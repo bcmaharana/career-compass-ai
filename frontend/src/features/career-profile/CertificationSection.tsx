@@ -1,0 +1,263 @@
+import {
+  useAddCertification,
+  useCertifications,
+  useDeleteCertification,
+  useMoveCertification,
+  useUpdateCertification,
+} from "@/api/queries/career-profile";
+import type { components } from "@/api/schema.gen";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapseToggle } from "@/components/ui/collapse-toggle";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Dialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { MoveButtons } from "@/components/ui/move-buttons";
+import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
+import { formatDisplayDate } from "@/lib/date-format";
+import { getErrorMessage } from "@/lib/errors";
+import { cn } from "@/lib/utils";
+import { Pencil, Plus, Trash2 } from "lucide-react";
+import { type FormEvent, useState } from "react";
+
+type Certification = components["schemas"]["CertificationResponse"];
+
+interface FormState {
+  name: string;
+  issuing_organization: string;
+  issue_date: string;
+  expiration_date: string;
+  credential_id: string;
+  credential_url: string;
+}
+
+const EMPTY_FORM: FormState = {
+  name: "",
+  issuing_organization: "",
+  issue_date: "",
+  expiration_date: "",
+  credential_id: "",
+  credential_url: "",
+};
+
+function toFormState(certification: Certification): FormState {
+  return {
+    name: certification.name,
+    issuing_organization: certification.issuing_organization,
+    issue_date: certification.issue_date ?? "",
+    expiration_date: certification.expiration_date ?? "",
+    credential_id: certification.credential_id ?? "",
+    credential_url: certification.credential_url ?? "",
+  };
+}
+
+export function CertificationSection({
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast,
+  moveDisabled,
+  cardBackground,
+}: SectionOrderProps) {
+  const { data: certifications, isLoading } = useCertifications();
+  const addCertification = useAddCertification();
+  const updateCertification = useUpdateCertification();
+  const deleteCertification = useDeleteCertification();
+  const moveCertification = useMoveCertification();
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [isOpen, setIsOpen] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<Certification | null>(null);
+
+  function openAddDialog() {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setDialogOpen(true);
+  }
+
+  function openEditDialog(certification: Certification) {
+    setEditingId(certification.id);
+    setForm(toFormState(certification));
+    setDialogOpen(true);
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const body = {
+      name: form.name,
+      issuing_organization: form.issuing_organization,
+      issue_date: form.issue_date || null,
+      expiration_date: form.expiration_date || null,
+      credential_id: form.credential_id || null,
+      credential_url: form.credential_url || null,
+    };
+
+    const mutation = editingId
+      ? updateCertification.mutateAsync({ id: editingId, body })
+      : addCertification.mutateAsync(body);
+
+    mutation.then(() => setDialogOpen(false)).catch(() => {});
+  }
+
+  const isSaving = addCertification.isPending || updateCertification.isPending;
+  const saveError = addCertification.error ?? updateCertification.error;
+
+  return (
+    <Card className={cardBackground === "background" ? "bg-background" : undefined}>
+      <CardHeader className="flex-row items-center justify-between space-y-0">
+        <CardTitle>Certifications</CardTitle>
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="sm" onClick={openAddDialog}>
+            <Plus className="h-4 w-4" />
+            Add
+          </Button>
+          <CollapseToggle
+            isOpen={isOpen}
+            onToggle={() => setIsOpen(!isOpen)}
+            label="Certifications"
+          />
+          <MoveButtons
+            onMoveUp={onMoveUp}
+            onMoveDown={onMoveDown}
+            isFirst={isFirst}
+            isLast={isLast}
+            disabled={moveDisabled}
+          />
+        </div>
+      </CardHeader>
+      {isOpen && (
+      <CardContent className="flex flex-col gap-3">
+        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+        {certifications?.length === 0 && (
+          <p className="text-sm text-muted-foreground">No certifications added yet.</p>
+        )}
+        {certifications?.map((certification, index) => (
+          <div
+            key={certification.id}
+            className={cn(
+              "flex items-start justify-between gap-4 rounded-md border border-border p-4",
+              itemAlternateClass(cardBackground, index),
+            )}
+          >
+            <MoveButtons
+              onMoveUp={() => moveCertification.mutate({ id: certification.id, direction: "up" })}
+              onMoveDown={() =>
+                moveCertification.mutate({ id: certification.id, direction: "down" })
+              }
+              isFirst={index === 0}
+              isLast={index === certifications.length - 1}
+              disabled={moveCertification.isPending}
+            />
+            <div className="flex-1">
+              <p className="font-medium">{certification.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {certification.issuing_organization}
+              </p>
+              {certification.expiration_date && (
+                <p className="text-xs font-bold italic text-accent">
+                  Expires {formatDisplayDate(certification.expiration_date)}
+                </p>
+              )}
+            </div>
+            <div className="flex shrink-0 gap-1">
+              <Button variant="ghost" size="sm" onClick={() => openEditDialog(certification)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(certification)}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+      )}
+
+      <Dialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        title={editingId ? "Edit certification" : "Add certification"}
+      >
+        <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cert-name">Name</Label>
+            <Input
+              id="cert-name"
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cert-org">Issuing organization</Label>
+            <Input
+              id="cert-org"
+              required
+              value={form.issuing_organization}
+              onChange={(e) => setForm({ ...form, issuing_organization: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="cert-issue">Issue date</Label>
+              <Input
+                id="cert-issue"
+                type="date"
+                value={form.issue_date}
+                onChange={(e) => setForm({ ...form, issue_date: e.target.value })}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="cert-expiration">Expiration date</Label>
+              <Input
+                id="cert-expiration"
+                type="date"
+                value={form.expiration_date}
+                onChange={(e) => setForm({ ...form, expiration_date: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cert-credential-id">Credential ID</Label>
+            <Input
+              id="cert-credential-id"
+              value={form.credential_id}
+              onChange={(e) => setForm({ ...form, credential_id: e.target.value })}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cert-url">Credential URL</Label>
+            <Input
+              id="cert-url"
+              type="url"
+              value={form.credential_url}
+              onChange={(e) => setForm({ ...form, credential_url: e.target.value })}
+            />
+          </div>
+          <Button type="submit" disabled={isSaving}>
+            {isSaving ? "Saving..." : editingId ? "Save changes" : "Add certification"}
+          </Button>
+          {saveError && (
+            <p role="alert" className="text-sm text-destructive">
+              {getErrorMessage(saveError)}
+            </p>
+          )}
+        </form>
+      </Dialog>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) deleteCertification.mutate(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+        title="Delete certification?"
+        description={deleteTarget ? `Remove "${deleteTarget.name}"? This can't be undone.` : ""}
+        isPending={deleteCertification.isPending}
+      />
+    </Card>
+  );
+}

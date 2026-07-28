@@ -1,0 +1,73 @@
+import { cn } from "@/lib/utils";
+import { X } from "lucide-react";
+import type { ReactNode } from "react";
+import { useEffect } from "react";
+
+interface DialogProps {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  description?: string;
+  children: ReactNode;
+  className?: string;
+}
+
+/**
+ * A minimal controlled modal — deliberately not built on Radix or any
+ * other headless-UI library, matching this project's preference for a
+ * small dependency footprint (see package.json). Closes on Escape or
+ * the explicit close button only — not on backdrop click.
+ *
+ * Backdrop-click-to-close was removed deliberately: dragging a
+ * <textarea>'s native resize handle can end with the pointer outside
+ * the dialog's bounds, and some browsers synthesize the resulting
+ * "click" event on whatever element is under the pointer at that point
+ * (the backdrop) rather than the element the interaction started on —
+ * closing the dialog mid-edit even though the user never intended to
+ * dismiss it. Reported as "expanding a textbox kicks me out of edit
+ * mode" — reproducible with the textarea's resize handle specifically,
+ * not a general click-outside case.
+ */
+export function Dialog({ open, onClose, title, description, children, className }: DialogProps) {
+  useEffect(() => {
+    if (!open) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dialog-title"
+        className={cn(
+          "w-full max-w-lg rounded-lg border border-border bg-card p-6 shadow-card",
+          className,
+        )}
+      >
+        <div className="mb-4 flex items-start justify-between">
+          <div>
+            <h2 id="dialog-title" className="font-display text-lg font-semibold">
+              {title}
+            </h2>
+            {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-md p-1 text-muted-foreground hover:bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] hover:text-primary"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Career Compass AI design tokens.
+ *
+ * Values chosen deliberately for this brief, not framework defaults:
+ * - Primary: a deep, slightly indigo-leaning navy (not a generic Tailwind
+ *   blue-600) — reads as authoritative without feeling cold.
+ * - Accent: a muted plum/violet — used for AI-related affordances,
+ *   progress, and active states. Originally a muted teal, replaced
+ *   (2026-07-27, see ADR-005) because that teal/green was hard for
+ *   colorblind users to distinguish from surrounding text; plum reads as
+ *   a clearly distinct hue from navy primary, red destructive, and gray
+ *   muted-foreground regardless of color vision, while passing WCAG AA
+ *   contrast (5.8:1 against white).
+ * - Background: a cool light gray with a faint blue undertone, not pure
+ *   neutral gray, so it sits quietly behind white cards without looking
+ *   like unstyled default UI.
+ */
+@layer base {
+  :root {
+    --background: 218 25% 97%;      /* #F4F6F9 */
+    --foreground: 222 47% 9%;       /* #0B1220 */
+
+    --card: 0 0% 100%;              /* #FFFFFF */
+    --card-foreground: 222 47% 9%;
+
+    --primary: 222 52% 20%;         /* #182F5E */
+    --primary-foreground: 210 40% 98%;
+    /* --primary, 5 points lighter (same math as Sass's lighten()) —
+       used by the three "bookend" boxes that sit against the plain
+       --primary field: Left Nav's top logo box and bottom user/sign-out
+       box, and Right Nav's top identity box. */
+    --primary-light: 222 52% 25%;
+
+    --accent: 272 42% 42%;          /* #6B3FA0 */
+    --accent-foreground: 0 0% 100%;
+
+    --muted: 218 20% 93%;
+    --muted-foreground: 218 11% 42%;
+
+    --border: 218 18% 89%;
+    --ring: 272 42% 42%;
+
+    --destructive: 0 68% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --radius: 0.625rem;
+
+    /* Fixed Header background (Part 1.3) — also used by the Right Nav's
+       lower contextual section (Part 1.4), so darkening this one token
+       keeps both in sync. Desaturated toward gray rather than the
+       lighter blue tint used elsewhere, per explicit request. */
+    --header-bg: 222 16% 83%;
+    /* Footer's background (AppFooter.tsx). Previously also doubled as
+       the Header purpose line's text color — split into its own
+       `--header-purpose-text` token below (2026-07-27) so darkening the
+       purpose text doesn't also darken the Footer. */
+    --footer-bg: 218 12% 52%;
+    /* Header purpose line's text color (AppHeader.tsx) — darker than
+       --footer-bg (which it used to share) for readability. */
+    --header-purpose-text: 218 15% 30%;
+    /* Scrollable center panel background — its own token (not reusing
+       --background directly) so it can be tuned independently as each
+       shell region gets adjusted one at a time. */
+    --center-bg: 218 22% 93%;
+
+    /*
+     * App shell region sizing (see components/layout/AppShell.tsx).
+     * Left Nav, Header, Footer, and Right Nav are all `position: fixed`
+     * against the viewport, and the scrollable center panel is inset by
+     * exactly these values on each side — a single source of truth so
+     * the four fixed regions and the center panel's offsets can never
+     * drift out of sync with each other.
+     */
+    --shell-left-nav-w: 16rem;
+    --shell-right-nav-w: 16rem;
+    --shell-header-h: 6rem;
+    --shell-footer-h: 4.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display;
+  }
+  code, kbd, samp, pre {
+    @apply font-mono;
+  }
+}

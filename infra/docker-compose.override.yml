@@ -1,0 +1,9 @@
+# Local developer overrides — gitignored customizations go here in
+# practice (e.g., alternate host ports if 5432/6379/9000 are already
+# taken locally). Checked-in version intentionally has no overrides;
+# copy this file's pattern into a local, untracked
+# docker-compose.override.local.yml instead of editing docker-compose.yml
+# directly.
+services:
+  backend:
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
