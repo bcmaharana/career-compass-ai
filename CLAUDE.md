@@ -123,6 +123,18 @@ and silently swaps the token in. Active use keeps extending the
 session; genuine idle time still expires it. See
 `tests/unit/test_token_refresh.py` for the exact mechanics.
 
+**Any field added to `IdentityClaims` must be threaded through four
+places, or it silently vanishes on the next token refresh** — this has
+been the actual bug three separate times (`first_name`/`last_name`,
+`last_login_at`, `salutation`): `verify_access_token()` (decode with a
+`.get()` fallback, since already-issued tokens predate the new claim),
+`authenticate_with_credentials()` (encode on login),
+`issue_access_token()`'s `extra_claims` (encode into the token), and
+`_refresh_token_if_stale()` in `app/api/dependencies.py` (the
+sliding-session refresh path — easiest one to forget, since nothing
+fails loudly when it's missed, the claim just quietly drops out of any
+token minted after the halfway-life refresh).
+
 ## Testing philosophy
 
 - `tests/unit/`: fast, no infrastructure, fake in-memory repositories
@@ -232,6 +244,52 @@ Known environment gotchas already solved, don't reintroduce:
   bug shipped where typing a value and clicking Save directly (without
   pressing Enter first) silently dropped it, caught only via a browser
   DevTools Network-tab capture showing the empty array actually being sent.
+- **Rainbow accent design language** (replaced the earlier single plum
+  accent color, applied to nearly every interactive/branded element:
+  buttons, active nav states, borders, icons, gradient text): the
+  literal gradient class string
+  `bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)]`
+  is duplicated across every file that uses it, not extracted into a
+  shared JS constant — Tailwind's JIT scanner needs a statically
+  analyzable literal class string per file, so a template-literal
+  constant silently fails to compile. An SVG stroke can't pick up a
+  Tailwind background gradient via `currentColor`, so icon strokes use
+  a hidden `<svg><defs><linearGradient id="rainbow-accent-gradient">`
+  (one per independently-rendered React tree — `AppShell` has one,
+  `LoginPage` needs its own since it renders outside `AppShell`'s route
+  tree) plus `<Icon color="url(#rainbow-accent-gradient)" />`. A
+  gradient *border* on a rounded element can't use CSS `border-image`
+  (it ignores `border-radius`, producing square corners) — use the
+  nested-div padding trick instead: an outer `rounded-lg bg-[gradient]
+  p-{N}` wrapping an inner `border-0` element, where `p-{N}` sets the
+  visual border width.
+- **Left Nav vs Right Nav split**: Left Nav (`AppShell.tsx`) is always
+  the same 4 top-level items regardless of route. Right Nav
+  (`RightNav.tsx`) is the one that changes per page — plain structural
+  placeholder by default, the Career Profile page's target-roles widget
+  on `/profile`, or the Settings sub-nav (`SETTINGS_NAV_ITEMS` from
+  `frontend/src/lib/nav-items.ts`) under `/settings/*` — with
+  Settings/Sign-out pinned to its bottom box regardless of section.
+  Route-to-section matching goes through `matchNavItem()`/
+  `isSettingsRoute()` in that same file, not ad hoc `pathname` checks.
+- **Country-aware phone formatting**: `libphonenumber-js`'s
+  `AsYouType(countryCode)` reformats the phone input live, both as the
+  user types and whenever the Country `<select>` changes (see
+  `SettingsProfilePage.tsx`'s `formatPhoneForCountry`). It only applies
+  a pattern once the digits match a plausible national format for that
+  country (e.g. a GB number needs the leading trunk `0`) — an
+  unrecognized sequence passes through as plain digits, which is
+  expected library behavior, not a bug.
+- **Structured, country-aware address fields**: `address_line1`,
+  `address_line2`, `city`, `state`, `postal_code` are separate columns
+  (see `User` entity), not one free-text field — the frontend chooses
+  labels/layout/order based on the selected `country` (US: State + ZIP
+  side by side; everywhere else: Postal code + State/Province
+  (optional)), the same "backend stores atomic components, frontend
+  decides country-specific presentation" split used for phone
+  formatting. Country and language display names come from the
+  built-in `Intl.DisplayNames` API (`frontend/src/lib/locale-options.ts`)
+  rather than a bundled name list.
 
 ## Current status (as of this handoff)
 
@@ -308,6 +366,33 @@ Known environment gotchas already solved, don't reintroduce:
   delete action in this domain (and going forward, every domain)
   confirms first via `ConfirmDialog` — a standing default, not decided
   per-feature.
+- **UI redesign round 2 + Settings + Profile enrichment** (post-Phase 3)
+  — done. Nav/visual overhaul: the single plum accent color was replaced
+  by the rainbow gradient design language described under "Frontend
+  conventions" above, applied to buttons, active nav states, borders,
+  and icons throughout; Left Nav is now always the same 4 items on
+  every route, with Right Nav owning per-page context (target-roles
+  widget, Settings sub-nav) plus Settings/Sign-out pinned to its bottom
+  box. A real **Settings > Profile** self-service page
+  (`frontend/src/features/settings/SettingsProfilePage.tsx`,
+  `PATCH /api/v1/identity/me`,
+  `app/application/identity/update_user_profile.py`) replaced what had
+  been placeholder/hardcoded name data — this is also why `User` gained
+  proper separate `first_name`/`last_name` fields (previously only a
+  blended `full_name`/`display_name` existed) and a real `last_login_at`
+  column (captures the *previous* login, read before the new login
+  overwrites it, so "Last logged in" never drifts to "now"). The Right
+  Nav identity box shows a time-of-day greeting plus the user's name in
+  formal salutation order — "Salutation Lastname, Firstname" (e.g.
+  "Mr. Smith, John") — deliberately not the blended `full_name`, which
+  reads "Salutation Firstname Lastname". The Settings > Profile form was
+  then extended with `phone_number`, `country`, `language`, and a
+  structured (not single-field) `address` — see "Frontend conventions"
+  for the country-aware formatting/layout details. Every field added
+  here also had to be threaded through the JWT claims propagation
+  points described under "Auth: sliding session" above, since the Right
+  Nav reads identity from the in-memory auth store (populated at login/
+  profile-save), not a live `/me` call on every render.
 - **Not yet started**: Phase 4 (AI Platform real wiring) onward through
   Phase 9. Domain list in `docs/architecture/system-overview.md`; that
   doc doesn't enumerate a numbered phase-by-phase roadmap the way this
