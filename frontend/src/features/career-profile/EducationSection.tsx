@@ -1,5 +1,6 @@
 import {
   useAddEducation,
+  useClearEducations,
   useDeleteEducation,
   useEducations,
   useMoveEducation,
@@ -14,12 +15,14 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Eraser, Pencil, Plus, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 type Education = components["schemas"]["EducationResponse"];
@@ -61,17 +64,22 @@ export function EducationSection({
   moveDisabled,
   cardBackground,
 }: SectionOrderProps) {
-  const { data: educations, isLoading } = useEducations();
-  const addEducation = useAddEducation();
-  const updateEducation = useUpdateEducation();
-  const deleteEducation = useDeleteEducation();
-  const moveEducation = useMoveEducation();
+  const scope = useProfileScope();
+  const { data: educations, isLoading } = useEducations(scope);
+  const addEducation = useAddEducation(scope);
+  const updateEducation = useUpdateEducation(scope);
+  const deleteEducation = useDeleteEducation(scope);
+  const clearEducations = useClearEducations(scope);
+  const moveEducation = useMoveEducation(scope);
+  const { data: masterEducations } = useEducations(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Education | null>(null);
+  const [clearSectionOpen, setClearSectionOpen] = useState(false);
 
   function openAddDialog() {
     setEditingId(null);
@@ -83,6 +91,11 @@ export function EducationSection({
     setEditingId(education.id);
     setForm(toFormState(education));
     setDialogOpen(true);
+  }
+
+  function copyFromMaster(educationId: string) {
+    const source = masterEducations?.find((e) => e.id === educationId);
+    if (source) setForm(toFormState(source));
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -100,7 +113,12 @@ export function EducationSection({
       ? updateEducation.mutateAsync({ id: editingId, body })
       : addEducation.mutateAsync(body);
 
-    mutation.then(() => setDialogOpen(false)).catch(() => {});
+    mutation
+      .then(() => {
+        setDialogOpen(false);
+        if (!editingId) setIsOpen(true);
+      })
+      .catch(() => {});
   }
 
   const isSaving = addEducation.isPending || updateEducation.isPending;
@@ -108,13 +126,22 @@ export function EducationSection({
 
   return (
     <Card className={cardBackground === "background" ? "bg-background" : undefined}>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Education</CardTitle>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" onClick={openAddDialog}>
+        <div className="flex items-start gap-1">
+          <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
+            {isEditMode ? "Done" : "Edit"}
+          </Button>
+          {!!educations?.length && (
+            <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
+              <Eraser className="h-4 w-4" />
+              Clear
+            </Button>
+          )}
           <CollapseToggle isOpen={isOpen} onToggle={() => setIsOpen(!isOpen)} label="Education" />
           <MoveButtons
             onMoveUp={onMoveUp}
@@ -139,13 +166,15 @@ export function EducationSection({
               itemAlternateClass(cardBackground, index),
             )}
           >
-            <MoveButtons
-              onMoveUp={() => moveEducation.mutate({ id: education.id, direction: "up" })}
-              onMoveDown={() => moveEducation.mutate({ id: education.id, direction: "down" })}
-              isFirst={index === 0}
-              isLast={index === educations.length - 1}
-              disabled={moveEducation.isPending}
-            />
+            {isEditMode && (
+              <MoveButtons
+                onMoveUp={() => moveEducation.mutate({ id: education.id, direction: "up" })}
+                onMoveDown={() => moveEducation.mutate({ id: education.id, direction: "down" })}
+                isFirst={index === 0}
+                isLast={index === educations.length - 1}
+                disabled={moveEducation.isPending}
+              />
+            )}
             <div className="flex-1">
               <p className="font-medium">{education.institution}</p>
               <p className="text-sm text-muted-foreground">
@@ -159,12 +188,16 @@ export function EducationSection({
               )}
             </div>
             <div className="flex shrink-0 gap-1">
-              <Button variant="ghost" size="sm" onClick={() => openEditDialog(education)}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(education)}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {isEditMode && (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(education)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(education)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         ))}
@@ -177,6 +210,19 @@ export function EducationSection({
         title={editingId ? "Edit education" : "Add education"}
       >
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+          {!editingId && scope !== null && !!masterEducations?.length && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edu-copy-from-master">Copy from Master (optional)</Label>
+              <Select id="edu-copy-from-master" value="" onChange={(e) => copyFromMaster(e.target.value)}>
+                <option value="">Start blank</option>
+                {masterEducations.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.institution}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="edu-institution">Institution</Label>
             <Input
@@ -254,6 +300,20 @@ export function EducationSection({
           deleteTarget ? `Remove "${deleteTarget.institution}"? This can't be undone.` : ""
         }
         isPending={deleteEducation.isPending}
+      />
+
+      <ConfirmDialog
+        open={clearSectionOpen}
+        onCancel={() => setClearSectionOpen(false)}
+        onConfirm={() => {
+          clearEducations.mutate();
+          setClearSectionOpen(false);
+        }}
+        title="Clear Education?"
+        description="Remove every education entry from your profile? This can't be undone."
+        isPending={clearEducations.isPending}
+        confirmLabel="Clear"
+        confirmPendingLabel="Clearing..."
       />
     </Card>
   );

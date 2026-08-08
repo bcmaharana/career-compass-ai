@@ -1,6 +1,7 @@
 import {
   useAddCareerHighlight,
   useCareerHighlights,
+  useClearCareerHighlights,
   useDeleteCareerHighlight,
   useMoveCareerHighlight,
   useUpdateCareerHighlight,
@@ -14,12 +15,14 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Eraser, Pencil, Plus, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 type CareerHighlight = components["schemas"]["CareerHighlightResponse"];
@@ -50,17 +53,22 @@ export function CareerHighlightsSection({
   moveDisabled,
   cardBackground,
 }: SectionOrderProps) {
-  const { data: highlights, isLoading } = useCareerHighlights();
-  const addHighlight = useAddCareerHighlight();
-  const updateHighlight = useUpdateCareerHighlight();
-  const deleteHighlight = useDeleteCareerHighlight();
-  const moveHighlight = useMoveCareerHighlight();
+  const scope = useProfileScope();
+  const { data: highlights, isLoading } = useCareerHighlights(scope);
+  const addHighlight = useAddCareerHighlight(scope);
+  const updateHighlight = useUpdateCareerHighlight(scope);
+  const deleteHighlight = useDeleteCareerHighlight(scope);
+  const clearHighlights = useClearCareerHighlights(scope);
+  const moveHighlight = useMoveCareerHighlight(scope);
+  const { data: masterHighlights } = useCareerHighlights(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CareerHighlight | null>(null);
+  const [clearSectionOpen, setClearSectionOpen] = useState(false);
 
   function openAddDialog() {
     setEditingId(null);
@@ -74,6 +82,11 @@ export function CareerHighlightsSection({
     setDialogOpen(true);
   }
 
+  function copyFromMaster(highlightId: string) {
+    const source = masterHighlights?.find((h) => h.id === highlightId);
+    if (source) setForm(toFormState(source));
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const body = {
@@ -85,7 +98,12 @@ export function CareerHighlightsSection({
     const mutation = editingId
       ? updateHighlight.mutateAsync({ id: editingId, body })
       : addHighlight.mutateAsync(body);
-    mutation.then(() => setDialogOpen(false)).catch(() => {});
+    mutation
+      .then(() => {
+        setDialogOpen(false);
+        if (!editingId) setIsOpen(true);
+      })
+      .catch(() => {});
   }
 
   const isSaving = addHighlight.isPending || updateHighlight.isPending;
@@ -93,13 +111,22 @@ export function CareerHighlightsSection({
 
   return (
     <Card className={cardBackground === "background" ? "bg-background" : undefined}>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Career Highlights</CardTitle>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" onClick={openAddDialog}>
+        <div className="flex items-start gap-1">
+          <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
+            {isEditMode ? "Done" : "Edit"}
+          </Button>
+          {!!highlights?.length && (
+            <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
+              <Eraser className="h-4 w-4" />
+              Clear
+            </Button>
+          )}
           <CollapseToggle
             isOpen={isOpen}
             onToggle={() => setIsOpen(!isOpen)}
@@ -131,13 +158,15 @@ export function CareerHighlightsSection({
               itemAlternateClass(cardBackground, index),
             )}
           >
-            <MoveButtons
-              onMoveUp={() => moveHighlight.mutate({ id: highlight.id, direction: "up" })}
-              onMoveDown={() => moveHighlight.mutate({ id: highlight.id, direction: "down" })}
-              isFirst={index === 0}
-              isLast={index === highlights.length - 1}
-              disabled={moveHighlight.isPending}
-            />
+            {isEditMode && (
+              <MoveButtons
+                onMoveUp={() => moveHighlight.mutate({ id: highlight.id, direction: "up" })}
+                onMoveDown={() => moveHighlight.mutate({ id: highlight.id, direction: "down" })}
+                isFirst={index === 0}
+                isLast={index === highlights.length - 1}
+                disabled={moveHighlight.isPending}
+              />
+            )}
             <div className="flex-1">
               <p className="font-medium">{highlight.title}</p>
               {highlight.company && (
@@ -148,15 +177,21 @@ export function CareerHighlightsSection({
                   {formatDisplayDate(highlight.occurred_on)}
                 </p>
               )}
-              {highlight.description && <p className="mt-1 text-sm">{highlight.description}</p>}
+              {highlight.description && (
+                <p className="mt-1 whitespace-pre-line text-sm">{highlight.description}</p>
+              )}
             </div>
             <div className="flex shrink-0 gap-1">
-              <Button variant="ghost" size="sm" onClick={() => openEditDialog(highlight)}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(highlight)}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {isEditMode && (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(highlight)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(highlight)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         ))}
@@ -169,6 +204,23 @@ export function CareerHighlightsSection({
         title={editingId ? "Edit highlight" : "Add highlight"}
       >
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+          {!editingId && scope !== null && !!masterHighlights?.length && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="highlight-copy-from-master">Copy from Master (optional)</Label>
+              <Select
+                id="highlight-copy-from-master"
+                value=""
+                onChange={(e) => copyFromMaster(e.target.value)}
+              >
+                <option value="">Start blank</option>
+                {masterHighlights.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.title}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="highlight-title">Title</Label>
             <Input
@@ -226,6 +278,20 @@ export function CareerHighlightsSection({
         title="Delete highlight?"
         description={deleteTarget ? `Remove "${deleteTarget.title}"? This can't be undone.` : ""}
         isPending={deleteHighlight.isPending}
+      />
+
+      <ConfirmDialog
+        open={clearSectionOpen}
+        onCancel={() => setClearSectionOpen(false)}
+        onConfirm={() => {
+          clearHighlights.mutate();
+          setClearSectionOpen(false);
+        }}
+        title="Clear Career Highlights?"
+        description="Remove every career highlight from your profile? This can't be undone."
+        isPending={clearHighlights.isPending}
+        confirmLabel="Clear"
+        confirmPendingLabel="Clearing..."
       />
     </Card>
   );

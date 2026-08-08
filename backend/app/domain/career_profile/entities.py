@@ -12,6 +12,20 @@ from uuid import UUID
 
 
 @dataclass(slots=True)
+class CoreCompetency:
+    """A single Core Competencies / My Skills entry — the same field
+    (CareerProfile.core_competencies) is edited from both the Career
+    Profile page and the Skill Intelligence page. `category` is a plain
+    per-item attribute, not a link into a shared catalog (ADR-005
+    removed the old global SkillCategory model entirely) — two users'
+    "Agile & Scaling" categories are unrelated strings, not the same row.
+    """
+
+    name: str
+    category: str | None = None
+
+
+@dataclass(slots=True)
 class CareerProfile:
     id: UUID
     tenant_id: UUID
@@ -21,7 +35,7 @@ class CareerProfile:
     summary: str | None
     career_readiness_score: int | None
     photo_url: str | None
-    core_competencies: list[str]
+    core_competencies: list[CoreCompetency]
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
@@ -30,6 +44,42 @@ class CareerProfile:
     # "tracked" profile field, so it's deliberately excluded from
     # CareerProfileVersion snapshots (see career_profile_service.py).
     section_order: list[str] | None = None
+    # None = the Master Profile. A real id = one of this user's Target
+    # Role Profiles — a fully independent row, not a filter/view over
+    # Master. See career_profile_service.py's get_or_create for how this
+    # is resolved.
+    target_role_id: UUID | None = None
+
+
+@dataclass(slots=True)
+class CareerProfileSummary:
+    """Cheap existence/counts snapshot of one profile (Master or a Target
+    Role Profile) — powers the Override-vs-Merge prompt during resume
+    merge, so the user sees "this profile already has 3 experience
+    entries and a summary" instead of a content-free yes/no.
+    """
+
+    experience_count: int
+    education_count: int
+    certification_count: int
+    career_highlight_count: int
+    key_achievement_count: int
+    competency_count: int
+    has_headline: bool
+    has_summary: bool
+
+    @property
+    def has_any_data(self) -> bool:
+        return (
+            self.experience_count > 0
+            or self.education_count > 0
+            or self.certification_count > 0
+            or self.career_highlight_count > 0
+            or self.key_achievement_count > 0
+            or self.competency_count > 0
+            or self.has_headline
+            or self.has_summary
+        )
 
 
 @dataclass(slots=True)

@@ -1,11 +1,13 @@
 """Gap analysis application service (Phase 3, simplified per ADR-005).
 
 Computes, for each of the user's target roles, which of that role's
-`required_skills` aren't present (case-insensitively) in the user's
-`CareerProfile.core_competencies`. Both are plain free-text lists — the
-catalog/proficiency/category model (Skill, SkillCategory, UserSkill,
-RoleTag) that this originally blended against was removed entirely, so
-there's no more catalog-driven "core gaps" half.
+`required_skills` (plain free-text list[str]) aren't present
+(case-insensitively, by name) in the user's `CareerProfile.core_competencies`
+(list[CoreCompetency] — each with an optional per-item `category`, but the
+category plays no part in this comparison). The old catalog/proficiency/
+category model (Skill, SkillCategory, UserSkill, RoleTag) this originally
+blended against was removed entirely per ADR-005, so there's no more
+catalog-driven "core gaps" half.
 
 Pure computation — no new storage, just cross-referencing the
 career_profile domain's two existing services.
@@ -44,7 +46,7 @@ class GapAnalysisService:
 
     async def compute(self, *, tenant_id: UUID, user_id: UUID) -> GapAnalysisResult:
         profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
-        owned = {competency.lower() for competency in profile.core_competencies}
+        owned = {competency.name.lower() for competency in profile.core_competencies}
 
         target_roles = await self._target_roles.list_for_current_user(
             tenant_id=tenant_id, user_id=user_id

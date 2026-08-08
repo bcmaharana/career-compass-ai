@@ -90,3 +90,6 @@ class CareerGoalService:
     ) -> None:
         await self._get_owned_or_raise(tenant_id=tenant_id, user_id=user_id, goal_id=goal_id)
         await self._goals.move(tenant_id, goal_id, direction)
+
+    async def clear_all(self, *, tenant_id: UUID, user_id: UUID) -> None:
+        await self._goals.soft_delete_all_for_user(tenant_id, user_id)

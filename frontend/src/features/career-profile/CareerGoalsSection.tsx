@@ -1,6 +1,7 @@
 import {
   useAddCareerGoal,
   useCareerGoals,
+  useClearCareerGoals,
   useDeleteCareerGoal,
   useMoveCareerGoal,
   useUpdateCareerGoal,
@@ -16,11 +17,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
 import { Textarea } from "@/components/ui/textarea";
+import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Eraser, Pencil, Plus, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 type CareerGoal = components["schemas"]["CareerGoalResponse"];
@@ -67,13 +69,22 @@ export function CareerGoalsSection({
   const addGoal = useAddCareerGoal();
   const updateGoal = useUpdateCareerGoal();
   const deleteGoal = useDeleteCareerGoal();
+  const clearGoals = useClearCareerGoals();
   const moveGoal = useMoveCareerGoal();
+  // Career Goals stay Master-only regardless of which profile is being
+  // viewed (resume merge never touches them, no per-target-role use case
+  // yet) — this label is the only thing that changes on a Target Role
+  // Profile view, so it doesn't silently look like a bug that this
+  // section's data never changes when switching roles.
+  const isTargetRoleView = useProfileScope() !== null;
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CareerGoal | null>(null);
+  const [clearSectionOpen, setClearSectionOpen] = useState(false);
 
   function openAddDialog() {
     setEditingId(null);
@@ -110,7 +121,10 @@ export function CareerGoalsSection({
           target_date: form.target_date || null,
           description: form.description || null,
         })
-        .then(() => setDialogOpen(false))
+        .then(() => {
+          setDialogOpen(false);
+          setIsOpen(true);
+        })
         .catch(() => {});
     }
   }
@@ -120,13 +134,25 @@ export function CareerGoalsSection({
 
   return (
     <Card className={cardBackground === "background" ? "bg-background" : undefined}>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>Career Goals</CardTitle>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" onClick={openAddDialog}>
+      <CardHeader className="flex-row items-start justify-between space-y-0">
+        <div className="flex items-center gap-2">
+          <CardTitle>Career Goals</CardTitle>
+          {isTargetRoleView && <Badge variant="default">Master profile</Badge>}
+        </div>
+        <div className="flex items-start gap-1">
+          <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
+            {isEditMode ? "Done" : "Edit"}
+          </Button>
+          {!!goals?.length && (
+            <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
+              <Eraser className="h-4 w-4" />
+              Clear
+            </Button>
+          )}
           <CollapseToggle
             isOpen={isOpen}
             onToggle={() => setIsOpen(!isOpen)}
@@ -155,13 +181,15 @@ export function CareerGoalsSection({
               itemAlternateClass(cardBackground, index),
             )}
           >
-            <MoveButtons
-              onMoveUp={() => moveGoal.mutate({ id: goal.id, direction: "up" })}
-              onMoveDown={() => moveGoal.mutate({ id: goal.id, direction: "down" })}
-              isFirst={index === 0}
-              isLast={index === goals.length - 1}
-              disabled={moveGoal.isPending}
-            />
+            {isEditMode && (
+              <MoveButtons
+                onMoveUp={() => moveGoal.mutate({ id: goal.id, direction: "up" })}
+                onMoveDown={() => moveGoal.mutate({ id: goal.id, direction: "down" })}
+                isFirst={index === 0}
+                isLast={index === goals.length - 1}
+                disabled={moveGoal.isPending}
+              />
+            )}
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <p className="font-medium">{goal.target_role}</p>
@@ -172,15 +200,21 @@ export function CareerGoalsSection({
                   Target: {formatDisplayDate(goal.target_date)}
                 </p>
               )}
-              {goal.description && <p className="mt-1 text-sm">{goal.description}</p>}
+              {goal.description && (
+                <p className="mt-1 whitespace-pre-line text-sm">{goal.description}</p>
+              )}
             </div>
             <div className="flex shrink-0 gap-1">
-              <Button variant="ghost" size="sm" onClick={() => openEditDialog(goal)}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(goal)}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {isEditMode && (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(goal)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(goal)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         ))}
@@ -258,6 +292,20 @@ export function CareerGoalsSection({
           deleteTarget ? `Remove "${deleteTarget.target_role}"? This can't be undone.` : ""
         }
         isPending={deleteGoal.isPending}
+      />
+
+      <ConfirmDialog
+        open={clearSectionOpen}
+        onCancel={() => setClearSectionOpen(false)}
+        onConfirm={() => {
+          clearGoals.mutate();
+          setClearSectionOpen(false);
+        }}
+        title="Clear Career Goals?"
+        description="Remove every career goal from your profile? This can't be undone."
+        isPending={clearGoals.isPending}
+        confirmLabel="Clear"
+        confirmPendingLabel="Clearing..."
       />
     </Card>
   );

@@ -14,10 +14,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from urllib.parse import urlsplit
 from uuid import UUID
 
-from app.core.exceptions import ValidationError
-from app.domain.career_profile.entities import CareerProfile, CareerProfileVersion
+from app.core.exceptions import CareerCompassError, ValidationError
+from app.domain.career_profile.entities import CareerProfile, CareerProfileVersion, CoreCompetency
 from app.domain.career_profile.repositories import (
     CareerProfileRepository,
     CareerProfileVersionRepository,
@@ -26,6 +27,22 @@ from app.domain.career_profile.storage import ObjectStorageRepository
 
 MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_PHOTO_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
+
+
+def _photo_key_from_url(*, tenant_id: UUID, profile_id: UUID, photo_url: str) -> str | None:
+    """Reconstructs the storage key from a stored photo_url.
+
+    The key itself (`profile-photos/{tenant_id}/{profile_id}.{ext}`) is
+    never persisted as its own field — only the full public URL (plus a
+    cache-busting `?v=` query param, see upload_photo) is. The extension
+    is the only part of the key not otherwise derivable, so it's parsed
+    back out of the URL path here.
+    """
+    path = urlsplit(photo_url).path
+    if "." not in path:
+        return None
+    extension = path.rsplit(".", 1)[-1]
+    return f"profile-photos/{tenant_id}/{profile_id}.{extension}"
 
 
 class CareerProfileService:
@@ -43,8 +60,26 @@ class CareerProfileService:
         # adapter wired in just to, say, update a headline.
         self._storage = storage
 
-    async def get_or_create(self, *, tenant_id: UUID, user_id: UUID) -> CareerProfile:
-        existing = await self._profiles.get_by_user_id(tenant_id, user_id)
+    async def get_by_id(self, *, tenant_id: UUID, profile_id: UUID) -> CareerProfile | None:
+        """Used by every child service's `_get_owned_or_raise` to resolve
+        ownership from an item's own `career_profile_id`, rather than
+        re-resolving "the" profile via `get_or_create` — the latter
+        always means Master unless a `target_role_id` happens to be
+        passed, so it would incorrectly 404 any edit/delete/move on an
+        item that actually lives on a Target Role Profile.
+        """
+        return await self._profiles.get_by_id(tenant_id, profile_id)
+
+    async def get_or_create(
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None = None
+    ) -> CareerProfile:
+        """target_role_id=None resolves the Master Profile (unchanged
+        default — every existing caller that hasn't been updated to pass
+        a scope keeps working exactly as before). A real id resolves (or
+        lazily creates) that Target Role Profile instead — a fully
+        independent row, not a filtered view of Master.
+        """
+        existing = await self._profiles.get_by_user_id(tenant_id, user_id, target_role_id)
         if existing is not None:
             return existing
 
@@ -61,6 +96,7 @@ class CareerProfileService:
                 photo_url=None,
                 core_competencies=[],
                 section_order=None,
+                target_role_id=target_role_id,
                 created_at=now,
                 updated_at=now,
             )
@@ -82,7 +118,10 @@ class CareerProfileService:
                     "summary": profile.summary,
                     "career_readiness_score": profile.career_readiness_score,
                     "photo_url": profile.photo_url,
-                    "core_competencies": profile.core_competencies,
+                    "core_competencies": [
+                        {"name": c.name, "category": c.category}
+                        for c in profile.core_competencies
+                    ],
                 },
                 change_reason=change_reason,
                 created_at=datetime.now(UTC),
@@ -97,10 +136,13 @@ class CareerProfileService:
         user_id: UUID,
         headline: str | None,
         summary: str | None,
-        core_competencies: list[str] | None = None,
+        core_competencies: list[CoreCompetency] | None = None,
         section_order: list[str] | None = None,
+        target_role_id: UUID | None = None,
     ) -> CareerProfile:
-        profile = await self.get_or_create(tenant_id=tenant_id, user_id=user_id)
+        profile = await self.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
         await self._snapshot_and_bump(profile, change_reason="profile_updated")
 
         profile.headline = headline
@@ -152,4 +194,25 @@ class CareerProfileService:
 
         await self._snapshot_and_bump(profile, change_reason="photo_updated")
         profile.photo_url = photo_url
+        return await self._profiles.update(profile)
+
+    async def delete_photo(self, *, tenant_id: UUID, user_id: UUID) -> CareerProfile:
+        profile = await self.get_or_create(tenant_id=tenant_id, user_id=user_id)
+        if profile.photo_url is not None and self._storage is not None:
+            key = _photo_key_from_url(
+                tenant_id=tenant_id, profile_id=profile.id, photo_url=profile.photo_url
+            )
+            if key is not None:
+                try:
+                    await self._storage.delete(key=key)
+                except CareerCompassError:
+                    # Best-effort: the DB field is the source of truth for
+                    # "does this profile have a photo," not the object's
+                    # actual presence in the bucket — a storage-side failure
+                    # here shouldn't block the user from clearing their
+                    # profile. Worst case, an orphaned object is left behind.
+                    pass
+
+        await self._snapshot_and_bump(profile, change_reason="photo_removed")
+        profile.photo_url = None
         return await self._profiles.update(profile)

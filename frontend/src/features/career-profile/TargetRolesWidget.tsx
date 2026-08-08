@@ -11,9 +11,12 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tooltip } from "@/components/ui/tooltip";
 import { getErrorMessage } from "@/lib/errors";
+import { cn } from "@/lib/utils";
 import { Pencil, Plus, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 type TargetRole = components["schemas"]["TargetRoleResponse"];
 
@@ -26,15 +29,21 @@ const TAG_MAX_LENGTH = 3;
  * each with a short (<=3 char) tag, e.g. "EAC" for "Enterprise Agile
  * Coach". Deliberately just entry/rename/removal this round: the
  * brief's explicit future scope is tagging other profile items against
- * these roles (a different, cross-entity feature — see backend
- * TargetRoleService's docstring for why each role already has a stable
- * id ready for that later), not built here.
+ * these roles — realized as the Master/Target-Role-Profile switcher: each
+ * row navigates to `/profile?role=<id>` (Career Profile page reads that
+ * param via ProfileScopeContext), and a pinned "Master Profile" row above
+ * the list navigates back to the unscoped `/profile`. Active state is
+ * derived from the URL, not local component state, so it survives a
+ * refresh and stays in sync if the URL changes some other way.
  */
 export function TargetRolesWidget() {
   const { data: targetRoles } = useTargetRoles();
   const addTargetRole = useAddTargetRole();
   const updateTargetRole = useUpdateTargetRole();
   const deleteTargetRole = useDeleteTargetRole();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const activeRoleId = searchParams.get("role");
 
   const [formOpen, setFormOpen] = useState(false);
   const [tag, setTag] = useState("");
@@ -92,6 +101,19 @@ export function TargetRolesWidget() {
 
   return (
     <div className="flex flex-col gap-3 p-4">
+      <button
+        type="button"
+        onClick={() => navigate("/profile")}
+        className={cn(
+          "flex items-center justify-between rounded-md px-2 py-1 text-left text-[11px] font-semibold",
+          activeRoleId === null
+            ? "bg-card text-foreground"
+            : "bg-card/60 text-primary-foreground hover:bg-card",
+        )}
+      >
+        Master Profile
+      </button>
+
       <div className="flex items-center justify-between">
         <h2 className="font-display text-[11px] font-semibold text-primary-foreground">
           Target Roles
@@ -103,33 +125,45 @@ export function TargetRolesWidget() {
 
       <ul className="flex flex-col gap-1.5">
         {targetRoles?.map((role) => (
-          <li
-            key={role.id}
-            className="flex items-center justify-between gap-2 rounded-md bg-card px-2 py-1 text-[11px]"
-          >
-            <div className="flex min-w-0 items-center gap-1.5">
-              <Badge variant="accent" className="shrink-0 px-1.5 py-0 text-[10px]">
-                {role.tag}
-              </Badge>
-              <span className="truncate">{role.role_name}</span>
-            </div>
-            <div className="flex shrink-0 items-center gap-0.5">
+          <li key={role.id}>
+            <div
+              className={cn(
+                "flex items-center justify-between gap-2 rounded-md px-2 py-1 text-[11px]",
+                activeRoleId === role.id
+                  ? "bg-card text-foreground"
+                  : "bg-card/60 text-primary-foreground hover:bg-card",
+              )}
+            >
               <button
                 type="button"
-                onClick={() => openEdit(role)}
-                aria-label={`Edit ${role.role_name}`}
-                className="text-muted-foreground hover:text-foreground"
+                onClick={() => navigate(`/profile?role=${role.id}`)}
+                className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
               >
-                <Pencil className="h-3.5 w-3.5" />
+                <Tooltip content={role.role_name} className="flex min-w-0 items-center gap-1.5">
+                  <Badge variant="accent" className="shrink-0 px-1.5 py-0 text-[10px]">
+                    {role.tag}
+                  </Badge>
+                  <span className="truncate">{role.role_name}</span>
+                </Tooltip>
               </button>
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(role)}
-                aria-label={`Remove ${role.role_name}`}
-                className="text-muted-foreground hover:text-destructive"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => openEdit(role)}
+                  aria-label={`Edit ${role.role_name}`}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(role)}
+                  aria-label={`Remove ${role.role_name}`}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
           </li>
         ))}
@@ -235,13 +269,21 @@ export function TargetRolesWidget() {
         open={deleteTarget !== null}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => {
-          if (deleteTarget) deleteTargetRole.mutate(deleteTarget.id);
+          if (deleteTarget) {
+            deleteTargetRole.mutate(deleteTarget.id);
+            // The role's own Target Role Profile (headline, experience,
+            // etc.) isn't deleted — it just becomes unreachable, since
+            // nothing else links to it once the role itself is gone (see
+            // TargetRoleService docstring). Navigate away from a URL
+            // that's about to point at nothing.
+            if (activeRoleId === deleteTarget.id) navigate("/profile");
+          }
           setDeleteTarget(null);
         }}
         title="Delete target role?"
         description={
           deleteTarget
-            ? `Remove "${deleteTarget.role_name}" (${deleteTarget.tag})? This can't be undone.`
+            ? `Remove "${deleteTarget.role_name}" (${deleteTarget.tag})? Any profile data you've built for this role (experience, education, etc.) stays in the database but becomes inaccessible — it isn't deleted, just unreachable. This can't be undone.`
             : ""
         }
         isPending={deleteTargetRole.isPending}

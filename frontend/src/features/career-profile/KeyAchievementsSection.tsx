@@ -1,5 +1,6 @@
 import {
   useAddKeyAchievement,
+  useClearKeyAchievements,
   useKeyAchievements,
   useDeleteKeyAchievement,
   useMoveKeyAchievement,
@@ -14,12 +15,14 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Eraser, Pencil, Plus, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 type KeyAchievement = components["schemas"]["KeyAchievementResponse"];
@@ -50,17 +53,22 @@ export function KeyAchievementsSection({
   moveDisabled,
   cardBackground,
 }: SectionOrderProps) {
-  const { data: achievements, isLoading } = useKeyAchievements();
-  const addAchievement = useAddKeyAchievement();
-  const updateAchievement = useUpdateKeyAchievement();
-  const deleteAchievement = useDeleteKeyAchievement();
-  const moveAchievement = useMoveKeyAchievement();
+  const scope = useProfileScope();
+  const { data: achievements, isLoading } = useKeyAchievements(scope);
+  const addAchievement = useAddKeyAchievement(scope);
+  const updateAchievement = useUpdateKeyAchievement(scope);
+  const deleteAchievement = useDeleteKeyAchievement(scope);
+  const clearAchievements = useClearKeyAchievements(scope);
+  const moveAchievement = useMoveKeyAchievement(scope);
+  const { data: masterAchievements } = useKeyAchievements(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<KeyAchievement | null>(null);
+  const [clearSectionOpen, setClearSectionOpen] = useState(false);
 
   function openAddDialog() {
     setEditingId(null);
@@ -74,6 +82,11 @@ export function KeyAchievementsSection({
     setDialogOpen(true);
   }
 
+  function copyFromMaster(achievementId: string) {
+    const source = masterAchievements?.find((a) => a.id === achievementId);
+    if (source) setForm(toFormState(source));
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const body = {
@@ -85,7 +98,12 @@ export function KeyAchievementsSection({
     const mutation = editingId
       ? updateAchievement.mutateAsync({ id: editingId, body })
       : addAchievement.mutateAsync(body);
-    mutation.then(() => setDialogOpen(false)).catch(() => {});
+    mutation
+      .then(() => {
+        setDialogOpen(false);
+        if (!editingId) setIsOpen(true);
+      })
+      .catch(() => {});
   }
 
   const isSaving = addAchievement.isPending || updateAchievement.isPending;
@@ -93,13 +111,22 @@ export function KeyAchievementsSection({
 
   return (
     <Card className={cardBackground === "background" ? "bg-background" : undefined}>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Key Achievements</CardTitle>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" onClick={openAddDialog}>
+        <div className="flex items-start gap-1">
+          <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
+            {isEditMode ? "Done" : "Edit"}
+          </Button>
+          {!!achievements?.length && (
+            <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
+              <Eraser className="h-4 w-4" />
+              Clear
+            </Button>
+          )}
           <CollapseToggle
             isOpen={isOpen}
             onToggle={() => setIsOpen(!isOpen)}
@@ -130,13 +157,15 @@ export function KeyAchievementsSection({
               itemAlternateClass(cardBackground, index),
             )}
           >
-            <MoveButtons
-              onMoveUp={() => moveAchievement.mutate({ id: achievement.id, direction: "up" })}
-              onMoveDown={() => moveAchievement.mutate({ id: achievement.id, direction: "down" })}
-              isFirst={index === 0}
-              isLast={index === achievements.length - 1}
-              disabled={moveAchievement.isPending}
-            />
+            {isEditMode && (
+              <MoveButtons
+                onMoveUp={() => moveAchievement.mutate({ id: achievement.id, direction: "up" })}
+                onMoveDown={() => moveAchievement.mutate({ id: achievement.id, direction: "down" })}
+                isFirst={index === 0}
+                isLast={index === achievements.length - 1}
+                disabled={moveAchievement.isPending}
+              />
+            )}
             <div className="flex-1">
               <p className="font-medium">{achievement.title}</p>
               {achievement.company && (
@@ -147,15 +176,21 @@ export function KeyAchievementsSection({
                   {formatDisplayDate(achievement.occurred_on)}
                 </p>
               )}
-              {achievement.description && <p className="mt-1 text-sm">{achievement.description}</p>}
+              {achievement.description && (
+                <p className="mt-1 whitespace-pre-line text-sm">{achievement.description}</p>
+              )}
             </div>
             <div className="flex shrink-0 gap-1">
-              <Button variant="ghost" size="sm" onClick={() => openEditDialog(achievement)}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(achievement)}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {isEditMode && (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(achievement)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(achievement)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         ))}
@@ -168,6 +203,23 @@ export function KeyAchievementsSection({
         title={editingId ? "Edit achievement" : "Add achievement"}
       >
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+          {!editingId && scope !== null && !!masterAchievements?.length && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="achievement-copy-from-master">Copy from Master (optional)</Label>
+              <Select
+                id="achievement-copy-from-master"
+                value=""
+                onChange={(e) => copyFromMaster(e.target.value)}
+              >
+                <option value="">Start blank</option>
+                {masterAchievements.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.title}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="achievement-title">Title</Label>
             <Input
@@ -225,6 +277,20 @@ export function KeyAchievementsSection({
         title="Delete achievement?"
         description={deleteTarget ? `Remove "${deleteTarget.title}"? This can't be undone.` : ""}
         isPending={deleteAchievement.isPending}
+      />
+
+      <ConfirmDialog
+        open={clearSectionOpen}
+        onCancel={() => setClearSectionOpen(false)}
+        onConfirm={() => {
+          clearAchievements.mutate();
+          setClearSectionOpen(false);
+        }}
+        title="Clear Key Achievements?"
+        description="Remove every key achievement from your profile? This can't be undone."
+        isPending={clearAchievements.isPending}
+        confirmLabel="Clear"
+        confirmPendingLabel="Clearing..."
       />
     </Card>
   );

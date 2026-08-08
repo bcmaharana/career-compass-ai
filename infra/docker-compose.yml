@@ -64,6 +64,10 @@ services:
     volumes:
       - ../backend/app:/app/app
       - ../backend/scripts:/app/scripts
+      # Firebase service-account key for phone login (see .env's
+      # FIREBASE_SERVICE_ACCOUNT_FILE=/app/secrets/...) — backend/secrets/
+      # is gitignored, never baked into the image itself.
+      - ../backend/secrets:/app/secrets:ro
 
 volumes:
   compass_postgres_data:

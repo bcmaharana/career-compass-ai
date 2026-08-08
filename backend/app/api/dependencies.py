@@ -19,6 +19,10 @@ from fastapi import Depends, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.ai_providers.anthropic_provider import AnthropicProvider
+from app.adapters.ai_providers.groq_provider import GroqProvider
+from app.adapters.ai_providers.ollama_embedding_provider import OllamaEmbeddingProvider
+from app.adapters.ai_providers.ollama_provider import OllamaProvider
 from app.adapters.db.base import async_session_factory, set_tenant_context
 from app.adapters.db.repositories import (
     SqlAlchemyAuditEventRepository,
@@ -38,18 +42,65 @@ from app.adapters.db.repositories import (
     SqlAlchemyTenantRepository,
     SqlAlchemyUserRepository,
 )
+from app.adapters.db.repositories.ai_platform import (
+    SqlAlchemyInvocationLogger,
+    SqlAlchemyModelRegistry,
+    SqlAlchemyPromptRegistry,
+)
+from app.adapters.db.repositories.career_intelligence import (
+    SqlAlchemyCategoryParentRepository,
+    SqlAlchemyCikgRoleRepository,
+    SqlAlchemyCompetencyRepository,
+    SqlAlchemyPrerequisiteOfEdgeRepository,
+    SqlAlchemyRelatedSkillRepository,
+    SqlAlchemyRoleRequiredSkillRepository,
+    SqlAlchemySkillAliasRepository,
+    SqlAlchemySkillCategoryMembershipRepository,
+    SqlAlchemySkillCategoryRepository,
+    SqlAlchemySkillCompetencyMembershipRepository,
+    SqlAlchemySkillRepository,
+    SqlAlchemySpecializesEdgeRepository,
+    SqlAlchemySynonymOfEdgeRepository,
+)
 from app.adapters.db.repositories.career_profile import SqlAlchemyCareerProfileVersionRepository
 from app.adapters.db.repositories.chat import (
     SqlAlchemyChatConversationRepository,
     SqlAlchemyChatMessageRepository,
 )
+from app.adapters.db.repositories.governance import (
+    SqlAlchemyContentHistoryRepository,
+    SqlAlchemyContentRevisionRepository,
+)
+from app.adapters.db.repositories.resume_intelligence import SqlAlchemyResumeRepository
+from app.adapters.db.repositories.search import (
+    SqlAlchemyContentEmbeddingRepository,
+    SqlAlchemyEmbeddingModelRepository,
+    SqlAlchemySearchRepository,
+)
+from app.adapters.identity_providers.firebase_phone import FirebasePhoneVerifier
 from app.adapters.identity_providers.internal_jwt import InternalJWTProvider, verify_access_token
+from app.adapters.parsing.resume_text_extractor import PdfDocxTextExtractor
 from app.adapters.quotes.zen_quotes_provider import ZenQuotesProvider
 from app.adapters.storage.s3_object_storage import S3ObjectStorageRepository
+from app.ai_platform.llm_service.provider_interface import LLMProviderInterface
+from app.ai_platform.llm_service.service import LLMService
+from app.application.ai_platform.model_preference_service import ModelPreferenceService
+from app.application.career_intelligence.catalog_query_service import CatalogQueryService
+from app.application.career_intelligence.content_revision_service import ContentRevisionService
+from app.application.career_intelligence.embedding_service import EmbeddingIndexingService
+from app.application.career_intelligence.search_service import SearchService
+from app.application.career_intelligence.skill_alias_admin_service import SkillAliasAdminService
+from app.application.career_intelligence.skill_alias_resolution_service import (
+    SkillAliasResolutionService,
+)
 from app.application.career_profile.career_goal_service import CareerGoalService
 from app.application.career_profile.career_highlight_service import CareerHighlightService
 from app.application.career_profile.career_profile_service import CareerProfileService
 from app.application.career_profile.certification_service import CertificationService
+from app.application.career_profile.career_profile_summary_service import (
+    CareerProfileSummaryService,
+)
+from app.application.career_profile.clear_profile_service import ClearCareerProfileService
 from app.application.career_profile.education_service import EducationService
 from app.application.career_profile.experience_service import ExperienceService
 from app.application.career_profile.key_achievement_service import KeyAchievementService
@@ -64,14 +115,19 @@ from app.application.identity.list_feature_flags import ListFeatureFlagsService
 from app.application.identity.register_tenant import RegisterTenantService
 from app.application.identity.update_user_profile import UpdateUserProfileService
 from app.application.quotes.quote_of_the_day_service import QuoteOfTheDayService
+from app.application.resume_intelligence.resume_extraction_service import ResumeExtractionService
+from app.application.resume_intelligence.resume_merge_service import ResumeMergeService
 from app.application.skill_intelligence.gap_analysis_service import GapAnalysisService
+from app.application.system_status.system_status_service import SystemStatusService
 from app.core.config import get_settings
 from app.core.exceptions import ForbiddenError, UnauthorizedError
 from app.core.identity_provider_interface import IdentityClaims
+from app.core.logging import get_logger
 from app.core.security import create_access_token, decode_access_token
 from app.domain.identity.authorization import has_permission
 from app.domain.identity.entities import Role
 
+logger = get_logger(__name__)
 _bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -281,17 +337,46 @@ def get_register_tenant_service(
     )
 
 
+# Process-wide (lru_cache), not per-request — same rationale as
+# get_anthropic_provider below. Returns None rather than raising when
+# Firebase isn't configured yet (FIREBASE_PROJECT_ID/
+# FIREBASE_SERVICE_ACCOUNT_FILE unset, or the key file isn't there yet)
+# so that email/password login — which shares get_authenticate_user_service
+# below — is never broken by an incomplete or absent phone-login setup;
+# AuthenticateUserService.execute_phone turns a None verifier into a
+# clean "not configured" error instead.
+@lru_cache
+def get_firebase_phone_verifier() -> FirebasePhoneVerifier | None:
+    settings = get_settings()
+    if not settings.firebase_project_id or not settings.firebase_service_account_file:
+        return None
+    try:
+        return FirebasePhoneVerifier(
+            project_id=settings.firebase_project_id,
+            service_account_file=settings.firebase_service_account_file,
+        )
+    except Exception:
+        logger.warning(
+            "firebase_phone_verifier_init_failed",
+            project_id=settings.firebase_project_id,
+            service_account_file=settings.firebase_service_account_file,
+        )
+        return None
+
+
 def get_authenticate_user_service(
     tenants: SqlAlchemyTenantRepository = Depends(get_tenant_repository),
     tenant_context: SqlAlchemyTenantContextBinder = Depends(get_tenant_context_binder),
     identity_provider: InternalJWTProvider = Depends(get_internal_jwt_provider),
     audit: AuditService = Depends(get_plain_audit_service),
+    phone_verifier: FirebasePhoneVerifier | None = Depends(get_firebase_phone_verifier),
 ) -> AuthenticateUserService:
     return AuthenticateUserService(
         tenants=tenants,
         tenant_context=tenant_context,
         identity_provider=identity_provider,
         audit=audit,
+        phone_verifier=phone_verifier,
     )
 
 
@@ -473,10 +558,123 @@ def get_career_goal_service(
     return CareerGoalService(goals)
 
 
+def get_clear_career_profile_service(
+    career_profiles: CareerProfileService = Depends(get_career_profile_service),
+    experiences: ExperienceService = Depends(get_experience_service),
+    educations: EducationService = Depends(get_education_service),
+    certifications: CertificationService = Depends(get_certification_service),
+    career_highlights: CareerHighlightService = Depends(get_career_highlight_service),
+    key_achievements: KeyAchievementService = Depends(get_key_achievement_service),
+    peer_endorsements: PeerEndorsementService = Depends(get_peer_endorsement_service),
+    career_goals: CareerGoalService = Depends(get_career_goal_service),
+) -> ClearCareerProfileService:
+    return ClearCareerProfileService(
+        career_profiles,
+        experiences,
+        educations,
+        certifications,
+        career_highlights,
+        key_achievements,
+        peer_endorsements,
+        career_goals,
+    )
+
+
+def get_career_profile_summary_service(
+    career_profiles: CareerProfileService = Depends(get_career_profile_service),
+    experiences: ExperienceService = Depends(get_experience_service),
+    educations: EducationService = Depends(get_education_service),
+    certifications: CertificationService = Depends(get_certification_service),
+    career_highlights: CareerHighlightService = Depends(get_career_highlight_service),
+    key_achievements: KeyAchievementService = Depends(get_key_achievement_service),
+) -> CareerProfileSummaryService:
+    return CareerProfileSummaryService(
+        career_profiles,
+        experiences,
+        educations,
+        certifications,
+        career_highlights,
+        key_achievements,
+    )
+
+
 def get_target_role_service(
     target_roles: SqlAlchemyTargetRoleRepository = Depends(get_target_role_repository),
 ) -> TargetRoleService:
     return TargetRoleService(target_roles)
+
+
+# --- AI Platform wiring (Phase 4) ---
+# get_anthropic_provider / get_ollama_provider are process-wide
+# (lru_cache), not per-request — same rationale as get_quote_provider
+# below (the Anthropic one wraps an AsyncAnthropic client that manages
+# its own httpx connection pool; the Ollama one is stateless but there's
+# no reason to reconstruct it every request either). The prompt/model
+# registries and invocation logger are per-request since they need the
+# request's (possibly tenant-scoped) DB session.
+
+
+@lru_cache
+def get_anthropic_provider() -> AnthropicProvider:
+    return AnthropicProvider(get_settings())
+
+
+@lru_cache
+def get_ollama_provider() -> OllamaProvider:
+    return OllamaProvider(get_settings())
+
+
+@lru_cache
+def get_groq_provider() -> GroqProvider:
+    return GroqProvider(get_settings())
+
+
+@lru_cache
+def get_ollama_embedding_provider() -> OllamaEmbeddingProvider:
+    return OllamaEmbeddingProvider(get_settings())
+
+
+def get_prompt_registry(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyPromptRegistry:
+    return SqlAlchemyPromptRegistry(session)
+
+
+def get_model_registry(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyModelRegistry:
+    return SqlAlchemyModelRegistry(session)
+
+
+def get_invocation_logger(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyInvocationLogger:
+    return SqlAlchemyInvocationLogger(session)
+
+
+def get_llm_service(
+    anthropic_provider: AnthropicProvider = Depends(get_anthropic_provider),
+    ollama_provider: OllamaProvider = Depends(get_ollama_provider),
+    groq_provider: GroqProvider = Depends(get_groq_provider),
+    prompts: SqlAlchemyPromptRegistry = Depends(get_prompt_registry),
+    models: SqlAlchemyModelRegistry = Depends(get_model_registry),
+    invocations: SqlAlchemyInvocationLogger = Depends(get_invocation_logger),
+) -> LLMService:
+    # Keyed by ModelVersion.provider — a third provider is one more
+    # entry here plus its own adapter, not a change to LLMService.
+    providers: dict[str, LLMProviderInterface] = {
+        "anthropic": anthropic_provider,
+        "ollama": ollama_provider,
+        "groq": groq_provider,
+    }
+    return LLMService(providers=providers, prompts=prompts, models=models, invocations=invocations)
+
+
+def get_model_preference_service(
+    models: SqlAlchemyModelRegistry = Depends(get_model_registry),
+    users: SqlAlchemyUserRepository = Depends(get_user_repository_scoped),
+) -> ModelPreferenceService:
+    return ModelPreferenceService(models, users)
 
 
 # --- Chat domain wiring (UI enhancement brief Part 1.2) ---
@@ -501,8 +699,55 @@ def get_chat_service(
         get_chat_conversation_repository
     ),
     messages: SqlAlchemyChatMessageRepository = Depends(get_chat_message_repository),
+    llm_service: LLMService = Depends(get_llm_service),
 ) -> ChatService:
-    return ChatService(conversations, messages)
+    return ChatService(conversations, messages, llm_service)
+
+
+# --- Resume Intelligence domain wiring (Phase 5) ---
+# Self-service, same as Career Profile above. get_resume_text_extractor
+# is process-wide (lru_cache) — PdfDocxTextExtractor is stateless, no
+# reason to reconstruct it every request.
+
+
+def get_resume_repository(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyResumeRepository:
+    return SqlAlchemyResumeRepository(session)
+
+
+@lru_cache
+def get_resume_text_extractor() -> PdfDocxTextExtractor:
+    return PdfDocxTextExtractor()
+
+
+def get_resume_extraction_service(
+    resumes: SqlAlchemyResumeRepository = Depends(get_resume_repository),
+    storage: S3ObjectStorageRepository = Depends(get_object_storage),
+    extractor: PdfDocxTextExtractor = Depends(get_resume_text_extractor),
+    llm_service: LLMService = Depends(get_llm_service),
+) -> ResumeExtractionService:
+    return ResumeExtractionService(resumes, storage, extractor, llm_service)
+
+
+def get_resume_merge_service(
+    resumes: SqlAlchemyResumeRepository = Depends(get_resume_repository),
+    experiences: ExperienceService = Depends(get_experience_service),
+    educations: EducationService = Depends(get_education_service),
+    certifications: CertificationService = Depends(get_certification_service),
+    career_highlights: CareerHighlightService = Depends(get_career_highlight_service),
+    key_achievements: KeyAchievementService = Depends(get_key_achievement_service),
+    career_profiles: CareerProfileService = Depends(get_career_profile_service),
+) -> ResumeMergeService:
+    return ResumeMergeService(
+        resumes,
+        experiences,
+        educations,
+        certifications,
+        career_highlights,
+        key_achievements,
+        career_profiles,
+    )
 
 
 # --- Quote of the day wiring (UI enhancement brief Part 1.3) ---
@@ -522,6 +767,17 @@ def get_quote_of_the_day_service(
     return QuoteOfTheDayService(provider)
 
 
+# --- Dashboard System Status wiring ---
+# Status-only (no restart execution) — see SystemStatusService's own
+# docstring for why. A fresh instance per request is fine, unlike the
+# quote provider above: there's no in-process cache to preserve, every
+# call performs live checks.
+
+
+def get_system_status_service() -> SystemStatusService:
+    return SystemStatusService(get_settings())
+
+
 # --- Skill Intelligence domain wiring (Phase 3, simplified per ADR-005) ---
 # The catalog/proficiency/category model (Skill, SkillCategory, UserSkill,
 # RoleTag, TargetRoleSkill) was removed entirely — Gap Analysis is now pure
@@ -535,3 +791,247 @@ def get_gap_analysis_service(
     target_roles: TargetRoleService = Depends(get_target_role_service),
 ) -> GapAnalysisService:
     return GapAnalysisService(career_profiles, target_roles)
+
+
+# --- Career Intelligence Knowledge Graph wiring (Phase 4.5.1 / MVP 1) ---
+# All CIKG tables are global reference data (no tenant_id, no RLS — see
+# app/adapters/db/models/career_intelligence.py), so these use the plain
+# get_db_session, not get_tenant_scoped_session.
+
+
+def get_skill_category_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemySkillCategoryRepository:
+    return SqlAlchemySkillCategoryRepository(session)
+
+
+def get_competency_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyCompetencyRepository:
+    return SqlAlchemyCompetencyRepository(session)
+
+
+def get_skill_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemySkillRepository:
+    return SqlAlchemySkillRepository(session)
+
+
+def get_cikg_role_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyCikgRoleRepository:
+    return SqlAlchemyCikgRoleRepository(session)
+
+
+def get_category_parent_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyCategoryParentRepository:
+    return SqlAlchemyCategoryParentRepository(session)
+
+
+def get_skill_category_membership_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemySkillCategoryMembershipRepository:
+    return SqlAlchemySkillCategoryMembershipRepository(session)
+
+
+def get_skill_competency_membership_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemySkillCompetencyMembershipRepository:
+    return SqlAlchemySkillCompetencyMembershipRepository(session)
+
+
+def get_related_skill_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyRelatedSkillRepository:
+    return SqlAlchemyRelatedSkillRepository(session)
+
+
+def get_role_required_skill_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyRoleRequiredSkillRepository:
+    return SqlAlchemyRoleRequiredSkillRepository(session)
+
+
+def get_skill_alias_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemySkillAliasRepository:
+    return SqlAlchemySkillAliasRepository(session)
+
+
+def get_skill_alias_admin_service(
+    aliases: SqlAlchemySkillAliasRepository = Depends(get_skill_alias_repository),
+) -> SkillAliasAdminService:
+    return SkillAliasAdminService(aliases)
+
+
+def get_prerequisite_of_edge_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyPrerequisiteOfEdgeRepository:
+    return SqlAlchemyPrerequisiteOfEdgeRepository(session)
+
+
+def get_specializes_edge_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemySpecializesEdgeRepository:
+    return SqlAlchemySpecializesEdgeRepository(session)
+
+
+def get_synonym_of_edge_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemySynonymOfEdgeRepository:
+    return SqlAlchemySynonymOfEdgeRepository(session)
+
+
+def get_content_revision_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyContentRevisionRepository:
+    return SqlAlchemyContentRevisionRepository(session)
+
+
+def get_content_history_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyContentHistoryRepository:
+    return SqlAlchemyContentHistoryRepository(session)
+
+
+def get_content_revision_service(
+    categories: SqlAlchemySkillCategoryRepository = Depends(get_skill_category_repository),
+    competencies: SqlAlchemyCompetencyRepository = Depends(get_competency_repository),
+    skills: SqlAlchemySkillRepository = Depends(get_skill_repository),
+    roles: SqlAlchemyCikgRoleRepository = Depends(get_cikg_role_repository),
+    category_parents: SqlAlchemyCategoryParentRepository = Depends(
+        get_category_parent_repository
+    ),
+    skill_category_memberships: SqlAlchemySkillCategoryMembershipRepository = Depends(
+        get_skill_category_membership_repository
+    ),
+    skill_competency_memberships: SqlAlchemySkillCompetencyMembershipRepository = Depends(
+        get_skill_competency_membership_repository
+    ),
+    related_skills: SqlAlchemyRelatedSkillRepository = Depends(get_related_skill_repository),
+    role_required_skills: SqlAlchemyRoleRequiredSkillRepository = Depends(
+        get_role_required_skill_repository
+    ),
+    prerequisite_of_edges: SqlAlchemyPrerequisiteOfEdgeRepository = Depends(
+        get_prerequisite_of_edge_repository
+    ),
+    specializes_edges: SqlAlchemySpecializesEdgeRepository = Depends(
+        get_specializes_edge_repository
+    ),
+    synonym_of_edges: SqlAlchemySynonymOfEdgeRepository = Depends(get_synonym_of_edge_repository),
+    revisions: SqlAlchemyContentRevisionRepository = Depends(get_content_revision_repository),
+    history: SqlAlchemyContentHistoryRepository = Depends(get_content_history_repository),
+) -> ContentRevisionService:
+    return ContentRevisionService(
+        categories=categories,
+        competencies=competencies,
+        skills=skills,
+        roles=roles,
+        category_parents=category_parents,
+        skill_category_memberships=skill_category_memberships,
+        skill_competency_memberships=skill_competency_memberships,
+        related_skills=related_skills,
+        role_required_skills=role_required_skills,
+        prerequisite_of_edges=prerequisite_of_edges,
+        specializes_edges=specializes_edges,
+        synonym_of_edges=synonym_of_edges,
+        revisions=revisions,
+        history=history,
+    )
+
+
+def get_catalog_query_service(
+    categories: SqlAlchemySkillCategoryRepository = Depends(get_skill_category_repository),
+    competencies: SqlAlchemyCompetencyRepository = Depends(get_competency_repository),
+    skills: SqlAlchemySkillRepository = Depends(get_skill_repository),
+    roles: SqlAlchemyCikgRoleRepository = Depends(get_cikg_role_repository),
+    category_parents: SqlAlchemyCategoryParentRepository = Depends(
+        get_category_parent_repository
+    ),
+    skill_category_memberships: SqlAlchemySkillCategoryMembershipRepository = Depends(
+        get_skill_category_membership_repository
+    ),
+    related_skills: SqlAlchemyRelatedSkillRepository = Depends(get_related_skill_repository),
+    role_required_skills: SqlAlchemyRoleRequiredSkillRepository = Depends(
+        get_role_required_skill_repository
+    ),
+    aliases: SqlAlchemySkillAliasRepository = Depends(get_skill_alias_repository),
+) -> CatalogQueryService:
+    return CatalogQueryService(
+        categories=categories,
+        competencies=competencies,
+        skills=skills,
+        roles=roles,
+        category_parents=category_parents,
+        skill_category_memberships=skill_category_memberships,
+        related_skills=related_skills,
+        role_required_skills=role_required_skills,
+        aliases=aliases,
+    )
+
+
+def get_skill_alias_resolution_service(
+    aliases: SqlAlchemySkillAliasRepository = Depends(get_skill_alias_repository),
+    skills: SqlAlchemySkillRepository = Depends(get_skill_repository),
+) -> SkillAliasResolutionService:
+    return SkillAliasResolutionService(aliases, skills)
+
+
+# --- CIKG search wiring (Phase 4.5.1 MVP 2A) ---
+# embedding_models/content_embeddings are global reference data like
+# every other CIKG table (get_db_session, not tenant-scoped).
+
+
+def get_embedding_model_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyEmbeddingModelRepository:
+    return SqlAlchemyEmbeddingModelRepository(session)
+
+
+def get_content_embedding_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyContentEmbeddingRepository:
+    return SqlAlchemyContentEmbeddingRepository(session)
+
+
+def get_search_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemySearchRepository:
+    return SqlAlchemySearchRepository(session)
+
+
+def get_embedding_indexing_service(
+    embedding_provider: OllamaEmbeddingProvider = Depends(get_ollama_embedding_provider),
+    embedding_models: SqlAlchemyEmbeddingModelRepository = Depends(get_embedding_model_repository),
+    content_embeddings: SqlAlchemyContentEmbeddingRepository = Depends(
+        get_content_embedding_repository
+    ),
+    skills: SqlAlchemySkillRepository = Depends(get_skill_repository),
+    roles: SqlAlchemyCikgRoleRepository = Depends(get_cikg_role_repository),
+    competencies: SqlAlchemyCompetencyRepository = Depends(get_competency_repository),
+) -> EmbeddingIndexingService:
+    settings = get_settings()
+    return EmbeddingIndexingService(
+        embedding_provider,
+        embedding_models,
+        content_embeddings,
+        skills,
+        roles,
+        competencies,
+        model_name=settings.cikg_embedding_model,
+        provider_name="ollama",
+        dimensions=settings.cikg_embedding_dimensions,
+    )
+
+
+def get_search_service(
+    search_repo: SqlAlchemySearchRepository = Depends(get_search_repository),
+    related_skills: SqlAlchemyRelatedSkillRepository = Depends(get_related_skill_repository),
+    embedding_models: SqlAlchemyEmbeddingModelRepository = Depends(get_embedding_model_repository),
+    embedding_provider: OllamaEmbeddingProvider = Depends(get_ollama_embedding_provider),
+    alias_resolver: SkillAliasResolutionService = Depends(get_skill_alias_resolution_service),
+) -> SearchService:
+    return SearchService(
+        search_repo, related_skills, embedding_models, embedding_provider, alias_resolver
+    )

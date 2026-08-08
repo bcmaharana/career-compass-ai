@@ -1,11 +1,13 @@
 import {
   useAddPeerEndorsement,
+  useClearPeerEndorsements,
   useDeletePeerEndorsement,
   useMovePeerEndorsement,
   usePeerEndorsements,
   useUpdatePeerEndorsement,
 } from "@/api/queries/career-profile";
 import type { components } from "@/api/schema.gen";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollapseToggle } from "@/components/ui/collapse-toggle";
@@ -15,10 +17,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
 import { Textarea } from "@/components/ui/textarea";
+import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { Pencil, Plus, Quote, Trash2 } from "lucide-react";
+import { Eraser, Pencil, Plus, Quote, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 type PeerEndorsement = components["schemas"]["PeerEndorsementResponse"];
@@ -65,13 +68,19 @@ export function PeerEndorsementsSection({
   const addEndorsement = useAddPeerEndorsement();
   const updateEndorsement = useUpdatePeerEndorsement();
   const deleteEndorsement = useDeletePeerEndorsement();
+  const clearEndorsements = useClearPeerEndorsements();
   const moveEndorsement = useMovePeerEndorsement();
+  // Peer Endorsements stay Master-only regardless of which profile is
+  // being viewed — see CareerGoalsSection's identical note.
+  const isTargetRoleView = useProfileScope() !== null;
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PeerEndorsement | null>(null);
+  const [clearSectionOpen, setClearSectionOpen] = useState(false);
 
   function openAddDialog() {
     setEditingId(null);
@@ -96,7 +105,12 @@ export function PeerEndorsementsSection({
     const mutation = editingId
       ? updateEndorsement.mutateAsync({ id: editingId, body })
       : addEndorsement.mutateAsync(body);
-    mutation.then(() => setDialogOpen(false)).catch(() => {});
+    mutation
+      .then(() => {
+        setDialogOpen(false);
+        if (!editingId) setIsOpen(true);
+      })
+      .catch(() => {});
   }
 
   const isSaving = addEndorsement.isPending || updateEndorsement.isPending;
@@ -104,16 +118,28 @@ export function PeerEndorsementsSection({
 
   return (
     <Card className={cardBackground === "background" ? "bg-background" : undefined}>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex-row items-start justify-between space-y-0">
         <div>
-          <CardTitle>Recommendations</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle>Recommendations</CardTitle>
+            {isTargetRoleView && <Badge variant="default">Master profile</Badge>}
+          </div>
           <CardDescription>Testimonials from colleagues and managers</CardDescription>
         </div>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" onClick={openAddDialog}>
+        <div className="flex items-start gap-1">
+          <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
+            {isEditMode ? "Done" : "Edit"}
+          </Button>
+          {!!endorsements?.length && (
+            <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
+              <Eraser className="h-4 w-4" />
+              Clear
+            </Button>
+          )}
           <CollapseToggle
             isOpen={isOpen}
             onToggle={() => setIsOpen(!isOpen)}
@@ -145,16 +171,20 @@ export function PeerEndorsementsSection({
               itemAlternateClass(cardBackground, index),
             )}
           >
-            <MoveButtons
-              onMoveUp={() => moveEndorsement.mutate({ id: endorsement.id, direction: "up" })}
-              onMoveDown={() => moveEndorsement.mutate({ id: endorsement.id, direction: "down" })}
-              isFirst={index === 0}
-              isLast={index === endorsements.length - 1}
-              disabled={moveEndorsement.isPending}
-            />
+            {isEditMode && (
+              <MoveButtons
+                onMoveUp={() => moveEndorsement.mutate({ id: endorsement.id, direction: "up" })}
+                onMoveDown={() => moveEndorsement.mutate({ id: endorsement.id, direction: "down" })}
+                isFirst={index === 0}
+                isLast={index === endorsements.length - 1}
+                disabled={moveEndorsement.isPending}
+              />
+            )}
             <div className="flex-1">
               <Quote className="h-4 w-4 text-accent" />
-              <p className="mt-1 text-sm italic">&ldquo;{endorsement.content}&rdquo;</p>
+              <p className="mt-1 whitespace-pre-line text-sm italic">
+                &ldquo;{endorsement.content}&rdquo;
+              </p>
               <p className="mt-2 text-sm font-medium">{endorsement.recommender_name}</p>
               <p className="text-xs text-muted-foreground">
                 {[endorsement.recommender_title, endorsement.relationship]
@@ -163,12 +193,16 @@ export function PeerEndorsementsSection({
               </p>
             </div>
             <div className="flex shrink-0 gap-1">
-              <Button variant="ghost" size="sm" onClick={() => openEditDialog(endorsement)}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(endorsement)}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {isEditMode && (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(endorsement)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(endorsement)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         ))}
@@ -243,6 +277,20 @@ export function PeerEndorsementsSection({
             : ""
         }
         isPending={deleteEndorsement.isPending}
+      />
+
+      <ConfirmDialog
+        open={clearSectionOpen}
+        onCancel={() => setClearSectionOpen(false)}
+        onConfirm={() => {
+          clearEndorsements.mutate();
+          setClearSectionOpen(false);
+        }}
+        title="Clear Recommendations?"
+        description="Remove every recommendation from your profile? This can't be undone."
+        isPending={clearEndorsements.isPending}
+        confirmLabel="Clear"
+        confirmPendingLabel="Clearing..."
       />
     </Card>
   );

@@ -14,6 +14,7 @@ from dataclasses import replace
 import pytest
 
 from app.application.career_profile.career_profile_service import CareerProfileService
+from app.core.exceptions import CareerCompassError
 from app.domain.career_profile.entities import CareerProfile, CareerProfileVersion
 
 
@@ -40,10 +41,17 @@ class FakeCareerProfileRepository:
         return replace(profile)
 
     async def get_by_user_id(
-        self, tenant_id: uuid.UUID, user_id: uuid.UUID
+        self,
+        tenant_id: uuid.UUID,
+        user_id: uuid.UUID,
+        target_role_id: uuid.UUID | None = None,
     ) -> CareerProfile | None:
         for profile in self.profiles.values():
-            if profile.tenant_id == tenant_id and profile.user_id == user_id:
+            if (
+                profile.tenant_id == tenant_id
+                and profile.user_id == user_id
+                and profile.target_role_id == target_role_id
+            ):
                 return replace(profile)
         return None
 
@@ -68,6 +76,27 @@ class FakeCareerProfileVersionRepository:
         self, career_profile_id: uuid.UUID, *, limit: int = 50
     ) -> list[CareerProfileVersion]:
         return [v for v in self.versions if v.career_profile_id == career_profile_id][:limit]
+
+
+class FakeObjectStorageRepository:
+    """Records what was uploaded/deleted rather than touching real
+    S3/MinIO. `raise_on_delete` simulates a storage-side failure to
+    verify delete_photo's best-effort handling (see that method's
+    docstring)."""
+
+    def __init__(self, *, raise_on_delete: bool = False) -> None:
+        self.uploaded: dict[str, bytes] = {}
+        self.deleted_keys: list[str] = []
+        self._raise_on_delete = raise_on_delete
+
+    async def upload(self, *, key: str, content: bytes, content_type: str) -> str:
+        self.uploaded[key] = content
+        return f"http://fake-storage/bucket/{key}"
+
+    async def delete(self, *, key: str) -> None:
+        if self._raise_on_delete:
+            raise CareerCompassError(f"simulated storage failure for '{key}'")
+        self.deleted_keys.append(key)
 
 
 @pytest.fixture
@@ -156,3 +185,67 @@ class TestUpdate:
 
         assert updated.headline == "First ever update"
         assert len(profiles.profiles) == 1
+
+
+def _service_with_storage(
+    *, raise_on_delete: bool = False
+) -> tuple[
+    CareerProfileService,
+    FakeCareerProfileRepository,
+    FakeCareerProfileVersionRepository,
+    FakeObjectStorageRepository,
+]:
+    profiles = FakeCareerProfileRepository()
+    versions = FakeCareerProfileVersionRepository()
+    storage = FakeObjectStorageRepository(raise_on_delete=raise_on_delete)
+    return CareerProfileService(profiles, versions, storage), profiles, versions, storage
+
+
+@pytest.mark.unit
+class TestDeletePhoto:
+    async def test_no_op_when_profile_has_no_photo(self) -> None:
+        svc, _, _, storage = _service_with_storage()
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        await svc.get_or_create(tenant_id=tenant_id, user_id=user_id)
+
+        result = await svc.delete_photo(tenant_id=tenant_id, user_id=user_id)
+
+        assert result.photo_url is None
+        assert storage.deleted_keys == []
+
+    async def test_clears_photo_url_and_deletes_the_storage_object(self) -> None:
+        svc, profiles, _, storage = _service_with_storage()
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        profile = await svc.get_or_create(tenant_id=tenant_id, user_id=user_id)
+        profile.photo_url = (
+            f"http://fake-storage/bucket/profile-photos/{tenant_id}/{profile.id}.png?v=123"
+        )
+        await profiles.update(profile)
+
+        result = await svc.delete_photo(tenant_id=tenant_id, user_id=user_id)
+
+        assert result.photo_url is None
+        assert storage.deleted_keys == [f"profile-photos/{tenant_id}/{profile.id}.png"]
+
+    async def test_bumps_version_and_snapshots_prior_photo_url(self) -> None:
+        svc, profiles, versions, _ = _service_with_storage()
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        profile = await svc.get_or_create(tenant_id=tenant_id, user_id=user_id)
+        profile.photo_url = f"http://fake-storage/bucket/profile-photos/{tenant_id}/{profile.id}.jpg"
+        await profiles.update(profile)
+
+        result = await svc.delete_photo(tenant_id=tenant_id, user_id=user_id)
+
+        assert result.current_version == profile.current_version + 1
+        assert versions.versions[-1].snapshot["photo_url"] == profile.photo_url
+
+    async def test_storage_failure_does_not_block_clearing_the_field(self) -> None:
+        svc, profiles, _, _ = _service_with_storage(raise_on_delete=True)
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        profile = await svc.get_or_create(tenant_id=tenant_id, user_id=user_id)
+        profile.photo_url = f"http://fake-storage/bucket/profile-photos/{tenant_id}/{profile.id}.png"
+        await profiles.update(profile)
+
+        result = await svc.delete_photo(tenant_id=tenant_id, user_id=user_id)
+
+        assert result.photo_url is None

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { getErrorMessage } from "@/lib/errors";
 import { UserCircle } from "lucide-react";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
@@ -47,10 +48,21 @@ import { type ChangeEvent, useEffect, useRef, useState } from "react";
  * would submit the just-overwritten (old) value — making it look like
  * saves were "not persisting" when the actual save was submitting stale
  * data it never should have held in the first place.
+ *
+ * Photo is Master-only regardless of which profile is currently in view
+ * (one professional photo, not one per target role — resume merge never
+ * touches it either) — always fetched via the unscoped `useCareerProfile(null)`
+ * call. Headline, though, IS part of the current scope (a Target Role
+ * Profile's own headline, independent of Master's), so it's read/saved
+ * through a second, scope-aware `useCareerProfile(scope)` call. When
+ * viewing Master these are the same cached query; viewing a Target Role
+ * Profile, they're genuinely two different profiles' data in one card.
  */
 export function ProfileHeader() {
-  const { data: profile, isLoading } = useCareerProfile();
-  const updateProfile = useUpdateCareerProfile();
+  const scope = useProfileScope();
+  const { data: masterProfile } = useCareerProfile(null);
+  const { data: profile, isLoading } = useCareerProfile(scope);
+  const updateProfile = useUpdateCareerProfile(scope);
   const uploadPhoto = useUploadProfilePhoto();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -66,7 +78,7 @@ export function ProfileHeader() {
   // would load fine.
   useEffect(() => {
     setPhotoLoadFailed(false);
-  }, [profile?.photo_url]);
+  }, [masterProfile?.photo_url]);
 
   function openEdit() {
     setHeadline(profile?.headline ?? "");
@@ -121,20 +133,20 @@ export function ProfileHeader() {
     // to show through — it's one continuous painted box the whole way
     // down, not two independently-positioned pieces that could ever
     // drift apart mid-scroll.
-    <div className="sticky top-0 z-10 bg-[hsl(var(--center-bg))] pt-6">
+    <div className="sticky top-0 z-10 bg-[hsl(var(--center-bg))] pt-3">
       <Card>
         <CardContent className="flex flex-col gap-4 pt-6">
         <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-1 items-center gap-4">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="group relative h-28 w-28 shrink-0 overflow-hidden rounded-full border border-border bg-muted"
               aria-label="Change profile photo"
             >
-              {profile?.photo_url && !photoLoadFailed ? (
+              {masterProfile?.photo_url && !photoLoadFailed ? (
                 <img
-                  src={profile.photo_url}
+                  src={masterProfile.photo_url}
                   alt=""
                   className="h-full w-full object-cover"
                   onError={() => setPhotoLoadFailed(true)}
@@ -153,7 +165,7 @@ export function ProfileHeader() {
               className="hidden"
               onChange={handlePhotoChange}
             />
-            <div>
+            <div className="min-w-0 flex-1">
               {isEditing ? (
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="headline">Headline / About</Label>
@@ -191,7 +203,7 @@ export function ProfileHeader() {
               </Button>
             </div>
           ) : (
-            <Button variant="outline" size="sm" onClick={openEdit}>
+            <Button variant="ghost" size="sm" onClick={openEdit}>
               Edit
             </Button>
           )}

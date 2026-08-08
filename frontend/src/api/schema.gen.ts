@@ -58,6 +58,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity/login/phone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login Phone */
+        post: operations["login_phone_api_v1_identity_login_phone_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identity/me": {
         parameters: {
             query?: never;
@@ -121,11 +138,29 @@ export interface paths {
         get: operations["get_career_profile_api_v1_career_profile_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Clear Career Profile */
+        delete: operations["clear_career_profile_api_v1_career_profile_delete"];
         options?: never;
         head?: never;
         /** Update Career Profile */
         patch: operations["update_career_profile_api_v1_career_profile_patch"];
+        trace?: never;
+    };
+    "/api/v1/career-profile/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Career Profile Summary */
+        get: operations["get_career_profile_summary_api_v1_career_profile_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/career-profile/photo": {
@@ -139,7 +174,8 @@ export interface paths {
         put?: never;
         /** Upload Profile Photo */
         post: operations["upload_profile_photo_api_v1_career_profile_photo_post"];
-        delete?: never;
+        /** Delete Profile Photo */
+        delete: operations["delete_profile_photo_api_v1_career_profile_photo_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -157,7 +193,8 @@ export interface paths {
         put?: never;
         /** Add Experience */
         post: operations["add_experience_api_v1_career_profile_experiences_post"];
-        delete?: never;
+        /** Clear Experiences */
+        delete: operations["clear_experiences_api_v1_career_profile_experiences_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -210,7 +247,8 @@ export interface paths {
         put?: never;
         /** Add Education */
         post: operations["add_education_api_v1_career_profile_educations_post"];
-        delete?: never;
+        /** Clear Educations */
+        delete: operations["clear_educations_api_v1_career_profile_educations_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -263,7 +301,8 @@ export interface paths {
         put?: never;
         /** Add Certification */
         post: operations["add_certification_api_v1_career_profile_certifications_post"];
-        delete?: never;
+        /** Clear Certifications */
+        delete: operations["clear_certifications_api_v1_career_profile_certifications_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -316,7 +355,8 @@ export interface paths {
         put?: never;
         /** Add Career Highlight */
         post: operations["add_career_highlight_api_v1_career_profile_highlights_post"];
-        delete?: never;
+        /** Clear Career Highlights */
+        delete: operations["clear_career_highlights_api_v1_career_profile_highlights_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -369,7 +409,8 @@ export interface paths {
         put?: never;
         /** Add Key Achievement */
         post: operations["add_key_achievement_api_v1_career_profile_achievements_post"];
-        delete?: never;
+        /** Clear Key Achievements */
+        delete: operations["clear_key_achievements_api_v1_career_profile_achievements_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -422,7 +463,8 @@ export interface paths {
         put?: never;
         /** Add Peer Endorsement */
         post: operations["add_peer_endorsement_api_v1_career_profile_endorsements_post"];
-        delete?: never;
+        /** Clear Peer Endorsements */
+        delete: operations["clear_peer_endorsements_api_v1_career_profile_endorsements_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -475,7 +517,8 @@ export interface paths {
         put?: never;
         /** Add Career Goal */
         post: operations["add_career_goal_api_v1_career_goals_post"];
-        delete?: never;
+        /** Clear Career Goals */
+        delete: operations["clear_career_goals_api_v1_career_goals_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -638,6 +681,399 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai-platform/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Model Selection */
+        get: operations["get_model_selection_api_v1_ai_platform_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai-platform/model-preference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Model Preference */
+        patch: operations["set_model_preference_api_v1_ai_platform_model_preference_patch"];
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Categories */
+        get: operations["list_categories_api_v1_career_intelligence_categories_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/categories/{category_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Category */
+        get: operations["get_category_api_v1_career_intelligence_categories__category_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/competencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Competencies */
+        get: operations["list_competencies_api_v1_career_intelligence_competencies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Skills */
+        get: operations["list_skills_api_v1_career_intelligence_skills_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/skills/{skill_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Skill */
+        get: operations["get_skill_api_v1_career_intelligence_skills__skill_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/skill-aliases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Skill Alias */
+        post: operations["create_skill_alias_api_v1_career_intelligence_skill_aliases_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/skill-aliases/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolve Skill Alias */
+        get: operations["resolve_skill_alias_api_v1_career_intelligence_skill_aliases_resolve_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Roles */
+        get: operations["list_roles_api_v1_career_intelligence_roles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/roles/{role_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Role */
+        get: operations["get_role_api_v1_career_intelligence_roles__role_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search */
+        get: operations["search_api_v1_career_intelligence_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Revisions */
+        get: operations["list_revisions_api_v1_career_intelligence_revisions_get"];
+        put?: never;
+        /** Propose Revision */
+        post: operations["propose_revision_api_v1_career_intelligence_revisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/revisions/{revision_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Revision For Review */
+        post: operations["submit_revision_for_review_api_v1_career_intelligence_revisions__revision_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/revisions/{revision_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Revision */
+        post: operations["approve_revision_api_v1_career_intelligence_revisions__revision_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/revisions/{revision_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Revision */
+        post: operations["reject_revision_api_v1_career_intelligence_revisions__revision_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/revisions/{revision_id}/mark-rejected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Revision Rejected */
+        post: operations["mark_revision_rejected_api_v1_career_intelligence_revisions__revision_id__mark_rejected_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-intelligence/revisions/batch-approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Batch Approve Revisions */
+        post: operations["batch_approve_revisions_api_v1_career_intelligence_revisions_batch_approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resume-intelligence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Resumes */
+        get: operations["list_resumes_api_v1_resume_intelligence_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resume-intelligence/{resume_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Resume */
+        get: operations["get_resume_api_v1_resume_intelligence__resume_id__get"];
+        put?: never;
+        post?: never;
+        /** Discard Resume */
+        delete: operations["discard_resume_api_v1_resume_intelligence__resume_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resume-intelligence/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Resume */
+        post: operations["upload_resume_api_v1_resume_intelligence_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resume-intelligence/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Merge Resume */
+        post: operations["merge_resume_api_v1_resume_intelligence_merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get System Status */
+        get: operations["get_system_status_api_v1_system_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -667,10 +1103,32 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** BatchApprovalResultResponse */
+        BatchApprovalResultResponse: {
+            /** Approved */
+            approved: string[];
+            /** Failed */
+            failed: components["schemas"]["FailedRevisionResponse"][];
+        };
+        /** BatchApproveRequest */
+        BatchApproveRequest: {
+            /**
+             * Import Batch Id
+             * Format: uuid
+             */
+            import_batch_id: string;
+        };
         /** Body_upload_profile_photo_api_v1_career_profile_photo_post */
         Body_upload_profile_photo_api_v1_career_profile_photo_post: {
             /** File */
             file: string;
+        };
+        /** Body_upload_resume_api_v1_resume_intelligence_upload_post */
+        Body_upload_resume_api_v1_resume_intelligence_upload_post: {
+            /** File */
+            file: string;
+            /** Target Role Id */
+            target_role_id?: string | null;
         };
         /** CareerGoalRequest */
         CareerGoalRequest: {
@@ -757,9 +1215,36 @@ export interface components {
             /** Photo Url */
             photo_url: string | null;
             /** Core Competencies */
-            core_competencies: string[];
+            core_competencies: components["schemas"]["CoreCompetencyPayload"][];
             /** Section Order */
             section_order: string[] | null;
+        };
+        /**
+         * CareerProfileSummaryResponse
+         * @description Cheap counts snapshot of one profile (Master or a Target Role
+         *     Profile) — powers the frontend's Override-vs-Merge prompt during
+         *     resume merge, so the choice is informed ("this profile already has 3
+         *     experience entries and a summary") rather than a content-free yes/no.
+         */
+        CareerProfileSummaryResponse: {
+            /** Experience Count */
+            experience_count: number;
+            /** Education Count */
+            education_count: number;
+            /** Certification Count */
+            certification_count: number;
+            /** Career Highlight Count */
+            career_highlight_count: number;
+            /** Key Achievement Count */
+            key_achievement_count: number;
+            /** Competency Count */
+            competency_count: number;
+            /** Has Headline */
+            has_headline: boolean;
+            /** Has Summary */
+            has_summary: boolean;
+            /** Has Any Data */
+            has_any_data: boolean;
         };
         /** CertificationRequest */
         CertificationRequest: {
@@ -814,6 +1299,112 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** CikgRoleDetailResponse */
+        CikgRoleDetailResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string | null;
+            /** Experience Level */
+            experience_level: string | null;
+            /** Content Status */
+            content_status: string;
+            /** Required Skills */
+            required_skills: components["schemas"]["RequiredSkillResponse"][];
+        };
+        /** CikgRoleResponse */
+        CikgRoleResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string | null;
+            /** Experience Level */
+            experience_level: string | null;
+            /** Content Status */
+            content_status: string;
+        };
+        /** CompetencyResponse */
+        CompetencyResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Content Status */
+            content_status: string;
+        };
+        /** ContentRevisionResponse */
+        ContentRevisionResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Entity Type */
+            entity_type: string;
+            /** Entity Id */
+            entity_id: string | null;
+            /** Proposed Data */
+            proposed_data: {
+                [key: string]: unknown;
+            };
+            /** Revision Number */
+            revision_number: number;
+            /** Status */
+            status: string;
+            /** Confidence */
+            confidence: number | null;
+            /** Source Attribution */
+            source_attribution: string;
+            /** Import Batch Id */
+            import_batch_id: string | null;
+            /** Reviewed By */
+            reviewed_by: string | null;
+            /** Review Notes */
+            review_notes: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Reviewed At */
+            reviewed_at: string | null;
+        };
+        /** CoreCompetencyPayload */
+        CoreCompetencyPayload: {
+            /** Name */
+            name: string;
+            /** Category */
+            category?: string | null;
+        };
+        /** CreateSkillAliasRequest */
+        CreateSkillAliasRequest: {
+            /**
+             * Skill Id
+             * Format: uuid
+             */
+            skill_id: string;
+            /** Alias Text */
+            alias_text: string;
+            /** Source */
+            source: string;
+            /** Confidence */
+            confidence?: number | null;
         };
         /** CurrentUserResponse */
         CurrentUserResponse: {
@@ -938,6 +1529,98 @@ export interface components {
             /** Display Order */
             display_order: number;
         };
+        /** ExtractedCareerHighlight */
+        ExtractedCareerHighlight: {
+            /** Title */
+            title: string;
+            /** Company */
+            company?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Occurred On */
+            occurred_on?: string | null;
+        };
+        /** ExtractedCertification */
+        ExtractedCertification: {
+            /** Name */
+            name: string;
+            /** Issuing Organization */
+            issuing_organization: string;
+            /** Issue Date */
+            issue_date?: string | null;
+            /** Expiration Date */
+            expiration_date?: string | null;
+            /** Credential Id */
+            credential_id?: string | null;
+            /** Credential Url */
+            credential_url?: string | null;
+        };
+        /** ExtractedEducation */
+        ExtractedEducation: {
+            /** Institution */
+            institution: string;
+            /** Degree */
+            degree?: string | null;
+            /** Field Of Study */
+            field_of_study?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Description */
+            description?: string | null;
+        };
+        /** ExtractedExperience */
+        ExtractedExperience: {
+            /** Title */
+            title: string;
+            /** Company */
+            company: string;
+            /** Location */
+            location?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Description */
+            description?: string | null;
+        };
+        /** ExtractedResumeData */
+        ExtractedResumeData: {
+            /** Headline */
+            headline?: string | null;
+            /** Summary */
+            summary?: string | null;
+            /** Skills */
+            skills?: components["schemas"]["ExtractedSkill"][];
+            /** Experience */
+            experience?: components["schemas"]["ExtractedExperience"][];
+            /** Education */
+            education?: components["schemas"]["ExtractedEducation"][];
+            /** Certifications */
+            certifications?: components["schemas"]["ExtractedCertification"][];
+            /** Career Highlights */
+            career_highlights?: components["schemas"]["ExtractedCareerHighlight"][];
+            /** Key Achievements */
+            key_achievements?: components["schemas"]["ExtractedCareerHighlight"][];
+        };
+        /** ExtractedSkill */
+        ExtractedSkill: {
+            /** Name */
+            name: string;
+            /** Category */
+            category?: string | null;
+        };
+        /** FailedRevisionResponse */
+        FailedRevisionResponse: {
+            /**
+             * Revision Id
+             * Format: uuid
+             */
+            revision_id: string;
+            /** Error */
+            error: string;
+        };
         /** FeatureFlagResponse */
         FeatureFlagResponse: {
             /**
@@ -1047,6 +1730,32 @@ export interface components {
             /** Roles */
             roles: string[];
         };
+        /** ModelOptionResponse */
+        ModelOptionResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Provider */
+            provider: string;
+            /** Model Name */
+            model_name: string;
+            /** Display Name */
+            display_name: string;
+            /** Is Default */
+            is_default: boolean;
+        };
+        /** ModelSelectionResponse */
+        ModelSelectionResponse: {
+            /** Available */
+            available: components["schemas"]["ModelOptionResponse"][];
+            /**
+             * Selected Id
+             * Format: uuid
+             */
+            selected_id: string;
+        };
         /**
          * MoveRequest
          * @description Shared by every reorderable entity's move endpoint.
@@ -1084,10 +1793,37 @@ export interface components {
             /** Display Order */
             display_order: number;
         };
+        /** PhoneLoginRequest */
+        PhoneLoginRequest: {
+            /** Subdomain */
+            subdomain: string;
+            /** Firebase Id Token */
+            firebase_id_token: string;
+        };
         /** PhotoUploadResponse */
         PhotoUploadResponse: {
             /** Photo Url */
             photo_url: string;
+        };
+        /** ProposeRevisionRequest */
+        ProposeRevisionRequest: {
+            /** Entity Type */
+            entity_type: string;
+            /**
+             * Entity Id
+             * @description Null proposes a brand-new entity; set to edit an existing one.
+             */
+            entity_id?: string | null;
+            /** Proposed Data */
+            proposed_data: {
+                [key: string]: unknown;
+            };
+            /** Source Attribution */
+            source_attribution: string;
+            /** Confidence */
+            confidence?: number | null;
+            /** Import Batch Id */
+            import_batch_id?: string | null;
         };
         /** QuoteOfTheDayResponse */
         QuoteOfTheDayResponse: {
@@ -1095,6 +1831,32 @@ export interface components {
             content: string;
             /** Author */
             author: string | null;
+        };
+        /**
+         * RateLimitInfoResponse
+         * @description Groq's rate-limit headers off its last real API call this backend
+         *     process made — see GroqRateLimitSnapshot's docstring for why
+         *     request/token track separate (daily/per-minute) buckets and why the
+         *     reset fields are unparsed duration strings, not seconds.
+         */
+        RateLimitInfoResponse: {
+            /** Limit Requests */
+            limit_requests: number | null;
+            /** Remaining Requests */
+            remaining_requests: number | null;
+            /** Reset Requests */
+            reset_requests: string | null;
+            /** Limit Tokens */
+            limit_tokens: number | null;
+            /** Remaining Tokens */
+            remaining_tokens: number | null;
+            /** Reset Tokens */
+            reset_tokens: string | null;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
         };
         /** RegisterTenantRequest */
         RegisterTenantRequest: {
@@ -1138,6 +1900,146 @@ export interface components {
             /** Admin Email */
             admin_email: string;
         };
+        /** RejectRevisionRequest */
+        RejectRevisionRequest: {
+            /** Review Notes */
+            review_notes: string;
+        };
+        /** RequiredSkillResponse */
+        RequiredSkillResponse: {
+            /**
+             * Skill Id
+             * Format: uuid
+             */
+            skill_id: string;
+            /** Requirement Level */
+            requirement_level: string;
+        };
+        /**
+         * ResolveAliasResponse
+         * @description `skill: null` is an expected, non-error outcome — see
+         *     SkillAliasResolutionService's docstring.
+         */
+        ResolveAliasResponse: {
+            skill: components["schemas"]["SkillResponse"] | null;
+        };
+        /** ResumeMergeRequest */
+        ResumeMergeRequest: {
+            /**
+             * Resume Id
+             * Format: uuid
+             */
+            resume_id: string;
+            /**
+             * Accept Headline
+             * @default false
+             */
+            accept_headline: boolean;
+            /**
+             * Accept Summary
+             * @default false
+             */
+            accept_summary: boolean;
+            /** Accepted Skill Indices */
+            accepted_skill_indices?: number[];
+            /** Accepted Experience Indices */
+            accepted_experience_indices?: number[];
+            /** Accepted Education Indices */
+            accepted_education_indices?: number[];
+            /** Accepted Certification Indices */
+            accepted_certification_indices?: number[];
+            /** Accepted Career Highlight Indices */
+            accepted_career_highlight_indices?: number[];
+            /** Accepted Key Achievement Indices */
+            accepted_key_achievement_indices?: number[];
+        };
+        /** ResumeMergeResponse */
+        ResumeMergeResponse: {
+            /** Added Experience Count */
+            added_experience_count: number;
+            /** Added Education Count */
+            added_education_count: number;
+            /** Added Certification Count */
+            added_certification_count: number;
+            /** Added Skills Count */
+            added_skills_count: number;
+            /** Added Career Highlight Count */
+            added_career_highlight_count: number;
+            /** Added Key Achievement Count */
+            added_key_achievement_count: number;
+            /** Updated Headline */
+            updated_headline: boolean;
+            /** Updated Summary */
+            updated_summary: boolean;
+            /** Skipped Experience Titles */
+            skipped_experience_titles?: string[];
+        };
+        /** ResumeResponse */
+        ResumeResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Original Filename */
+            original_filename: string;
+            /** Status */
+            status: string;
+            extracted_data: components["schemas"]["ExtractedResumeData"] | null;
+            /** Error Message */
+            error_message: string | null;
+            /** Target Role Id */
+            target_role_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * ResumeSummary
+         * @description Lighter shape for the history list — omits extracted_data (can be
+         *     a substantial JSON blob per resume) since the list view only needs
+         *     to show filename/status/target role/date; the full detail is
+         *     fetched separately (GET /resume-intelligence/{id}) when a specific
+         *     resume is opened for review.
+         */
+        ResumeSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Original Filename */
+            original_filename: string;
+            /** Status */
+            status: string;
+            /** Target Role Id */
+            target_role_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** SearchResultResponse */
+        SearchResultResponse: {
+            /** Entity Type */
+            entity_type: string;
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Score */
+            score: number;
+            /** Matched Via */
+            matched_via: string[];
+        };
         /** SendChatMessageRequest */
         SendChatMessageRequest: {
             /** Conversation Id */
@@ -1154,6 +2056,116 @@ export interface components {
             conversation_id: string;
             user_message: components["schemas"]["ChatMessageResponse"];
             assistant_message: components["schemas"]["ChatMessageResponse"];
+        };
+        /** ServiceStatusResponse */
+        ServiceStatusResponse: {
+            /** Name */
+            name: string;
+            /** Label */
+            label: string;
+            /** Status */
+            status: string;
+            /** Detail */
+            detail: string | null;
+            /** Fix Command */
+            fix_command: string | null;
+            rate_limit?: components["schemas"]["RateLimitInfoResponse"] | null;
+        };
+        /** SetModelPreferenceRequest */
+        SetModelPreferenceRequest: {
+            /** Model Version Id */
+            model_version_id?: string | null;
+        };
+        /** SkillAliasResponse */
+        SkillAliasResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Skill Id
+             * Format: uuid
+             */
+            skill_id: string;
+            /** Alias Text */
+            alias_text: string;
+            /** Normalized Text */
+            normalized_text: string;
+            /** Source */
+            source: string;
+            /** Confidence */
+            confidence: number | null;
+        };
+        /** SkillCategoryResponse */
+        SkillCategoryResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Content Status */
+            content_status: string;
+        };
+        /** SkillDetailResponse */
+        SkillDetailResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Content Status */
+            content_status: string;
+            /** Ats Keywords */
+            ats_keywords: string[];
+            /** Proficiency Level Definitions */
+            proficiency_level_definitions: {
+                [key: string]: string;
+            } | null;
+            /** Category Ids */
+            category_ids: string[];
+            /** Related Skill Ids */
+            related_skill_ids: string[];
+            /** Aliases */
+            aliases: string[];
+        };
+        /** SkillResponse */
+        SkillResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Content Status */
+            content_status: string;
+            /** Ats Keywords */
+            ats_keywords: string[];
+            /** Proficiency Level Definitions */
+            proficiency_level_definitions: {
+                [key: string]: string;
+            } | null;
+        };
+        /** SystemStatusResponse */
+        SystemStatusResponse: {
+            /** Services */
+            services: components["schemas"]["ServiceStatusResponse"][];
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
         };
         /** TargetRoleGapResponse */
         TargetRoleGapResponse: {
@@ -1197,7 +2209,7 @@ export interface components {
             /** Summary */
             summary?: string | null;
             /** Core Competencies */
-            core_competencies?: string[] | null;
+            core_competencies?: components["schemas"]["CoreCompetencyPayload"][] | null;
             /** Section Order */
             section_order?: string[] | null;
         };
@@ -1334,6 +2346,39 @@ export interface operations {
             };
         };
     };
+    login_phone_api_v1_identity_login_phone_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhoneLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_me_api_v1_identity_me_get: {
         parameters: {
             query?: never;
@@ -1429,7 +2474,9 @@ export interface operations {
     };
     get_career_profile_api_v1_career_profile_get: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1445,11 +2492,51 @@ export interface operations {
                     "application/json": components["schemas"]["CareerProfileResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_career_profile_api_v1_career_profile_delete: {
+        parameters: {
+            query?: {
+                target_role_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     update_career_profile_api_v1_career_profile_patch: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1467,6 +2554,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CareerProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_career_profile_summary_api_v1_career_profile_summary_get: {
+        parameters: {
+            query?: {
+                target_role_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CareerProfileSummaryResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1513,9 +2631,29 @@ export interface operations {
             };
         };
     };
-    list_experiences_api_v1_career_profile_experiences_get: {
+    delete_profile_photo_api_v1_career_profile_photo_delete: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_experiences_api_v1_career_profile_experiences_get: {
+        parameters: {
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1531,11 +2669,22 @@ export interface operations {
                     "application/json": components["schemas"]["ExperienceResponse"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     add_experience_api_v1_career_profile_experiences_post: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1554,6 +2703,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ExperienceResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_experiences_api_v1_career_profile_experiences_delete: {
+        parameters: {
+            query?: {
+                target_role_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -1632,7 +2810,9 @@ export interface operations {
     };
     move_experience_api_v1_career_profile_experiences__experience_id__move_post: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path: {
                 experience_id: string;
@@ -1667,7 +2847,9 @@ export interface operations {
     };
     list_educations_api_v1_career_profile_educations_get: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1683,11 +2865,22 @@ export interface operations {
                     "application/json": components["schemas"]["EducationResponse"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     add_education_api_v1_career_profile_educations_post: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1706,6 +2899,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["EducationResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_educations_api_v1_career_profile_educations_delete: {
+        parameters: {
+            query?: {
+                target_role_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -1784,7 +3006,9 @@ export interface operations {
     };
     move_education_api_v1_career_profile_educations__education_id__move_post: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path: {
                 education_id: string;
@@ -1819,7 +3043,9 @@ export interface operations {
     };
     list_certifications_api_v1_career_profile_certifications_get: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1835,11 +3061,22 @@ export interface operations {
                     "application/json": components["schemas"]["CertificationResponse"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     add_certification_api_v1_career_profile_certifications_post: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1858,6 +3095,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CertificationResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_certifications_api_v1_career_profile_certifications_delete: {
+        parameters: {
+            query?: {
+                target_role_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -1936,7 +3202,9 @@ export interface operations {
     };
     move_certification_api_v1_career_profile_certifications__certification_id__move_post: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path: {
                 certification_id: string;
@@ -1971,7 +3239,9 @@ export interface operations {
     };
     list_career_highlights_api_v1_career_profile_highlights_get: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1987,11 +3257,22 @@ export interface operations {
                     "application/json": components["schemas"]["CareerHighlightResponse"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     add_career_highlight_api_v1_career_profile_highlights_post: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2010,6 +3291,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CareerHighlightResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_career_highlights_api_v1_career_profile_highlights_delete: {
+        parameters: {
+            query?: {
+                target_role_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2088,7 +3398,9 @@ export interface operations {
     };
     move_career_highlight_api_v1_career_profile_highlights__highlight_id__move_post: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path: {
                 highlight_id: string;
@@ -2123,7 +3435,9 @@ export interface operations {
     };
     list_key_achievements_api_v1_career_profile_achievements_get: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2139,11 +3453,22 @@ export interface operations {
                     "application/json": components["schemas"]["KeyAchievementResponse"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     add_key_achievement_api_v1_career_profile_achievements_post: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2162,6 +3487,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["KeyAchievementResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_key_achievements_api_v1_career_profile_achievements_delete: {
+        parameters: {
+            query?: {
+                target_role_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2240,7 +3594,9 @@ export interface operations {
     };
     move_key_achievement_api_v1_career_profile_achievements__achievement_id__move_post: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+            };
             header?: never;
             path: {
                 achievement_id: string;
@@ -2323,6 +3679,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    clear_peer_endorsements_api_v1_career_profile_endorsements_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -2475,6 +3849,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    clear_career_goals_api_v1_career_goals_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -2866,6 +4258,727 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GapAnalysisResponse"];
+                };
+            };
+        };
+    };
+    get_model_selection_api_v1_ai_platform_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSelectionResponse"];
+                };
+            };
+        };
+    };
+    set_model_preference_api_v1_ai_platform_model_preference_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetModelPreferenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSelectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_categories_api_v1_career_intelligence_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillCategoryResponse"][];
+                };
+            };
+        };
+    };
+    get_category_api_v1_career_intelligence_categories__category_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillCategoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_competencies_api_v1_career_intelligence_competencies_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetencyResponse"][];
+                };
+            };
+        };
+    };
+    list_skills_api_v1_career_intelligence_skills_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillResponse"][];
+                };
+            };
+        };
+    };
+    get_skill_api_v1_career_intelligence_skills__skill_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skill_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_skill_alias_api_v1_career_intelligence_skill_aliases_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSkillAliasRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillAliasResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_skill_alias_api_v1_career_intelligence_skill_aliases_resolve_get: {
+        parameters: {
+            query: {
+                text: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveAliasResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_roles_api_v1_career_intelligence_roles_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CikgRoleResponse"][];
+                };
+            };
+        };
+    };
+    get_role_api_v1_career_intelligence_roles__role_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CikgRoleDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_api_v1_career_intelligence_search_get: {
+        parameters: {
+            query: {
+                q: string;
+                entity_type?: ("skill" | "cikg_role" | "competency") | null;
+                category_id?: string | null;
+                role_id?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResultResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_revisions_api_v1_career_intelligence_revisions_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+                import_batch_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentRevisionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propose_revision_api_v1_career_intelligence_revisions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeRevisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentRevisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_revision_for_review_api_v1_career_intelligence_revisions__revision_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentRevisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_revision_api_v1_career_intelligence_revisions__revision_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentRevisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_revision_api_v1_career_intelligence_revisions__revision_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectRevisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentRevisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_revision_rejected_api_v1_career_intelligence_revisions__revision_id__mark_rejected_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectRevisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentRevisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_approve_revisions_api_v1_career_intelligence_revisions_batch_approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchApprovalResultResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_resumes_api_v1_resume_intelligence_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeSummary"][];
+                };
+            };
+        };
+    };
+    get_resume_api_v1_resume_intelligence__resume_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resume_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_resume_api_v1_resume_intelligence__resume_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resume_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_resume_api_v1_resume_intelligence_upload_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_resume_api_v1_resume_intelligence_upload_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    merge_resume_api_v1_resume_intelligence_merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResumeMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeMergeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_system_status_api_v1_system_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemStatusResponse"];
                 };
             };
         };

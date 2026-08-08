@@ -27,8 +27,12 @@ class EducationService:
         self, *, tenant_id: UUID, user_id: UUID, education_id: UUID
     ) -> Education:
         education = await self._educations.get_by_id(tenant_id, education_id)
-        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
-        if education is None or education.career_profile_id != profile.id:
+        if education is None:
+            raise NotFoundError("Education not found.", code="EDUCATION_NOT_FOUND")
+        profile = await self._career_profiles.get_by_id(
+            tenant_id=tenant_id, profile_id=education.career_profile_id
+        )
+        if profile is None or profile.user_id != user_id:
             raise NotFoundError("Education not found.", code="EDUCATION_NOT_FOUND")
         return education
 
@@ -43,8 +47,11 @@ class EducationService:
         start_date: date | None,
         end_date: date | None,
         description: str | None,
+        target_role_id: UUID | None = None,
     ) -> Education:
-        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
         now = datetime.now(UTC)
         return await self._educations.create(
             Education(
@@ -63,8 +70,12 @@ class EducationService:
             )
         )
 
-    async def list_for_current_user(self, *, tenant_id: UUID, user_id: UUID) -> list[Education]:
-        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
+    async def list_for_current_user(
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None = None
+    ) -> list[Education]:
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
         return await self._educations.list_for_profile(tenant_id, profile.id)
 
     async def update(
@@ -104,3 +115,11 @@ class EducationService:
             tenant_id=tenant_id, user_id=user_id, education_id=education_id
         )
         await self._educations.move(tenant_id, education_id, direction)
+
+    async def clear_all(
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None = None
+    ) -> None:
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
+        await self._educations.soft_delete_all_for_profile(tenant_id, profile.id)

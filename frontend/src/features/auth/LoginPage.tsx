@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneLoginForm } from "@/features/auth/PhoneLoginForm";
 import { cn } from "@/lib/utils";
 import { Compass } from "lucide-react";
 import { type ComponentProps, type FormEvent, useState } from "react";
@@ -37,6 +38,10 @@ export function LoginPage() {
   const navigate = useNavigate();
   const login = useLogin();
 
+  const [method, setMethod] = useState<"email" | "phone">("email");
+  // Shared across both tabs (rather than each owning its own copy) so
+  // switching tabs mid-entry doesn't make the user retype which
+  // organization they're signing into.
   const [subdomain, setSubdomain] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -90,52 +95,74 @@ export function LoginPage() {
             <CardDescription>Continuous career intelligence for you and your team.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="subdomain">Organization</Label>
-                <RainbowBorderInput
-                  id="subdomain"
-                  type="text"
-                  placeholder="acme"
-                  autoComplete="organization"
-                  required
-                  value={subdomain}
-                  onChange={(e) => setSubdomain(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="email">Work email</Label>
-                <RainbowBorderInput
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="password">Password</Label>
-                <RainbowBorderInput
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
+            <div className="mb-4 grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
+              {(["email", "phone"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setMethod(option)}
+                  className={cn(
+                    "rounded-sm py-1.5 text-sm font-medium transition-colors",
+                    method === option
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {option === "email" ? "Email" : "Phone"}
+                </button>
+              ))}
+            </div>
 
-              {errorMessage && (
-                <p role="alert" className="text-sm text-destructive">
-                  {errorMessage}
-                </p>
-              )}
+            {method === "email" ? (
+              <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="subdomain">Organization</Label>
+                  <RainbowBorderInput
+                    id="subdomain"
+                    type="text"
+                    placeholder="acme"
+                    autoComplete="organization"
+                    required
+                    value={subdomain}
+                    onChange={(e) => setSubdomain(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="email">Work email</Label>
+                  <RainbowBorderInput
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="password">Password</Label>
+                  <RainbowBorderInput
+                    id="password"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
 
-              <Button type="submit" className="mt-2 w-full" disabled={login.isPending}>
-                {login.isPending ? "Signing in..." : "Sign in"}
-              </Button>
-            </form>
+                {errorMessage && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {errorMessage}
+                  </p>
+                )}
+
+                <Button type="submit" className="mt-2 w-full" disabled={login.isPending}>
+                  {login.isPending ? "Signing in..." : "Sign in"}
+                </Button>
+              </form>
+            ) : (
+              <PhoneLoginForm subdomain={subdomain} onSubdomainChange={setSubdomain} />
+            )}
           </CardContent>
         </Card>
       </div>

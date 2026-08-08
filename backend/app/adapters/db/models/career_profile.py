@@ -43,8 +43,27 @@ class CareerProfileModel(Base):
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     career_readiness_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     photo_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
-    core_competencies: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    # Each element is {"name": str, "category": str | None} — see
+    # CoreCompetency in app/domain/career_profile/entities.py. Kept as a
+    # loosely-typed JSON column (not a dataclass) per this module's
+    # mypy-strict exemption.
+    core_competencies: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
     section_order: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    # NULL = the Master Profile. A real id = one of this user's up-to-10
+    # independent Target Role Profiles (TargetRoleService.MAX_TARGET_ROLES)
+    # — a fully separate row with its own Experience/Education/etc.
+    # children via career_profile_id, not a filter over Master's data.
+    # Enforced to at most one row per (tenant_id, user_id) for Master and
+    # at most one per (tenant_id, user_id, target_role_id) for a target
+    # role via two partial unique indexes (see migration
+    # f1a4c9e6b3d2_target_role_profiles.py) — a plain composite unique
+    # constraint would NOT work here since Postgres treats NULLs as
+    # distinct from each other.
+    target_role_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("target_roles.id"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

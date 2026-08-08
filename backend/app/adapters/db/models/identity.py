@@ -86,6 +86,7 @@ class UserModel(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     phone_number: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    phone_number_e164: Mapped[str | None] = mapped_column(String(20), nullable=True)
     country: Mapped[str | None] = mapped_column(String(2), nullable=True)
     language: Mapped[str | None] = mapped_column(String(10), nullable=True)
     address_line1: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -93,6 +94,9 @@ class UserModel(Base):
     city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     state: Mapped[str | None] = mapped_column(String(100), nullable=True)
     postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    preferred_model_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("model_versions.id"), nullable=True
+    )
 
 
 class PermissionModel(Base):

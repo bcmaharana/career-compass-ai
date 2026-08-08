@@ -2,8 +2,11 @@ import { useCareerProfile, useUpdateCareerProfile } from "@/api/queries/career-p
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollapseToggle } from "@/components/ui/collapse-toggle";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { getErrorMessage } from "@/lib/errors";
+import { Eraser } from "lucide-react";
 import { useState } from "react";
 
 /**
@@ -20,16 +23,29 @@ import { useState } from "react";
  * follow-up decision.
  */
 export function ExecutiveSummarySection() {
-  const { data: profile } = useCareerProfile();
-  const updateProfile = useUpdateCareerProfile();
+  const scope = useProfileScope();
+  const { data: profile } = useCareerProfile(scope);
+  const updateProfile = useUpdateCareerProfile(scope);
 
   const [isEditing, setIsEditing] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
   const [summary, setSummary] = useState("");
+  const [clearOpen, setClearOpen] = useState(false);
 
   function openEdit() {
     setSummary(profile?.summary ?? "");
     setIsEditing(true);
+  }
+
+  async function handleClear() {
+    try {
+      await updateProfile.mutateAsync({
+        headline: profile?.headline ?? null,
+        summary: null,
+      });
+    } finally {
+      setClearOpen(false);
+    }
   }
 
   async function handleSave() {
@@ -56,12 +72,18 @@ export function ExecutiveSummarySection() {
     // never needs to change dynamically the way a reorderable section's
     // does (see section-order.ts).
     <Card className="bg-background">
-      <CardHeader className="flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Executive Summary</CardTitle>
-        <div className="flex items-center gap-1">
+        <div className="flex items-start gap-1">
           {!isEditing && (
-            <Button variant="outline" size="sm" onClick={openEdit}>
+            <Button variant="ghost" size="sm" onClick={openEdit}>
               Edit
+            </Button>
+          )}
+          {!isEditing && !!profile?.summary && (
+            <Button variant="ghost" size="sm" onClick={() => setClearOpen(true)}>
+              <Eraser className="h-4 w-4" />
+              Clear
             </Button>
           )}
           <CollapseToggle
@@ -97,12 +119,23 @@ export function ExecutiveSummarySection() {
               )}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="whitespace-pre-line text-sm text-muted-foreground">
               {profile?.summary || "No summary yet — add one to help your AI coach get to know you."}
             </p>
           )}
         </CardContent>
       )}
+
+      <ConfirmDialog
+        open={clearOpen}
+        onCancel={() => setClearOpen(false)}
+        onConfirm={handleClear}
+        title="Clear Executive Summary?"
+        description="Remove your executive summary? This can't be undone."
+        isPending={updateProfile.isPending}
+        confirmLabel="Clear"
+        confirmPendingLabel="Clearing..."
+      />
     </Card>
   );
 }

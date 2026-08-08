@@ -77,3 +77,16 @@ class SqlAlchemyChatMessageRepository:
         await self._session.flush()
         await self._session.refresh(model)
         return _message_to_domain(model)
+
+    async def list_by_conversation(
+        self, tenant_id: UUID, conversation_id: UUID
+    ) -> list[ChatMessage]:
+        result = await self._session.execute(
+            select(ChatMessageModel)
+            .where(
+                ChatMessageModel.tenant_id == tenant_id,
+                ChatMessageModel.conversation_id == conversation_id,
+            )
+            .order_by(ChatMessageModel.created_at)
+        )
+        return [_message_to_domain(model) for model in result.scalars().all()]

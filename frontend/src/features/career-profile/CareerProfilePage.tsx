@@ -1,4 +1,12 @@
-import { useCareerProfile, useUpdateCareerProfile } from "@/api/queries/career-profile";
+import {
+  useCareerProfile,
+  useClearCareerProfile,
+  useTargetRoles,
+  useUpdateCareerProfile,
+} from "@/api/queries/career-profile";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CareerGoalsSection } from "@/features/career-profile/CareerGoalsSection";
 import { CareerHighlightsSection } from "@/features/career-profile/CareerHighlightsSection";
 import { CertificationSection } from "@/features/career-profile/CertificationSection";
@@ -9,8 +17,11 @@ import { ExperienceSection } from "@/features/career-profile/ExperienceSection";
 import { KeyAchievementsSection } from "@/features/career-profile/KeyAchievementsSection";
 import { PeerEndorsementsSection } from "@/features/career-profile/PeerEndorsementsSection";
 import { ProfileHeader } from "@/features/career-profile/ProfileHeader";
-import { useMemo } from "react";
+import { ProfileScopeProvider } from "@/features/career-profile/ProfileScopeContext";
+import { Eraser } from "lucide-react";
+import { useMemo, useState } from "react";
 import type { ComponentType } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { SectionOrderProps } from "@/features/career-profile/section-order";
 
 /**
@@ -62,8 +73,15 @@ function resolveOrder(saved: string[] | null | undefined): string[] {
  * text list on this page.
  */
 export function CareerProfilePage() {
-  const { data: profile } = useCareerProfile();
-  const updateProfile = useUpdateCareerProfile();
+  const [searchParams] = useSearchParams();
+  const targetRoleId = searchParams.get("role");
+  const { data: targetRoles } = useTargetRoles();
+  const activeRole = targetRoleId ? targetRoles?.find((r) => r.id === targetRoleId) : null;
+
+  const { data: profile } = useCareerProfile(targetRoleId);
+  const updateProfile = useUpdateCareerProfile(targetRoleId);
+  const clearProfile = useClearCareerProfile(targetRoleId);
+  const [clearProfileOpen, setClearProfileOpen] = useState(false);
 
   const orderedKeys = useMemo(() => resolveOrder(profile?.section_order), [profile?.section_order]);
 
@@ -90,29 +108,73 @@ export function CareerProfilePage() {
   }
 
   return (
-    <div className="-mt-8 grid gap-3">
-      <ProfileHeader />
-      <ExecutiveSummarySection />
-      {orderedKeys.map((key, index) => {
-        const def = SECTION_DEFS.find((s) => s.key === key);
-        if (!def) return null;
-        const { Component } = def;
-        return (
-          <Component
-            key={key}
-            onMoveUp={() => moveSection(key, "up")}
-            onMoveDown={() => moveSection(key, "down")}
-            isFirst={index === 0}
-            isLast={index === orderedKeys.length - 1}
-            moveDisabled={updateProfile.isPending}
-            // ProfileHeader (white) then ExecutiveSummarySection
-            // (tinted) come before this list, so the first reorderable
-            // section alternates starting back at white, then tinted,
-            // etc.
-            cardBackground={index % 2 === 0 ? "card" : "background"}
-          />
-        );
-      })}
-    </div>
+    <ProfileScopeProvider targetRoleId={targetRoleId}>
+      <div className="-mt-8 grid gap-3">
+        <div className="-mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-semibold text-foreground">
+              Career Profile:{" "}
+              <span className="bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] bg-clip-text text-transparent">
+                {activeRole ? activeRole.role_name : "Master"}
+              </span>
+            </span>
+            {activeRole && <Badge variant="accent">{activeRole.tag}</Badge>}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            onClick={() => setClearProfileOpen(true)}
+          >
+            <Eraser className="h-4 w-4" />
+            {activeRole ? "Clear This Target Role Profile" : "Clear Career Profile"}
+          </Button>
+        </div>
+        <ProfileHeader />
+        <ExecutiveSummarySection />
+        {orderedKeys.map((key, index) => {
+          const def = SECTION_DEFS.find((s) => s.key === key);
+          if (!def) return null;
+          const { Component } = def;
+          return (
+            <Component
+              key={key}
+              onMoveUp={() => moveSection(key, "up")}
+              onMoveDown={() => moveSection(key, "down")}
+              isFirst={index === 0}
+              isLast={index === orderedKeys.length - 1}
+              moveDisabled={updateProfile.isPending}
+              // ProfileHeader (white) then ExecutiveSummarySection
+              // (tinted) come before this list, so the first reorderable
+              // section alternates starting back at white, then tinted,
+              // etc.
+              cardBackground={index % 2 === 0 ? "card" : "background"}
+            />
+          );
+        })}
+
+        <ConfirmDialog
+          open={clearProfileOpen}
+          onCancel={() => setClearProfileOpen(false)}
+          onConfirm={() => {
+            clearProfile.mutate();
+            setClearProfileOpen(false);
+          }}
+          title={
+            activeRole
+              ? `Clear the ${activeRole.role_name} Target Role Profile?`
+              : "Clear your entire Career Profile?"
+          }
+          description={
+            activeRole
+              ? "This removes headline, summary, core competencies, and every experience, education, certification, career highlight, and key achievement entry on this Target Role Profile only — your Master Profile, career goals, and recommendations are untouched. This can't be undone."
+              : "This removes your headline, summary, core competencies, and every entry in every section below — experience, education, certifications, career highlights, key achievements, career goals, and recommendations. Your profile photo is kept — delete it separately from the photo itself if you want it gone too. This can't be undone."
+          }
+          isPending={clearProfile.isPending}
+          confirmLabel="Clear everything"
+          confirmPendingLabel="Clearing..."
+        />
+      </div>
+    </ProfileScopeProvider>
   );
 }

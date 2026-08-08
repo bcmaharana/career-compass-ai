@@ -35,8 +35,15 @@ class ExperienceService:
         self, *, tenant_id: UUID, user_id: UUID, experience_id: UUID
     ) -> Experience:
         experience = await self._experiences.get_by_id(tenant_id, experience_id)
-        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
-        if experience is None or experience.career_profile_id != profile.id:
+        if experience is None:
+            raise NotFoundError("Experience not found.", code="EXPERIENCE_NOT_FOUND")
+        # Resolved from the item's OWN profile, not "the" (Master-by-default)
+        # profile — an item living on a Target Role Profile must still
+        # resolve here, or every edit/delete/move on it would 404.
+        profile = await self._career_profiles.get_by_id(
+            tenant_id=tenant_id, profile_id=experience.career_profile_id
+        )
+        if profile is None or profile.user_id != user_id:
             raise NotFoundError("Experience not found.", code="EXPERIENCE_NOT_FOUND")
         return experience
 
@@ -51,8 +58,11 @@ class ExperienceService:
         start_date: date,
         end_date: date | None,
         description: str | None,
+        target_role_id: UUID | None = None,
     ) -> Experience:
-        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
         now = datetime.now(UTC)
         return await self._experiences.create(
             Experience(
@@ -71,8 +81,12 @@ class ExperienceService:
             )
         )
 
-    async def list_for_current_user(self, *, tenant_id: UUID, user_id: UUID) -> list[Experience]:
-        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
+    async def list_for_current_user(
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None = None
+    ) -> list[Experience]:
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
         return await self._experiences.list_for_profile(tenant_id, profile.id)
 
     async def update(
@@ -112,3 +126,11 @@ class ExperienceService:
             tenant_id=tenant_id, user_id=user_id, experience_id=experience_id
         )
         await self._experiences.move(tenant_id, experience_id, direction)
+
+    async def clear_all(
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None = None
+    ) -> None:
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
+        await self._experiences.soft_delete_all_for_profile(tenant_id, profile.id)

@@ -8,6 +8,11 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+class CoreCompetencyPayload(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    category: str | None = Field(default=None, max_length=255)
+
+
 class CareerProfileResponse(BaseModel):
     id: UUID
     current_version: int
@@ -15,14 +20,32 @@ class CareerProfileResponse(BaseModel):
     summary: str | None
     career_readiness_score: int | None
     photo_url: str | None
-    core_competencies: list[str]
+    core_competencies: list[CoreCompetencyPayload]
     section_order: list[str] | None
+
+
+class CareerProfileSummaryResponse(BaseModel):
+    """Cheap counts snapshot of one profile (Master or a Target Role
+    Profile) — powers the frontend's Override-vs-Merge prompt during
+    resume merge, so the choice is informed ("this profile already has 3
+    experience entries and a summary") rather than a content-free yes/no.
+    """
+
+    experience_count: int
+    education_count: int
+    certification_count: int
+    career_highlight_count: int
+    key_achievement_count: int
+    competency_count: int
+    has_headline: bool
+    has_summary: bool
+    has_any_data: bool
 
 
 class UpdateCareerProfileRequest(BaseModel):
     headline: str | None = Field(default=None, max_length=255)
     summary: str | None = Field(default=None, max_length=10_000)
-    core_competencies: list[str] | None = Field(default=None, max_length=50)
+    core_competencies: list[CoreCompetencyPayload] | None = Field(default=None, max_length=150)
     section_order: list[str] | None = Field(default=None, max_length=20)
 
 

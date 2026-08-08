@@ -7,19 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/errors";
 import { getCountryOptions, getLanguageOptions } from "@/lib/locale-options";
-import { AsYouType, isSupportedCountry, type CountryCode } from "libphonenumber-js";
+import { formatPhoneForCountry } from "@/lib/phone-format";
 import { type FormEvent, useState } from "react";
 
 type CurrentUserResponse = components["schemas"]["CurrentUserResponse"];
 
 const COUNTRY_OPTIONS = getCountryOptions();
 const LANGUAGE_OPTIONS = getLanguageOptions();
-
-function formatPhoneForCountry(value: string, country: string): string {
-  if (!value.trim()) return value;
-  const defaultCountry = isSupportedCountry(country) ? (country as CountryCode) : undefined;
-  return new AsYouType(defaultCountry).input(value);
-}
 
 export function SettingsProfilePage() {
   const { data: user, isLoading, isError, error } = useCurrentUser();

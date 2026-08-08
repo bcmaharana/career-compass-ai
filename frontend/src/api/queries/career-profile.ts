@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 type CareerProfileResponse = components["schemas"]["CareerProfileResponse"];
 type UpdateCareerProfileRequest = components["schemas"]["UpdateCareerProfileRequest"];
+type CareerProfileSummaryResponse = components["schemas"]["CareerProfileSummaryResponse"];
 type PhotoUploadResponse = components["schemas"]["PhotoUploadResponse"];
 
 type ExperienceResponse = components["schemas"]["ExperienceResponse"];
@@ -33,30 +34,62 @@ type TargetRoleRequest = components["schemas"]["TargetRoleRequest"];
 
 type MoveDirection = "up" | "down";
 
+/** null = Master Profile, a real id = that Target Role Profile — the
+ * single scoping axis threaded through every profile/experience/
+ * education/certification/highlight/achievement query below. Career
+ * Goals, Peer Endorsements, and Target Role CRUD itself stay unscoped
+ * (Master-only), per the Master/Target-Role-Profile design. */
+type Scope = string | null;
+
+function scopeKey(scope: Scope): string {
+  return scope ?? "master";
+}
+
+/** Appends `?target_role_id=` when scoped — every list/add/clear/summary
+ * endpoint below accepts this as an optional query param; a plain id
+ * (not further encoded) is safe here since target role ids are UUIDs. */
+function withScope(path: string, scope: Scope): string {
+  return scope ? `${path}?target_role_id=${scope}` : path;
+}
+
 const KEYS = {
-  profile: ["career-profile"],
-  experiences: ["career-profile", "experiences"],
-  educations: ["career-profile", "educations"],
-  certifications: ["career-profile", "certifications"],
+  profile: (scope: Scope) => ["career-profile", scopeKey(scope)] as const,
+  summary: (scope: Scope) => ["career-profile", "summary", scopeKey(scope)] as const,
+  experiences: (scope: Scope) => ["career-profile", "experiences", scopeKey(scope)] as const,
+  educations: (scope: Scope) => ["career-profile", "educations", scopeKey(scope)] as const,
+  certifications: (scope: Scope) => ["career-profile", "certifications", scopeKey(scope)] as const,
+  highlights: (scope: Scope) => ["career-profile", "highlights", scopeKey(scope)] as const,
+  achievements: (scope: Scope) => ["career-profile", "achievements", scopeKey(scope)] as const,
+  // Master-only — no scope axis.
   goals: ["career-goals"],
-  highlights: ["career-profile", "highlights"],
-  achievements: ["career-profile", "achievements"],
   endorsements: ["career-profile", "endorsements"],
   targetRoles: ["career-profile", "target-roles"],
 } as const;
 
-export function useCareerProfile() {
+export function useCareerProfile(scope: Scope = null) {
   return useQuery({
-    queryKey: KEYS.profile,
-    queryFn: () => apiClient.get<CareerProfileResponse>("/api/v1/career-profile"),
+    queryKey: KEYS.profile(scope),
+    queryFn: () => apiClient.get<CareerProfileResponse>(withScope("/api/v1/career-profile", scope)),
   });
 }
 
-export function useUpdateCareerProfile() {
+/** Cheap counts snapshot of one profile — powers the Override-vs-Merge
+ * prompt during resume merge (see resume-intelligence.ts's useMergeResume
+ * caller), so the choice is informed rather than a content-free yes/no. */
+export function useCareerProfileSummary(scope: Scope, enabled = true) {
+  return useQuery({
+    queryKey: KEYS.summary(scope),
+    queryFn: () =>
+      apiClient.get<CareerProfileSummaryResponse>(withScope("/api/v1/career-profile/summary", scope)),
+    enabled,
+  });
+}
+
+export function useUpdateCareerProfile(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: UpdateCareerProfileRequest) =>
-      apiClient.patch<CareerProfileResponse>("/api/v1/career-profile", body),
+      apiClient.patch<CareerProfileResponse>(withScope("/api/v1/career-profile", scope), body),
     // Writes the confirmed server response straight into the cache
     // (instant UI update), then also triggers a real refetch as a
     // belt-and-suspenders check that what's displayed genuinely matches
@@ -68,8 +101,8 @@ export function useUpdateCareerProfile() {
     // overwrite an unsaved edit; now the form only reads from the query
     // once, explicitly, when Edit is clicked.
     onSuccess: async (data) => {
-      queryClient.setQueryData(KEYS.profile, data);
-      await queryClient.refetchQueries({ queryKey: KEYS.profile });
+      queryClient.setQueryData(KEYS.profile(scope), data);
+      await queryClient.refetchQueries({ queryKey: KEYS.profile(scope) });
       // core_competencies feeds Gap Analysis (My Skills owned-skill set) —
       // invalidate on every profile update rather than threading a
       // "did core_competencies change" flag through every call site.
@@ -78,105 +111,211 @@ export function useUpdateCareerProfile() {
   });
 }
 
-export function useExperiences() {
-  return useQuery({
-    queryKey: KEYS.experiences,
-    queryFn: () => apiClient.get<ExperienceResponse[]>("/api/v1/career-profile/experiences"),
+/** Clears every section this profile owns. Scoped to Master by default
+ * (unchanged behavior); a Target Role Profile's clear skips Career
+ * Goals/Peer Endorsements/photo, which stay Master-only regardless of
+ * scope — see clear_profile_service.py's own scoped-vs-unscoped split. */
+export function useClearCareerProfile(scope: Scope = null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.delete<void>(withScope("/api/v1/career-profile", scope)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.profile(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.experiences(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.educations(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.certifications(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.highlights(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.achievements(scope) });
+      if (scope === null) {
+        queryClient.invalidateQueries({ queryKey: KEYS.goals });
+        queryClient.invalidateQueries({ queryKey: KEYS.endorsements });
+      }
+      queryClient.invalidateQueries({ queryKey: ["skills", "gap-analysis"] });
+    },
   });
 }
 
-export function useAddExperience() {
+export function useDeleteProfilePhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.delete<void>("/api/v1/career-profile/photo"),
+    // Photo is always Master's, regardless of which profile is currently
+    // being viewed — always writes into the Master (null-scope) cache.
+    onSuccess: () =>
+      queryClient.setQueryData(
+        KEYS.profile(null),
+        (old: CareerProfileResponse | undefined) => old && { ...old, photo_url: null },
+      ),
+  });
+}
+
+export function useExperiences(scope: Scope = null) {
+  return useQuery({
+    queryKey: KEYS.experiences(scope),
+    queryFn: () =>
+      apiClient.get<ExperienceResponse[]>(withScope("/api/v1/career-profile/experiences", scope)),
+  });
+}
+
+export function useAddExperience(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: ExperienceRequest) =>
-      apiClient.post<ExperienceResponse>("/api/v1/career-profile/experiences", body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.experiences }),
+      apiClient.post<ExperienceResponse>(withScope("/api/v1/career-profile/experiences", scope), body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.experiences(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+    },
   });
 }
 
-export function useUpdateExperience() {
+// Single-item update/delete resolve ownership from the item's own
+// career_profile_id server-side (no target_role_id needed on the
+// request) — but the cache key to invalidate still depends on which
+// scope the caller is currently viewing, so `scope` here is purely a
+// cache-invalidation hint, never sent to the backend.
+export function useUpdateExperience(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: ExperienceRequest }) =>
       apiClient.patch<ExperienceResponse>(`/api/v1/career-profile/experiences/${id}`, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.experiences }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.experiences(scope) }),
   });
 }
 
-export function useDeleteExperience() {
+export function useDeleteExperience(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiClient.delete(`/api/v1/career-profile/experiences/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.experiences }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.experiences(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+    },
   });
 }
 
-export function useEducations() {
+export function useClearExperiences(scope: Scope = null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.delete<void>(withScope("/api/v1/career-profile/experiences", scope)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.experiences(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+    },
+  });
+}
+
+export function useEducations(scope: Scope = null) {
   return useQuery({
-    queryKey: KEYS.educations,
-    queryFn: () => apiClient.get<EducationResponse[]>("/api/v1/career-profile/educations"),
+    queryKey: KEYS.educations(scope),
+    queryFn: () =>
+      apiClient.get<EducationResponse[]>(withScope("/api/v1/career-profile/educations", scope)),
   });
 }
 
-export function useAddEducation() {
+export function useAddEducation(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: EducationRequest) =>
-      apiClient.post<EducationResponse>("/api/v1/career-profile/educations", body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.educations }),
+      apiClient.post<EducationResponse>(withScope("/api/v1/career-profile/educations", scope), body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.educations(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+    },
   });
 }
 
-export function useUpdateEducation() {
+export function useUpdateEducation(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: EducationRequest }) =>
       apiClient.patch<EducationResponse>(`/api/v1/career-profile/educations/${id}`, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.educations }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.educations(scope) }),
   });
 }
 
-export function useDeleteEducation() {
+export function useDeleteEducation(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiClient.delete(`/api/v1/career-profile/educations/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.educations }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.educations(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+    },
   });
 }
 
-export function useCertifications() {
+export function useClearEducations(scope: Scope = null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.delete<void>(withScope("/api/v1/career-profile/educations", scope)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.educations(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+    },
+  });
+}
+
+export function useCertifications(scope: Scope = null) {
   return useQuery({
-    queryKey: KEYS.certifications,
+    queryKey: KEYS.certifications(scope),
     queryFn: () =>
-      apiClient.get<CertificationResponse[]>("/api/v1/career-profile/certifications"),
+      apiClient.get<CertificationResponse[]>(
+        withScope("/api/v1/career-profile/certifications", scope),
+      ),
   });
 }
 
-export function useAddCertification() {
+export function useAddCertification(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: CertificationRequest) =>
-      apiClient.post<CertificationResponse>("/api/v1/career-profile/certifications", body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.certifications }),
+      apiClient.post<CertificationResponse>(
+        withScope("/api/v1/career-profile/certifications", scope),
+        body,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.certifications(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+    },
   });
 }
 
-export function useUpdateCertification() {
+export function useUpdateCertification(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: CertificationRequest }) =>
       apiClient.patch<CertificationResponse>(`/api/v1/career-profile/certifications/${id}`, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.certifications }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.certifications(scope) }),
   });
 }
 
-export function useDeleteCertification() {
+export function useDeleteCertification(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiClient.delete(`/api/v1/career-profile/certifications/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.certifications }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.certifications(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+    },
   });
 }
+
+export function useClearCertifications(scope: Scope = null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiClient.delete<void>(withScope("/api/v1/career-profile/certifications", scope)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.certifications(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+    },
+  });
+}
+
+// --- Career Goals — Master-only, no scope axis (not part of resume
+// extraction/merge, no clear use case yet for per-target-role goals). ---
 
 export function useCareerGoals() {
   return useQuery({
@@ -211,6 +350,14 @@ export function useDeleteCareerGoal() {
   });
 }
 
+export function useClearCareerGoals() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.delete<void>("/api/v1/career-goals"),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.goals }),
+  });
+}
+
 export function useUploadProfilePhoto() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -220,80 +367,130 @@ export function useUploadProfilePhoto() {
     // (which would trigger a background refetch) — see ProfileHeader's
     // docstring for why a refetch racing against an in-progress, unsaved
     // edit elsewhere on the same form was a real bug, not a theoretical one.
+    // Always Master's photo, regardless of the currently-viewed scope.
     onSuccess: (data) =>
       queryClient.setQueryData(
-        KEYS.profile,
+        KEYS.profile(null),
         (old: CareerProfileResponse | undefined) =>
           old && { ...old, photo_url: data.photo_url },
       ),
   });
 }
 
-export function useCareerHighlights() {
+export function useCareerHighlights(scope: Scope = null) {
   return useQuery({
-    queryKey: KEYS.highlights,
-    queryFn: () => apiClient.get<CareerHighlightResponse[]>("/api/v1/career-profile/highlights"),
+    queryKey: KEYS.highlights(scope),
+    queryFn: () =>
+      apiClient.get<CareerHighlightResponse[]>(
+        withScope("/api/v1/career-profile/highlights", scope),
+      ),
   });
 }
 
-export function useAddCareerHighlight() {
+export function useAddCareerHighlight(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: CareerHighlightRequest) =>
-      apiClient.post<CareerHighlightResponse>("/api/v1/career-profile/highlights", body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.highlights }),
+      apiClient.post<CareerHighlightResponse>(
+        withScope("/api/v1/career-profile/highlights", scope),
+        body,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.highlights(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+    },
   });
 }
 
-export function useUpdateCareerHighlight() {
+export function useUpdateCareerHighlight(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: CareerHighlightRequest }) =>
       apiClient.patch<CareerHighlightResponse>(`/api/v1/career-profile/highlights/${id}`, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.highlights }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.highlights(scope) }),
   });
 }
 
-export function useDeleteCareerHighlight() {
+export function useDeleteCareerHighlight(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiClient.delete(`/api/v1/career-profile/highlights/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.highlights }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.highlights(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+    },
   });
 }
 
-export function useKeyAchievements() {
+export function useClearCareerHighlights(scope: Scope = null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.delete<void>(withScope("/api/v1/career-profile/highlights", scope)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.highlights(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+    },
+  });
+}
+
+export function useKeyAchievements(scope: Scope = null) {
   return useQuery({
-    queryKey: KEYS.achievements,
-    queryFn: () => apiClient.get<KeyAchievementResponse[]>("/api/v1/career-profile/achievements"),
+    queryKey: KEYS.achievements(scope),
+    queryFn: () =>
+      apiClient.get<KeyAchievementResponse[]>(
+        withScope("/api/v1/career-profile/achievements", scope),
+      ),
   });
 }
 
-export function useAddKeyAchievement() {
+export function useAddKeyAchievement(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: KeyAchievementRequest) =>
-      apiClient.post<KeyAchievementResponse>("/api/v1/career-profile/achievements", body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.achievements }),
+      apiClient.post<KeyAchievementResponse>(
+        withScope("/api/v1/career-profile/achievements", scope),
+        body,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.achievements(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+    },
   });
 }
 
-export function useUpdateKeyAchievement() {
+export function useUpdateKeyAchievement(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: KeyAchievementRequest }) =>
       apiClient.patch<KeyAchievementResponse>(`/api/v1/career-profile/achievements/${id}`, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.achievements }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.achievements(scope) }),
   });
 }
 
-export function useDeleteKeyAchievement() {
+export function useDeleteKeyAchievement(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiClient.delete(`/api/v1/career-profile/achievements/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.achievements }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.achievements(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+    },
   });
 }
+
+export function useClearKeyAchievements(scope: Scope = null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiClient.delete<void>(withScope("/api/v1/career-profile/achievements", scope)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.achievements(scope) });
+      queryClient.invalidateQueries({ queryKey: KEYS.summary(scope) });
+    },
+  });
+}
+
+// --- Peer Endorsements — Master-only, no scope axis. ---
 
 export function usePeerEndorsements() {
   return useQuery({
@@ -329,42 +526,55 @@ export function useDeletePeerEndorsement() {
   });
 }
 
+export function useClearPeerEndorsements() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.delete<void>("/api/v1/career-profile/endorsements"),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEYS.endorsements }),
+  });
+}
+
 // --- Reordering ---
-// Every move endpoint returns the full, freshly-ordered list, so the
-// mutation writes it straight into the cache (setQueryData) rather than
-// invalidating and waiting on a separate refetch — reordering should
-// feel instant.
+// Every move endpoint returns the full, freshly-ordered list for the
+// requested scope, so the mutation writes it straight into the cache
+// (setQueryData) rather than invalidating and waiting on a separate
+// refetch — reordering should feel instant. `scope` is passed as a query
+// param purely so the backend knows which list to hand back — the move
+// itself resolves ownership from the item's own career_profile_id.
 
-export function useMoveExperience() {
+export function useMoveExperience(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, direction }: { id: string; direction: MoveDirection }) =>
-      apiClient.post<ExperienceResponse[]>(`/api/v1/career-profile/experiences/${id}/move`, {
-        direction,
-      }),
-    onSuccess: (data) => queryClient.setQueryData(KEYS.experiences, data),
+      apiClient.post<ExperienceResponse[]>(
+        withScope(`/api/v1/career-profile/experiences/${id}/move`, scope),
+        { direction },
+      ),
+    onSuccess: (data) => queryClient.setQueryData(KEYS.experiences(scope), data),
   });
 }
 
-export function useMoveEducation() {
+export function useMoveEducation(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, direction }: { id: string; direction: MoveDirection }) =>
-      apiClient.post<EducationResponse[]>(`/api/v1/career-profile/educations/${id}/move`, {
-        direction,
-      }),
-    onSuccess: (data) => queryClient.setQueryData(KEYS.educations, data),
+      apiClient.post<EducationResponse[]>(
+        withScope(`/api/v1/career-profile/educations/${id}/move`, scope),
+        { direction },
+      ),
+    onSuccess: (data) => queryClient.setQueryData(KEYS.educations(scope), data),
   });
 }
 
-export function useMoveCertification() {
+export function useMoveCertification(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, direction }: { id: string; direction: MoveDirection }) =>
-      apiClient.post<CertificationResponse[]>(`/api/v1/career-profile/certifications/${id}/move`, {
-        direction,
-      }),
-    onSuccess: (data) => queryClient.setQueryData(KEYS.certifications, data),
+      apiClient.post<CertificationResponse[]>(
+        withScope(`/api/v1/career-profile/certifications/${id}/move`, scope),
+        { direction },
+      ),
+    onSuccess: (data) => queryClient.setQueryData(KEYS.certifications(scope), data),
   });
 }
 
@@ -377,25 +587,27 @@ export function useMoveCareerGoal() {
   });
 }
 
-export function useMoveCareerHighlight() {
+export function useMoveCareerHighlight(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, direction }: { id: string; direction: MoveDirection }) =>
-      apiClient.post<CareerHighlightResponse[]>(`/api/v1/career-profile/highlights/${id}/move`, {
-        direction,
-      }),
-    onSuccess: (data) => queryClient.setQueryData(KEYS.highlights, data),
+      apiClient.post<CareerHighlightResponse[]>(
+        withScope(`/api/v1/career-profile/highlights/${id}/move`, scope),
+        { direction },
+      ),
+    onSuccess: (data) => queryClient.setQueryData(KEYS.highlights(scope), data),
   });
 }
 
-export function useMoveKeyAchievement() {
+export function useMoveKeyAchievement(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, direction }: { id: string; direction: MoveDirection }) =>
-      apiClient.post<KeyAchievementResponse[]>(`/api/v1/career-profile/achievements/${id}/move`, {
-        direction,
-      }),
-    onSuccess: (data) => queryClient.setQueryData(KEYS.achievements, data),
+      apiClient.post<KeyAchievementResponse[]>(
+        withScope(`/api/v1/career-profile/achievements/${id}/move`, scope),
+        { direction },
+      ),
+    onSuccess: (data) => queryClient.setQueryData(KEYS.achievements(scope), data),
   });
 }
 
@@ -409,6 +621,8 @@ export function useMovePeerEndorsement() {
     onSuccess: (data) => queryClient.setQueryData(KEYS.endorsements, data),
   });
 }
+
+// --- Target Roles — the scoping dimension itself, always unscoped. ---
 
 export function useTargetRoles() {
   return useQuery({

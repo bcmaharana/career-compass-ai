@@ -10,12 +10,16 @@ from fastapi import FastAPI
 
 from app.api.middleware.error_handling import register_exception_handlers
 from app.api.middleware.request_context import RequestContextMiddleware
+from app.api.v1.ai_platform.router import router as ai_platform_router
+from app.api.v1.career_intelligence.router import router as career_intelligence_router
 from app.api.v1.career_profile.router import router as career_profile_router
 from app.api.v1.chat.router import router as chat_router
 from app.api.v1.health import router as health_router
 from app.api.v1.identity.router import router as identity_router
 from app.api.v1.quotes.router import router as quotes_router
+from app.api.v1.resume_intelligence.router import router as resume_intelligence_router
 from app.api.v1.skill_intelligence.router import router as skill_intelligence_router
+from app.api.v1.system_status.router import router as system_status_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 
@@ -42,6 +46,10 @@ def create_app() -> FastAPI:
     app.include_router(chat_router, prefix="/api/v1")
     app.include_router(quotes_router, prefix="/api/v1")
     app.include_router(skill_intelligence_router, prefix="/api/v1")
+    app.include_router(ai_platform_router, prefix="/api/v1")
+    app.include_router(career_intelligence_router, prefix="/api/v1")
+    app.include_router(resume_intelligence_router, prefix="/api/v1")
+    app.include_router(system_status_router, prefix="/api/v1")
 
     logger.info("app_startup", app_env=settings.app_env)
     return app

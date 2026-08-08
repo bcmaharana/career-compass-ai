@@ -11,9 +11,30 @@ from __future__ import annotations
 
 from uuid import UUID
 
+import phonenumbers
+
 from app.application.identity.dto import CurrentUserResult
 from app.core.exceptions import NotFoundError, ValidationError
 from app.domain.identity.repositories import RoleRepository, UserRepository
+
+
+def _to_e164(phone_number: str | None, country: str | None) -> str | None:
+    """Best-effort E.164 normalization for phone login lookup — returns
+    None (never raises) for anything unparseable/invalid, since the
+    general profile phone_number field stays permissive free text (see
+    the comment above its assignment below); a number that doesn't
+    normalize just means phone login isn't available for this user yet,
+    not a rejected profile save.
+    """
+    if not phone_number:
+        return None
+    try:
+        parsed = phonenumbers.parse(phone_number, country)
+    except phonenumbers.NumberParseException:
+        return None
+    if not phonenumbers.is_valid_number(parsed):
+        return None
+    return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
 
 
 class UpdateUserProfileService:
@@ -67,6 +88,7 @@ class UpdateUserProfileService:
         # The frontend formats/validates against the selected country
         # using libphonenumber-js before it ever reaches here.
         user.phone_number = phone_number.strip() if phone_number and phone_number.strip() else None
+        user.phone_number_e164 = _to_e164(user.phone_number, trimmed_country)
         user.country = trimmed_country
         user.language = language.strip() if language and language.strip() else None
         user.address_line1 = (

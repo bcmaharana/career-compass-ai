@@ -8,6 +8,10 @@ interface ConfirmDialogProps {
   title: string;
   description: string;
   isPending?: boolean;
+  /** Defaults to "Delete"/"Deleting..." — override for non-delete
+   * destructive actions (e.g. "Clear"/"Clearing..."). */
+  confirmLabel?: string;
+  confirmPendingLabel?: string;
 }
 
 /**
@@ -29,6 +33,8 @@ export function ConfirmDialog({
   title,
   description,
   isPending,
+  confirmLabel = "Delete",
+  confirmPendingLabel = "Deleting...",
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onClose={onCancel} title={title}>
@@ -38,7 +44,7 @@ export function ConfirmDialog({
           Cancel
         </Button>
         <Button variant="destructive" onClick={onConfirm} disabled={isPending}>
-          {isPending ? "Deleting..." : "Delete"}
+          {isPending ? confirmPendingLabel : confirmLabel}
         </Button>
       </div>
     </Dialog>

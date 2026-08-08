@@ -214,6 +214,20 @@ Known environment gotchas already solved, don't reintroduce:
   the finished migration file into the container before upgrading; if a
   no-op already got stamped, `alembic stamp <previous-revision>` then
   re-run `upgrade head`.
+- **`Request.is_disconnected()` cannot be trusted to detect a client
+  abort in this dev setup.** Verified live (2026-08-04, Resume
+  Intelligence's cancel-button investigation): Starlette's
+  implementation is a non-blocking peek at whatever the ASGI server has
+  already pushed onto the receive queue, not an active socket probe —
+  and through Docker Desktop's Windows networking, that disconnect
+  message reliably never arrived for either a forced `curl --max-time`
+  timeout or a .NET `HttpClient` cancellation token; a long-running
+  handler kept running to completion regardless of the client having
+  genuinely given up minutes earlier. Don't build a "cancel a
+  long-running request" feature around this pattern without testing it
+  live against this actual dev stack first — it may well work fine
+  behind a real reverse-proxy production deployment, but has been
+  confirmed not to here.
 
 ## Frontend conventions
 
@@ -263,8 +277,11 @@ Known environment gotchas already solved, don't reintroduce:
   nested-div padding trick instead: an outer `rounded-lg bg-[gradient]
   p-{N}` wrapping an inner `border-0` element, where `p-{N}` sets the
   visual border width.
-- **Left Nav vs Right Nav split**: Left Nav (`AppShell.tsx`) is always
-  the same 4 top-level items regardless of route. Right Nav
+- **Left Nav vs Right Nav split**: Left Nav (`AppShell.tsx`) is a fixed
+  set of top-level items regardless of route — 4 through Phase 4.5,
+  5 as of the Phase 5 redesign (Resume Intelligence was added as an
+  explicit, one-off carve-out to this rule, not a reversal of it; see
+  that phase's status entry for why). Right Nav
   (`RightNav.tsx`) is the one that changes per page — plain structural
   placeholder by default, the Career Profile page's target-roles widget
   on `/profile`, or the Settings sub-nav (`SETTINGS_NAV_ITEMS` from
@@ -393,13 +410,626 @@ Known environment gotchas already solved, don't reintroduce:
   points described under "Auth: sliding session" above, since the Right
   Nav reads identity from the in-memory auth store (populated at login/
   profile-save), not a live `/me` call on every render.
-- **Not yet started**: Phase 4 (AI Platform real wiring) onward through
-  Phase 9. Domain list in `docs/architecture/system-overview.md`; that
-  doc doesn't enumerate a numbered phase-by-phase roadmap the way this
-  section does — the phase numbers (1 Identity, 2 Career Profile,
-  3 Skill Intelligence, 4 AI Platform real wiring, 5 Resume
-  Intelligence, 6 Opportunity Intelligence, 7 Learning Intelligence,
-  8 AI Career Coach) are tracked here and in project memory only.
+- **Phase 4** — AI Platform real wiring — done. Real Anthropic adapter
+  (`app/adapters/ai_providers/anthropic_provider.py`, `anthropic` Python
+  SDK) implements `LLMProviderInterface`. `LLMService`
+  (`app/ai_platform/llm_service/service.py`) is the concrete
+  orchestrator — resolves the active approved prompt and active model
+  from two new Postgres tables (`prompt_versions`, `model_versions` —
+  reference data, no RLS, same shape as `permissions`/`roles`), renders
+  the template, calls the provider, and logs every invocation to a
+  third new table (`ai_invocations` — tenant-owned, RLS-enforced like
+  every other domain table) for the governance audit trail ADR-004
+  requires. `scripts/seed_platform_defaults.py` now also seeds the
+  `career_coach_chat` approved `PromptVersion` and an active
+  `ModelVersion` row (defaults to `claude-sonnet-5`, overridable via
+  `AI_DEFAULT_MODEL` — but per ADR-004, switching models afterward is a
+  DB update to that row, not a redeploy). The footer AI Chat
+  (`app/application/chat/chat_service.py`) is the first real caller: it
+  renders recent conversation history plus the latest message into the
+  prompt template and calls `LLMService.generate()` — a provider
+  failure (no API key configured, rate limit, network error) degrades
+  to an apologetic in-chat message rather than a 500, since the
+  conversation itself is persisted either way. One interface change
+  from the Phase 0 scaffold: `LLMRequest` gained a `model_name` field —
+  the Phase 0 shape only carried opaque registry IDs
+  (`prompt_version_id`/`model_version_id`), and the provider adapter
+  needs the literal model string (e.g. `"claude-sonnet-5"`) to actually
+  call the API; `LLMService` resolves it from the active `ModelVersion`
+  before building the request. **User-facing model selection** (added
+  same day, post-wiring): Settings > AI Model
+  (`frontend/src/features/settings/SettingsAIModelPage.tsx`) lets each
+  user pick which catalog model powers their own chats, from
+  `GET /api/v1/ai-platform/models` / `PATCH /api/v1/ai-platform/model-preference`
+  (`app/application/ai_platform/model_preference_service.py`). This
+  drove two more schema/design changes: `ModelVersion.is_default`
+  (exactly one "active" row is the platform default among possibly
+  several selectable ones — `model_versions` is now seeded with 3:
+  Opus 5 / Sonnet 5 (default) / Haiku 4.5) and `User.preferred_model_version_id`
+  (nullable FK, `null` = "use the platform default"). `LLMService`'s
+  constructor changed from a single `provider` to
+  `providers: Mapping[str, LLMProviderInterface]` keyed by
+  `ModelVersion.provider` — resolving a model whose provider has no
+  registered adapter raises `ProviderNotConfiguredError` rather than
+  silently using the wrong provider. **Second provider wired same day:
+  Ollama** (`app/adapters/ai_providers/ollama_provider.py`), for local,
+  free inference against models already installed on the user's
+  machine — `qwen2.5:7b` and `qwen2.5:3b` are seeded into
+  `model_versions` (`cost_per_1k_tokens=0`, genuinely free, unlike the
+  Anthropic rows' illustrative figures). No official Ollama SDK exists,
+  so the adapter is a plain `httpx` POST to `/api/chat` (same pattern as
+  `app/adapters/quotes/zen_quotes_provider.py`), mapping Ollama's
+  `prompt_eval_count`/`eval_count`/`num_predict` to the
+  input/output-tokens/max-tokens shape every other provider uses. The
+  shared `AIProviderError` moved out of `anthropic_provider.py` into
+  its own `app/adapters/ai_providers/errors.py` so the two adapters
+  don't depend on each other. **Docker networking gotcha**: Ollama runs
+  on the host, not in `docker-compose.yml`, so the backend container
+  reaches it via `OLLAMA_BASE_URL=http://host.docker.internal:11434`
+  (Docker Desktop's host-loopback DNS name) — plain `localhost` from
+  inside the container would resolve to the container itself, the same
+  class of bug as `DATABASE_URL`/`OBJECT_STORAGE_ENDPOINT` above.
+  Verified live: real chat replies from both `qwen2.5:3b` and
+  `qwen2.5:7b` through the full pipeline (model-preference switch,
+  multi-turn conversation history reaching the local model, and a real
+  `ai_invocations` row with actual token counts/latency) — not just
+  unit-tested with fakes.
+- **AI Career Coach page** (post-Phase 4, `/coach`) — done. A dedicated
+  full-page view onto the exact same conversation the footer's
+  persistent chat bar sends into (same `chat-store`/conversation_id,
+  same `POST /api/v1/chat/messages`) — not a second conversation or
+  endpoint. The send logic was pulled out of `AppFooter.tsx` into
+  `frontend/src/hooks/useChatComposer.ts` so both the footer input and
+  the Coach page's suggested-prompt chips
+  (`frontend/src/features/coach/suggested-prompts.ts`) drive the same
+  flow. Suggested prompts are built from the person's real profile data
+  (target roles, gap-analysis missing skills) with the actual role/skill
+  names woven directly into the prompt text — the chat backend only ever
+  receives conversation history plus the literal message, so this is
+  the only grounding mechanism, not a backend prompt change.
+  `AppShell.tsx` suppresses the generic compact `ChatThread` specifically
+  on `/coach` (CoachPage renders its own richer, labeled thread) to avoid
+  rendering the same messages twice.
+- **Phone login (Firebase Phone Auth)** — done, verified live end-to-end
+  with a real Firebase project (`career-compass-ai-c749f`) and a real
+  phone/test number, repeated successfully multiple times in a row.
+  Deliberately **not** a second `IdentityProviderInterface`
+  implementation — Firebase only proves phone ownership (it has no
+  notion of tenants/users); matching that verified number to a Career
+  Compass user and minting our own JWT still goes through
+  `InternalJWTProvider.authenticate_with_phone`
+  (`app/adapters/identity_providers/internal_jwt.py`), the phone-login
+  counterpart to `authenticate_with_credentials`. The frontend talks to
+  Firebase directly (`signInWithPhoneNumber`/`confirmationResult.confirm`,
+  see `frontend/src/lib/firebase.ts` +
+  `frontend/src/features/auth/PhoneLoginForm.tsx`) and only ever hands
+  the backend the resulting ID token
+  (`POST /api/v1/identity/login/phone`) — the OTP code itself never
+  reaches this backend, and neither does an SMS provider credential of
+  our own to manage; Firebase owns sending the code, reCAPTCHA-backed
+  abuse protection, and code expiry/retry limits entirely. New
+  `User.phone_number_e164` column (unique per tenant, nullable) is
+  computed server-side via `phonenumbers` whenever
+  `phone_number`+`country` are saved together
+  (`UpdateUserProfileService`) — this is the only field phone login
+  looks up against, separate from the free-text `phone_number` display
+  field, since Firebase's verified claim is always E.164 and the
+  free-text field is deliberately unvalidated (see its own comment).
+  Both `get_authenticate_user_service` and `AuthenticateUserService`
+  treat a missing/misconfigured Firebase adapter as "phone login not
+  configured" (`PHONE_LOGIN_NOT_CONFIGURED`) rather than raising — email/
+  password login is completely unaffected either way regardless of
+  Firebase's setup state, verified live.
+
+  Real setup on console.firebase.google.com, not just code: Web app
+  config (apiKey/appId → `frontend/.env.local`'s `VITE_FIREBASE_*`) and
+  a service-account key (Project Settings → Service Accounts → Generate
+  new private key → `backend/secrets/firebase-service-account.json`,
+  gitignored, bind-mounted read-only into the backend container —
+  `FIREBASE_SERVICE_ACCOUNT_FILE` in `.env`). Firebase's own **Phone
+  numbers for testing** feature (Authentication → Sign-in method →
+  Phone → "Phone numbers for testing") is genuinely useful for local dev
+  going forward — a fixed number+code pair (e.g. `+16505553434` /
+  `123456`) skips real SMS, billing, and reCAPTCHA entirely, so it's
+  usable in a browser without any of the gotchas below. `phase4@test.com`
+  already has `+1 650-555-3434` saved as its phone number for exactly
+  this.
+
+  **Five real gotchas hit getting this working live, all fixed** (none
+  of these show up in code review — only actually running the flow
+  surfaced them):
+  1. Firebase's `getAuth()` throws synchronously (`auth/invalid-api-key`)
+     for an empty/invalid config, and since ES module top-level code
+     always runs on import regardless of which LoginPage tab is active,
+     doing this eagerly in `lib/firebase.ts` crashed the *entire* app —
+     including the unrelated email/password path — the moment
+     `PhoneLoginForm` was merely imported, before Firebase credentials
+     were ever configured. Fixed by making `getFirebaseAuth()` a lazy,
+     memoized function called only from inside `PhoneLoginForm`'s submit
+     handlers, with a `FirebaseNotConfiguredError` surfaced as a plain
+     inline message instead of a blank white screen.
+  2. **SMS region policy** (Authentication → Settings → SMS region
+     policy) blocks phone verification by country until explicitly
+     allowed — surfaced as `auth/operation-not-allowed`, unrelated to
+     billing or code.
+  3. Phone Auth requires the **Blaze** billing plan, not the free Spark
+     plan — `auth/billing-not-enabled` even with zero actual usage. A
+     freshly-added billing account can also sit in a manual-review hold
+     specifically for SMS-capable APIs.
+  4. **Never recreate the `RecaptchaVerifier` on a failed retry** —
+     `PhoneLoginForm.tsx` originally called `.clear()` and rebuilt it
+     after every error, which threw "reCAPTCHA has already been
+     rendered in this element" on the next attempt: the underlying
+     `grecaptcha` widget is tied to its container DOM node and can't be
+     re-rendered into that same node, even after `.clear()`. Fixed by
+     creating the verifier once (lazily, on first use) and reusing it
+     for the component's whole lifetime — invisible verifiers are
+     designed to be reused across multiple `signInWithPhoneNumber` calls
+     anyway, so there was never a need to recreate one per attempt.
+  5. **Docker Desktop/WSL2 clock drift** (~1 second, worse right after
+     the host wakes from sleep) intermittently failed real token
+     verification with `InvalidIdTokenError: Token used too early` —
+     `verify_id_token`'s default zero clock-skew tolerance rejected a
+     token Firebase had only just issued. Fixed with
+     `clock_skew_seconds=10`. Also dropped `check_revoked=True` from the
+     same call — it added an extra round-trip that failed intermittently
+     for a just-issued token (likely Firebase-side propagation lag on
+     `tokensValidAfterTime`), and this app never calls Firebase's
+     `revoke_refresh_tokens()` itself, so there's no legitimate
+     "revoked elsewhere" case to guard against here anyway. Both changes
+     are in `app/adapters/identity_providers/firebase_phone.py`.
+- **Phase 4.5.1 — CIKG Core Graph Foundation** (2026-07-29, `app/domain/career_intelligence/`)
+  — done, verified live. The narrowest slice of the 17-doc CIKG
+  architecture (see project memory's `cikg_architecture` entry for the
+  full approval history): `Skill`, `SkillCategory`, `Competency`,
+  `CikgRole` (a job-role node — named `CikgRole`/`cikg_roles`, not
+  `Role`/`roles`, since that name is already the RBAC role table) +
+  the `member_of` (`skill_competency_memberships`), `requires`
+  (`role_required_skills`), and `related_to` (`related_skills`) edges,
+  the category hierarchy (`category_parents`,
+  `skill_category_memberships`), and `skill_aliases` (ADR-006 §3's
+  free-text-to-canonical soft link). All global reference data — no
+  `tenant_id`, no RLS, same shape as `prompt_versions`/`model_versions`.
+  Governance is deliberately minimal per the roadmap: `content_status`
+  CHECK-constrained to `('draft', 'approved')` only, single-approver
+  (no `in_review`), enforced by five new `cikg.content.*` permissions
+  (`create`/`review`/`approve`/`deprecate`/`admin`) and a new
+  `cikg_curator` role granted create+review+approve —
+  `ContentGovernanceService` is the one-class-per-verb create-draft/
+  approve workflow every node and edge type shares.
+  **Scope decision made at the start of this build**: the roadmap
+  (`cikg-mvp-roadmap.md`) defers `prerequisite_of`/`specializes`/
+  `synonym_of` to MVP 2B (they need the cycle-detection-at-approval
+  workflow that ships then), but the seed-data spec
+  (`cikg-mvp1-seed-data.md`) actually uses `prerequisite_of`/
+  `specializes` throughout its worked examples — a real inconsistency
+  between two "approved" docs. Resolved, per explicit user direction,
+  by following the roadmap strictly: every `prerequisite_of`/
+  `specializes` edge in the source spec was dropped from the seed
+  script (`scripts/seed_cikg_mvp1.py`), seeding only `related_to`.
+  Healthcare's seed content has zero `related_to` edges of its own
+  (all its ontology edges in the spec are `prerequisite_of`/
+  `specializes`), so it only meets MVP 1's "at least one ontology edge
+  per domain" exit criterion via the spec's own cross-domain edge (Risk
+  Analysis <-> Clinical Risk Assessment) — verified live, not assumed.
+  **`SkillCategory.name` is deliberately not globally unique** (caught
+  during seeding, not design review) — the seed spec itself reuses
+  "Regulatory" as a category name under both Healthcare's Health
+  Information & Compliance and Finance's Risk & Compliance; disambiguation
+  is by hierarchy position (`category_parents`), not name, so
+  `SkillCategoryRepository` has no `get_by_name`.
+  **A real async/ORM bug caught by testing the API live, not by
+  review**: every `approve()` repository method originally did
+  `session.flush()` then mapped the model straight to a domain
+  dataclass — `updated_at`'s `onupdate=func.now()` marks that column
+  expired after an UPDATE, and accessing it outside an awaited ORM call
+  raised `MissingGreenlet`. `create()` methods never hit this (Postgres
+  RETURNING populates server-generated columns in the same round trip
+  on INSERT), only `approve()`'s UPDATE path did. Fixed by adding
+  `await session.refresh(model)` after `flush()`, matching the same
+  pattern career_profile.py's `update()` methods already established —
+  caught by actually calling the API end-to-end with a real JWT and a
+  temporarily-granted `cikg_curator` role (reverted immediately after),
+  not by reasoning about the code.
+  Seed content: 97 skills / 49 categories / 13 roles / 17 `related_to`
+  edges / 7 `skill_alias` examples across the 5 seed domains
+  (`scripts/seed_cikg_mvp1.py`, idempotent — verified via a clean
+  re-run producing zero new rows). MVP 1's exit criterion (a `Skill` in
+  every domain with a populated hierarchy path, at least one ontology
+  edge, and at least one `skill_alias` resolving a real test user's
+  existing free-text `core_competencies` entry) was verified against
+  the real Postgres database and through `SkillAliasResolutionService`
+  called directly against real data — `name-qa@example.com`'s existing
+  `"Python"` competency resolves to canonical `Skill` "Python
+  Programming". A minimal read/write REST API exists at
+  `/api/v1/career-intelligence/*` (23 endpoints) — reads need only an
+  authenticated identity, writes are gated by `cikg.content.create`/
+  `cikg.content.approve`, verified live including a correct 403 for a
+  user without those permissions.
+- **CIKG MVP 2A — Search Foundation** (2026-07-29) — done, verified
+  live. Hybrid search over the MVP 1 graph per
+  `cikg-semantic-search.md`: `content_embeddings` (pgvector
+  `vector(768)` + HNSW index, polymorphic across
+  `Skill`/`CikgRole`/`Competency` — the only CIKG node types with real
+  free text; `SkillCategory` is excluded, already browsable via
+  `GET /categories`) and `embedding_models` (mirrors `model_versions`'
+  reference-data shape), plus a generated `search_vector` `tsvector` +
+  GIN index directly on `skills`/`cikg_roles`/`competencies` — the
+  first tsvector/GIN usage in this codebase. Embedding provider is
+  Ollama-only (`app/adapters/ai_providers/ollama_embedding_provider.py`,
+  mirroring `ollama_provider.py`'s exact shape;
+  `app/ai_platform/embeddings/` was an empty Phase-0-reserved slot,
+  now filled) — `nomic-embed-text` (768-dim), no paid provider wired,
+  per the roadmap's explicit MVP 2A scope. `SearchService`
+  (`app/application/career_intelligence/search_service.py`) implements
+  cikg-semantic-search.md's exact worked-example algorithm: resolve the
+  query to a canonical `Skill` (reuses `SkillAliasResolutionService`),
+  traverse its approved `related_to` edges (graph — ranks highest,
+  score 2.0 flat, always above the ~0-1 range of fulltext/vector
+  scores), then full-text (`ts_rank`) and vector (pgvector cosine KNN)
+  as supplementary signals, `category_id`/`role_id` as a hard
+  post-filter (skills only), all weighted by a live-computed
+  `knowledge_quality_score` (deliberately simple per MVP 2A scope —
+  `relationship_count` only; source-authorship/usage/freshness/conflict
+  factors are explicitly deferred, per cikg-semantic-search.md, to when
+  their inputs actually exist). **`knowledge_quality_score` is computed
+  live per query, not via a background job** — a deliberate MVP 2A
+  scope decision (confirmed with the user before building): this
+  codebase has no job scheduler, and at ~110 embeddable nodes a live
+  computation is cheap; revisit only if content volume or query latency
+  later demands a real batch job. `EmbeddingIndexingService`
+  (`scripts/embed_cikg_content.py`) is idempotent — re-embeds only
+  content whose text changed since its last embed (sha256 hash
+  comparison), verified live via a clean re-run producing zero new
+  embeddings. **Vector similarity's actual value verified live**, not
+  assumed: `q=handling customer objections` (zero keyword overlap with
+  any skill) correctly top-ranks "Objection Handling" purely via
+  `matched_via: ["vector"]`; `q=Data Analysis` top-ranks its
+  `related_to` neighbors ("Python Programming",
+  "SQL & Relational Database Querying") via `matched_via: ["graph"]`,
+  above the plain full-text self-match, over real Ollama-generated
+  embeddings (not mocked). One real bug caught building this, not by
+  review: `SkillAliasResolutionService.resolve()` only ever checked the
+  `skill_alias` table, never a skill's own canonical name — so a query
+  exactly matching a real `Skill.name` (not registered as its own
+  alias) silently failed to resolve and skipped the graph-traversal
+  step entirely. Fixed (exact-name match now tried first), regression
+  test added. New endpoint: `GET /api/v1/career-intelligence/search`
+  (any authenticated user, read-only) — 24 career-intelligence
+  endpoints total now.
+- **CIKG MVP 2B — Governance Expansion** (2026-07-29) — done, verified
+  live. **The write path was fully rewritten, not extended**: per the
+  user's explicit choice (`cikg-api-boundaries.md`'s "no CIKG resource
+  is ever writable directly — every change is `POST /revisions`"),
+  MVP 1's `ContentGovernanceService` and its ~19 direct
+  `create_draft_*`/`.../approve` endpoints are gone entirely, replaced
+  by `ContentRevisionService` (`app/application/career_intelligence/content_revision_service.py`)
+  and 7 generic endpoints under `/api/v1/career-intelligence/revisions`
+  (propose/submit/approve/reject/mark-rejected/list/batch-approve) — 16
+  career-intelligence endpoints total now (read endpoints unchanged).
+  New tables: `content_revisions` (the `draft`→`in_review`→`approved`/
+  `rejected` staging area — nothing touches a live row until an
+  `in_review` revision is approved) and `content_history` (append-only
+  prior-state snapshots, written automatically when an approved
+  revision edits an already-live entity). **Consequence**:
+  `content_status` on every governed node/edge table was narrowed from
+  `('draft', 'approved')` to `('approved', 'deprecated')` — `draft`/
+  `in_review` now live exclusively on `content_revisions.status`,
+  verified via a defensive zero-draft-rows check built into the
+  migration itself before narrowing the constraint. Three new
+  Skill↔Skill edge types unlocked by the DAG cycle-detection this slice
+  delivers: `prerequisite_of`/`specializes` (directed,
+  cycle-checked at approval via
+  `app/domain/career_intelligence/graph_validation.py`'s plain BFS —
+  the first graph-traversal logic in this codebase, no recursive SQL
+  CTE) and `synonym_of` (symmetric, same canonical-ordering/self-loop
+  rule as `related_to`, no cycle check). The 13
+  `prerequisite_of`/3 `specializes` edges MVP 1 deliberately dropped
+  (see that phase's status entry) were re-added via
+  `scripts/reseed_cikg_prerequisite_specializes.py`, transcribed
+  directly from `cikg-mvp1-seed-data.md`. **The literal MVP 2B exit
+  criterion verified live**: proposing the reverse of an
+  already-approved `prerequisite_of` edge (an AI-suggested edge,
+  `confidence=0.8`) is correctly blocked at `approve()` with
+  `EDGE_APPROVAL_WOULD_CREATE_CYCLE`, and the revision stays `in_review`
+  untouched rather than being silently dropped — real HTTP round trip,
+  not a unit test with fakes. Batch approval
+  (`import_batch_id`) and edit-with-history (proposing a new
+  description for an already-approved `Skill`, confirming
+  `content_history` captured the *prior* description) were also
+  verified live. **A real bug caught by that live batch-approve test,
+  not by review**: `search_vector` (MVP 2A's generated tsvector column)
+  had no `Computed()` marker on the ORM model, so any fresh INSERT
+  through the ORM (any brand-new node approved via a revision) failed
+  with `psycopg.errors.GeneratedAlways` — MVP 2A's own seed data never
+  hit this because it predated the column's existence, so no new
+  ORM-level INSERT had exercised this path until MVP 2B's
+  revision-approval flow did. Fixed by adding `Computed(...)` (matching
+  the migration's actual generation expression) to all three affected
+  models. **Known, documented limitation**: `batch_approve` isolates
+  `ValidationError`-style failures (the cycle check, which runs in
+  Python before any DB write) so one blocked edge doesn't block the
+  rest of a batch, but a genuine DB-level constraint violation would
+  abort the whole batch's shared transaction — accepted as out of scope
+  for this slice since the literal exit criterion never exercises that
+  path (see `content_revision_service.py`'s docstring). Full
+  `in_review`/multi-reviewer workflow beyond single-approver,
+  automatic conflict *detection* (vs. the `reject`/`mark_rejected`
+  primitives this slice exposes for a human to resolve one), and a real
+  AI-suggestion *generation* pipeline remain explicitly deferred past
+  MVP 2B, per the roadmap's own "Also Deferred Past MVP" list.
+- **Phase 5 — Resume Intelligence** (2026-08-04) — done, verified live.
+  New `app/domain/resume_intelligence/` domain: upload a PDF/DOCX resume
+  → parse it → use an LLM to extract structured data → the user reviews
+  and accepts/rejects individual items before anything is written into
+  the *existing* Career Profile (Experience/Education/Certifications/
+  headline/summary/core_competencies) — deliberately no parallel resume
+  data model of its own. Parsing is synchronous within the upload
+  request (no job queue in this codebase, same call already made for
+  CIKG's `knowledge_quality_score`): `pdfplumber`/`python-docx` extract
+  raw text (`app/adapters/parsing/resume_text_extractor.py`, run via
+  `asyncio.to_thread` — CPU-bound sync libraries, same pattern as boto3
+  calls elsewhere), then `LLMService.generate(use_case="resume_extraction")`
+  (reusing Phase 4's AI Platform as-is — a new seeded `PromptVersion`,
+  no other AI Platform changes) returns JSON that's normalized (missing
+  fields defaulted, individual malformed list items dropped rather than
+  failing the whole resume) and stored on a new `resumes` table
+  (tenant-owned, RLS enabled+forced, single `ResumeRepository` — a
+  resume row is write-once, no `update()`/`move()`). A failure at any
+  step (text extraction, the LLM call, malformed JSON back) is caught
+  and persisted as `status="failed"` with an `error_message` rather than
+  raising — verified live both ways: a missing `ANTHROPIC_API_KEY`
+  correctly degrades to a `failed` row, and switching the test user's
+  model preference to a local Ollama model (`qwen2.5:7b`, already seeded
+  from Phase 4) correctly produces a real `parsed` extraction end to end.
+  **Real security decision made mid-build, not assumed**: the existing
+  `S3ObjectStorageRepository`/`ObjectStorageRepository` (profile photos)
+  makes its bucket bucket-wide public-read by design — wrong for
+  resumes, which carry real PII. Extended the same adapter class with a
+  second, private bucket (`OBJECT_STORAGE_RESUMES_BUCKET`) and three new
+  methods (`upload_private`/`get_presigned_url`/`delete_private`,
+  ported behind a new `PrivateObjectStorageRepository` Protocol in
+  `app/domain/resume_intelligence/storage.py`) rather than reusing the
+  public path as-is — verified live: an anonymous `curl` against a
+  resume's object URL gets `403`, against the same-shaped photo URL
+  gets `404` (reachable, just not found) — confirming the resumes
+  bucket is genuinely private and the photos bucket genuinely isn't.
+  `ResumeMergeService` (`app/application/resume_intelligence/`) takes
+  the user's per-item accept/reject decisions and calls the *existing*
+  `ExperienceService.add()`/`EducationService.add()`/
+  `CertificationService.add()`/`CareerProfileService.update()` exactly
+  as every other caller does — no duplicated profile-mutation logic.
+  Skill merging dedups case-insensitively against current
+  `core_competencies`, same rule `TargetRole.add_required_skill` already
+  established. Verified live end-to-end via real HTTP calls with real
+  JWTs across two tenants (not just unit tests): upload → real-Ollama
+  extraction → `GET /latest` correctly 404s for a different tenant
+  (cross-tenant isolation through the real RLS-backed path, not a raw
+  superuser SQL check, which would have bypassed RLS meaninglessly) →
+  `POST /merge` with a subset of indices/skills → confirmed via
+  `GET /career-profile/*` that only the accepted items were written.
+  18 new unit tests (fake in-memory repositories, real
+  `ExperienceService`/`EducationService`/`CertificationService`/
+  `CareerProfileService` wired against them — the same DI shape
+  `app/api/dependencies.py` uses against real repositories) cover both
+  services including the failure/degradation paths. Frontend: new
+  `/profile/resume` page (`frontend/src/features/resume-intelligence/`,
+  unlisted route — Left Nav stays the fixed 4 items — reached via an
+  "Import from Resume" button on the Career Profile page), upload UI
+  mirroring `ProfileHeader.tsx`'s hidden-file-input pattern, and a
+  genuinely new review-screen UI (no accept/reject-list precedent
+  existed anywhere in this app before — Gap Analysis is read-only, My
+  Skills is single-select-and-add) built from existing primitives
+  (`Card`, `Badge`, `ConfirmDialog`). Selection state for the review
+  checkboxes is initialized fresh per resume via a `key={resume.id}`
+  remount rather than a `useEffect` re-sync — deliberately sidesteps the
+  reactive-re-sync bug class CLAUDE.md already documents elsewhere,
+  since a `key` change unmounts/remounts instead of clobbering
+  in-progress (de)selections on an unrelated background refetch. After
+  a successful merge the resume is also discarded (`DELETE`) so
+  revisiting `/profile/resume` doesn't re-offer already-merged items for
+  a second, duplicating merge. Verified live in a real headless browser
+  (Playwright, driven directly — no `chromium-cli` available on this
+  Windows host): logged in, navigated via the app's own client-side
+  router (a hard `page.goto` to an internal route loses the session,
+  since the access token is deliberately kept in-memory only — see
+  `auth-store.ts` — not a bug, just a test-script gotcha worth noting),
+  uploaded a real PDF, watched the review screen populate from a real
+  Ollama extraction, deselected one experience entry, merged, and
+  confirmed on the real (expanded) Career Profile page that the
+  accepted entry appears and the deselected one does not.
+- **Phase 5 redesign — Resume Intelligence becomes a history, not a
+  slot** (2026-08-04, same day, prompted directly by the user after
+  live-testing Phase 5 with their own real resume) — done, verified
+  live. Two of the day's own design choices above were reversed by
+  explicit user direction once the single-resume shape proved wrong in
+  practice: **(1) Resume Intelligence is now a 5th permanent Left Nav
+  item** (`/resumes`, `nav-items.ts`) — a deliberate, explicit
+  departure from the "Left Nav is always the same 4 items" convention
+  documented under "Frontend conventions" above, which still holds for
+  every *other* nav decision, this is a one-off carve-out, not a
+  reversal of the rule. The old unlisted `/profile/resume` route and
+  its "Import from Resume" button on the Career Profile page are gone.
+  **(2) Resumes are now real history, not a superseded single row**: a
+  person keeps multiple resume versions, optionally each tagged to a
+  different `TargetRole` (new nullable `Resume.target_role_id` FK,
+  migration `b7e4c8a91f3d`). `ResumeRepository` changed from
+  `get_latest_for_user`/`soft_delete_all_for_user` to
+  `list_for_user`/`get_by_id` — an upload no longer discards any prior
+  resume, and a merge no longer auto-discards the just-merged resume
+  either (both were deliberate Phase-5-day behaviors that only made
+  sense under the single-slot model). **Delete removes only the resume
+  record** — already-merged Career Profile data is never touched or
+  rolled back by deleting the resume that produced it, confirmed
+  explicitly with the user rather than assumed. New `GET
+  /resume-intelligence` (list, lightweight `ResumeSummary` shape) and
+  `GET /resume-intelligence/{id}` (single, full detail) replace the old
+  `GET /resume-intelligence/latest`. `ResumeIntelligencePage.tsx`
+  replaced `ResumeImportPage.tsx`: a history list (target-role tag per
+  row where linked) plus an upload card with a target-role `<Select>`,
+  and the same review/merge UI as before now reached per-resume rather
+  than for a single implicit latest one.
+  This redesign session was also the second live-debugging pass on the
+  Phase 5 extraction pipeline itself, using the user's own real
+  resume — a real DOCX bug (`document.paragraphs` never sees table
+  content at all; `_extract_docx` rewritten to walk
+  `document.element.body.iterchildren()` in document order via
+  `_iter_block_items()`, matching `w:p`/`w:tbl` tags) turned out to be
+  the likely root cause of several earlier "section went missing"
+  reports, since every prior real-resume test happened to be a Word
+  file. A second, distinct root cause for missing/incomplete sections
+  under token pressure: the LLM was writing full-paragraph
+  `description` fields and running out of its response token budget
+  before reaching every section — reordering the JSON schema key order
+  only shifted *which* section got sacrificed, not a real fix; the
+  actual fix was an explicit prompt instruction to keep every
+  description to one concise sentence, verified live to produce
+  complete extractions across all categories. Also fixed live this
+  session: an experience item with an unparseable/missing start date
+  no longer aborts the *entire* merge (skips just that item, reports it
+  in `skipped_experience_titles`); Education vs. Certification
+  miscategorization (employers and professional-membership bodies were
+  landing in Education) fixed via explicit prompt field guidance;
+  "Present"/"Current" roles were incorrectly nulling `start_date` along
+  with `end_date`; Executive Summary was being nulled whenever its
+  wording overlapped the headline, since no prompt guidance
+  distinguished the two fields at all. The prompt template
+  (`RESUME_EXTRACTION_PROMPT_TEMPLATE` in `seed_platform_defaults.py`)
+  went through 9 live-seeded versions across the full Phase 5 + redesign
+  session addressing these findings one at a time, each verified
+  against the user's actual resume, not synthetic test data.
+- **Career Profile bulk clear + resume upload cancel** (2026-08-04,
+  post-Phase-5-redesign) — done, verified live. Two independent
+  additions requested together: (1) a page-level "Clear Career Profile"
+  button on `CareerProfilePage.tsx` that wipes the *entire* profile —
+  photo, headline, summary, core competencies, and every entry across
+  all 7 list-domains (Experience/Education/Certifications/Career
+  Highlights/Key Achievements/Career Goals/Peer Endorsements) — plus a
+  "Clear" button on each of the 8 `SECTION_DEFS` section cards that
+  clears only that section, both gated behind `ConfirmDialog` per the
+  standing confirm-before-delete convention; (2) a Cancel button on the
+  Resume Intelligence upload flow. **Backend**: every domain repository
+  gained a bulk `soft_delete_all_for_profile`/`soft_delete_all_for_user`
+  (single `UPDATE ... WHERE ... deleted_at IS NULL` statement, not a
+  per-item loop) and its application service gained a matching
+  `clear_all()`; `CareerProfileService` gained `delete_photo()` (best-
+  effort — the storage key is reconstructed from `photo_url`'s file
+  extension since the key itself was never persisted separately, and a
+  storage-side failure is caught and swallowed rather than blocking the
+  DB-side clear, since the DB field is the source of truth for "does
+  this profile have a photo," not the object's actual presence in the
+  bucket). A new orchestrating `ClearCareerProfileService`
+  (`app/application/career_profile/clear_profile_service.py`) fans out
+  to all 7 domain services plus `CareerProfileService`, mirroring
+  `ResumeMergeService`'s own reuse-existing-services pattern just in the
+  write-nothing-but-delete direction. New endpoints all follow the
+  existing per-item `DELETE .../{id}` shape but with **no id** —
+  `DELETE /career-profile` (whole profile), `DELETE
+  /career-profile/photo`, and `DELETE /career-profile/{experiences,
+  educations, certifications, highlights, achievements, endorsements}`
+  plus `DELETE /career-goals` (its own prefix, matching that domain's
+  existing routing). Core Competencies has no dedicated clear endpoint —
+  its frontend "Clear" button reuses the existing `PATCH /career-profile`
+  with `core_competencies: []`, since that field already lives on
+  `CareerProfileService.update()`. Verified live via direct HTTP calls
+  (not just unit tests): whole-profile clear correctly reset every
+  field/domain and left a different user's profile untouched; a real
+  photo was uploaded then deleted, confirmed via an anonymous fetch
+  against the object URL going from `200` to `404` — the S3 object is
+  genuinely gone, not just unlinked from the profile row. New unit
+  tests (`CareerProfileService.delete_photo`, including a simulated
+  storage failure) and integration tests (`TestClearSection`,
+  `TestClearWholeProfile` in `test_career_profile_flow.py`, real
+  Postgres, cross-user isolation checked for both) — 243 backend tests
+  passing. **Frontend**: `ConfirmDialog` gained optional
+  `confirmLabel`/`confirmPendingLabel` props (default unchanged:
+  "Delete"/"Deleting...") so the same component reads "Clear"/
+  "Clearing..." for these actions without a second dialog component.
+  **Resume upload cancel**: `apiClient.uploadFile` and `useUploadResume`
+  both gained a threaded-through optional `AbortSignal`; `UploadCard`
+  creates a fresh `AbortController` per upload attempt (stored in a
+  ref) and shows a Cancel button only while `isPending`, clicking it
+  aborts the in-flight `fetch`. **Real architectural limit, documented
+  not hidden**: since resume extraction runs synchronously inside the
+  backend request (no job queue exists in this codebase — same
+  constraint noted throughout Phase 5), cancelling only abandons this
+  browser tab's wait for the response; the server keeps running the
+  extraction to completion and still writes a `resumes` row when it
+  finishes, which simply appears in history like any other upload
+  rather than opening automatically — there is no server-side
+  cancellation path to hook into without adding a job queue, which is
+  out of scope for this change. Verified live in a real headless
+  browser (Playwright): added a competency, cleared just that section,
+  confirmed it disappeared without touching an unrelated section;
+  opened (and correctly canceled, to avoid destroying the live test
+  tenant's data further) the whole-profile confirm dialog; and, using
+  Playwright route interception to artificially delay the upload
+  response (the dummy file otherwise failed extraction too fast to
+  leave a real cancel window), confirmed the Cancel button appears
+  during upload, clicking it shows "Upload canceled." instead of a
+  scary error, and the upload control re-enables afterward — zero
+  console errors throughout.
+- **Same-day follow-up, from real user testing of the above** (2026-08-04)
+  — done, verified live. Three issues reported after using the new
+  clear/cancel features for real: (1) adding a new item to a collapsed
+  section left it collapsed — the Add button lives in the section
+  header and is reachable even while collapsed, but nothing then opened
+  the section to show what was just added. Fixed in all 7 dialog-based
+  sections (Core Competencies isn't affected — its add input only
+  renders once already expanded) by expanding on a successful **add**
+  specifically, not an edit, since `editingId` already distinguishes
+  the two in every section's shared submit handler. (2) One real
+  upload produced **three** `failed` entries in Resume History instead
+  of one, and entries showed only a date, no time, making the
+  duplicates impossible to tell apart. Root-caused live, not assumed:
+  the just-shipped Cancel button aborts the *browser's* wait, but
+  extraction keeps running server-side regardless (no job queue exists
+  to actually stop it) — the UI going back to "ready" immediately after
+  Cancel invited exactly this: cancel, retry, cancel, retry, with 2-3
+  independent ~10-minute Ollama calls silently in flight at once, each
+  eventually writing its own `failed` row. **First attempted a real
+  fix**: `upload_resume` (`app/api/v1/resume_intelligence/router.py`)
+  raced the extraction against `Request.is_disconnected()` polling (the
+  documented Starlette pattern — task-cancel on client disconnect, so
+  cancellation unwinds the coroutine before it ever reaches
+  `resumes.create()`, no row written at all for a genuinely cancelled
+  attempt). **Verified live that this does NOT work in this specific
+  dev setup**: two separate real disconnect tests (a forced curl
+  timeout, and a .NET `HttpClient` cancellation token) both still
+  produced a `resumes` row once Ollama eventually replied minutes
+  later — `Request.is_disconnected()` only reports a disconnect that
+  the ASGI server already pushed onto the receive queue
+  (`starlette/requests.py`'s implementation is a non-blocking peek, not
+  an active probe), and that message reliably never arrived through
+  Docker Desktop's Windows networking for these test clients. The
+  router code is kept anyway (spec-correct, harmless, may well work
+  behind a normal reverse proxy in a real deployment) but is **not**
+  relied on to solve the dev-environment bug. The actual fix that
+  matters here is honest UI messaging: `UploadCard`'s post-cancel state
+  (`ResumeIntelligencePage.tsx`) no longer implies a clean stop —  a
+  persistent (not auto-dismissing) note explains the previous attempt
+  may still finish in the background and appear later, so a user
+  cancelling and retrying does so with accurate expectations instead of
+  the UI's own "ready to go" appearance being what caused the
+  duplicate-attempt pattern in the first place. (3) Resume History now
+  shows date **and time** (`formatDisplayDateTime`, new in
+  `lib/date-format.ts`, local timezone) instead of date-only
+  (`formatDisplayDate`) — directly requested, and specifically useful
+  for telling near-simultaneous duplicate entries apart, which is
+  exactly the scenario issue (2) produces when it does still happen.
+  243 backend tests still passing; all three fixes verified live
+  (Playwright for the auto-expand fix — confirmed a collapsed section
+  reliably opens and shows the new item after Add; direct HTTP/curl and
+  PowerShell `HttpClient` for the disconnect-race investigation itself).
+- **Not yet started**: Phase 6 onward through Phase 9 (Phase 4.5.2+ —
+  CIKG MVP 3/4/5 — also not started; see
+  `docs/architecture/cikg-mvp-roadmap.md`). Domain list in
+  `docs/architecture/system-overview.md`; that doc doesn't enumerate a
+  numbered phase-by-phase roadmap the way this section does — the phase
+  numbers (1 Identity, 2 Career Profile, 3 Skill Intelligence, 4 AI
+  Platform real wiring, 4.5 CIKG Foundation, 5 Resume Intelligence, 6
+  Opportunity Intelligence, 7 Learning Intelligence, 8 AI Career Coach) are tracked
+  here and in project memory only.
 
 ## Working conventions this user expects
 

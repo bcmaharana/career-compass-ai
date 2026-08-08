@@ -15,7 +15,7 @@ import pytest
 from app.application.career_profile.career_profile_service import CareerProfileService
 from app.application.career_profile.target_role_service import TargetRoleService
 from app.application.skill_intelligence.gap_analysis_service import GapAnalysisService
-from app.domain.career_profile.entities import CareerProfile, TargetRole
+from app.domain.career_profile.entities import CareerProfile, CoreCompetency, TargetRole
 
 
 class FakeCareerProfileRepository:
@@ -23,10 +23,17 @@ class FakeCareerProfileRepository:
         self.profiles: dict[uuid.UUID, CareerProfile] = {}
 
     async def get_by_user_id(
-        self, tenant_id: uuid.UUID, user_id: uuid.UUID
+        self,
+        tenant_id: uuid.UUID,
+        user_id: uuid.UUID,
+        target_role_id: uuid.UUID | None = None,
     ) -> CareerProfile | None:
         for profile in self.profiles.values():
-            if profile.tenant_id == tenant_id and profile.user_id == user_id:
+            if (
+                profile.tenant_id == tenant_id
+                and profile.user_id == user_id
+                and profile.target_role_id == target_role_id
+            ):
                 return replace(profile)
         return None
 
@@ -89,7 +96,7 @@ class TestGapAnalysisService:
             user_id=user_id,
             headline=None,
             summary=None,
-            core_competencies=["Python"],
+            core_competencies=[CoreCompetency(name="Python")],
         )
         target_role = await service._target_roles.add(
             tenant_id=tenant_id, user_id=user_id, role_name="Staff Engineer", tag="SE"
@@ -117,7 +124,7 @@ class TestGapAnalysisService:
             user_id=user_id,
             headline=None,
             summary=None,
-            core_competencies=["python"],
+            core_competencies=[CoreCompetency(name="python")],
         )
         target_role = await service._target_roles.add(
             tenant_id=tenant_id, user_id=user_id, role_name="Staff Engineer", tag="SE"

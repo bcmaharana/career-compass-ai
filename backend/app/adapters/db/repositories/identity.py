@@ -75,6 +75,7 @@ def _user_to_domain(model: UserModel) -> User:
         deleted_at=model.deleted_at,
         last_login_at=model.last_login_at,
         phone_number=model.phone_number,
+        phone_number_e164=model.phone_number_e164,
         country=model.country,
         language=model.language,
         address_line1=model.address_line1,
@@ -82,6 +83,7 @@ def _user_to_domain(model: UserModel) -> User:
         city=model.city,
         state=model.state,
         postal_code=model.postal_code,
+        preferred_model_version_id=model.preferred_model_version_id,
     )
 
 
@@ -209,6 +211,15 @@ class SqlAlchemyUserRepository:
         model = result.scalar_one_or_none()
         return _user_to_domain(model) if model else None
 
+    async def get_by_phone_e164(self, tenant_id: UUID, phone_e164: str) -> User | None:
+        result = await self._session.execute(
+            select(UserModel).where(
+                UserModel.tenant_id == tenant_id, UserModel.phone_number_e164 == phone_e164
+            )
+        )
+        model = result.scalar_one_or_none()
+        return _user_to_domain(model) if model else None
+
     async def update(self, user: User) -> User:
         model = await self._session.get(UserModel, user.id)
         assert model is not None, "update() called with a user id that no longer exists"
@@ -217,6 +228,7 @@ class SqlAlchemyUserRepository:
         model.last_name = user.last_name
         model.last_login_at = user.last_login_at
         model.phone_number = user.phone_number
+        model.phone_number_e164 = user.phone_number_e164
         model.country = user.country
         model.language = user.language
         model.address_line1 = user.address_line1
@@ -224,6 +236,7 @@ class SqlAlchemyUserRepository:
         model.city = user.city
         model.state = user.state
         model.postal_code = user.postal_code
+        model.preferred_model_version_id = user.preferred_model_version_id
         await self._session.flush()
         await self._session.refresh(model)
         return _user_to_domain(model)

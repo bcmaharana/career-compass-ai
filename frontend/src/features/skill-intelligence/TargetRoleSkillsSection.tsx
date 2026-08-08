@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollapseToggle } from "@/components/ui/collapse-toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { CopyButton } from "@/components/ui/copy-button";
 import { Input } from "@/components/ui/input";
 import { itemAlternateClass } from "@/features/career-profile/section-order";
 import { RenameSkillDialog } from "@/features/skill-intelligence/RenameSkillDialog";
@@ -103,26 +104,38 @@ function TargetRoleRequirementsRow({
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Badge variant="accent">{targetRole.tag}</Badge>
-          <p className="font-medium">{targetRole.role_name}</p>
+          <p className="font-medium">
+            {targetRole.role_name}{" "}
+            <span className="text-sm font-normal italic text-muted-foreground">
+              ({targetRole.required_skills.length})
+            </span>
+          </p>
         </div>
-        <form onSubmit={handleAdd} className="flex items-center gap-1.5">
-          <Input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Add target role skill(s)"
-            aria-label={`New required skill(s) for ${targetRole.role_name}, comma-separated`}
-            className="h-8 w-48"
+        <div className="flex items-center gap-2">
+          <form onSubmit={handleAdd} className="flex items-center gap-1.5">
+            <Input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Add target role skill(s)"
+              aria-label={`New required skill(s) for ${targetRole.role_name}, comma-separated`}
+              className="h-8 w-48"
+            />
+            <Button
+              type="submit"
+              variant="ghost"
+              size="sm"
+              disabled={!draft.trim() || isSubmitting}
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </Button>
+          </form>
+          <CopyButton
+            text={targetRole.required_skills.join(", ")}
+            disabled={targetRole.required_skills.length === 0}
+            variant="ghost"
           />
-          <Button
-            type="submit"
-            variant="outline"
-            size="sm"
-            disabled={!draft.trim() || isSubmitting}
-          >
-            <Plus className="h-4 w-4" />
-            Add
-          </Button>
-        </form>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-1.5">
@@ -198,7 +211,7 @@ export function TargetRoleSkillsSection({ cardBackground }: TargetRoleSkillsSect
 
   return (
     <Card className={cardBackground === "background" ? "bg-background" : undefined}>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Target Role Skill Requirements</CardTitle>
         <CollapseToggle
           isOpen={isOpen}

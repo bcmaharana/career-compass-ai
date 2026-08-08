@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, type LucideIcon } from "lucide-react";
 
 interface MoveButtonsProps {
   onMoveUp: () => void;
@@ -7,6 +7,22 @@ interface MoveButtonsProps {
   isFirst: boolean;
   isLast: boolean;
   disabled?: boolean;
+  /** Distinguishes what's being moved when a page has more than one
+   * MoveButtons pair in the same view (e.g. a whole page section's own
+   * reorder controls vs. a group *within* that section's content) —
+   * without this, two pairs both labeled bare "Move up"/"Move down" are
+   * ambiguous to a screen reader and to anything selecting by
+   * accessible name. Interpolated as `Move {label} up`/`Move {label}
+   * down`; omit for the plain "Move up"/"Move down" every existing
+   * (single-pair-per-view) caller already uses. */
+  label?: string;
+  /** "vertical" (default, stacked — every existing caller) or
+   * "horizontal" (side-by-side). */
+  orientation?: "vertical" | "horizontal";
+  /** Override the up/down icon components — defaults to ChevronUp/
+   * ChevronDown (every existing caller). */
+  upIcon?: LucideIcon;
+  downIcon?: LucideIcon;
 }
 
 /**
@@ -21,28 +37,38 @@ interface MoveButtonsProps {
  * but disabling here gives the user an immediate visual signal instead
  * of a click that appears to do nothing.
  */
-export function MoveButtons({ onMoveUp, onMoveDown, isFirst, isLast, disabled }: MoveButtonsProps) {
+export function MoveButtons({
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast,
+  disabled,
+  label,
+  orientation = "vertical",
+  upIcon: UpIcon = ChevronUp,
+  downIcon: DownIcon = ChevronDown,
+}: MoveButtonsProps) {
   return (
-    <div className="flex flex-col">
+    <div className={orientation === "horizontal" ? "flex flex-row" : "flex flex-col"}>
       <Button
         variant="ghost"
         size="sm"
         onClick={onMoveUp}
         disabled={disabled || isFirst}
-        aria-label="Move up"
-        className="h-6 px-1"
+        aria-label={label ? `Move ${label} up` : "Move up"}
+        className="h-8 px-1"
       >
-        <ChevronUp className="h-4 w-4" />
+        <UpIcon className="h-4 w-4" />
       </Button>
       <Button
         variant="ghost"
         size="sm"
         onClick={onMoveDown}
         disabled={disabled || isLast}
-        aria-label="Move down"
-        className="h-6 px-1"
+        aria-label={label ? `Move ${label} down` : "Move down"}
+        className="h-8 px-1"
       >
-        <ChevronDown className="h-4 w-4" />
+        <DownIcon className="h-4 w-4" />
       </Button>
     </div>
   );

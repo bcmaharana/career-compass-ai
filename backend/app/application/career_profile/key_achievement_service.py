@@ -28,8 +28,12 @@ class KeyAchievementService:
         self, *, tenant_id: UUID, user_id: UUID, achievement_id: UUID
     ) -> KeyAchievement:
         achievement = await self._achievements.get_by_id(tenant_id, achievement_id)
-        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
-        if achievement is None or achievement.career_profile_id != profile.id:
+        if achievement is None:
+            raise NotFoundError("Key achievement not found.", code="KEY_ACHIEVEMENT_NOT_FOUND")
+        profile = await self._career_profiles.get_by_id(
+            tenant_id=tenant_id, profile_id=achievement.career_profile_id
+        )
+        if profile is None or profile.user_id != user_id:
             raise NotFoundError("Key achievement not found.", code="KEY_ACHIEVEMENT_NOT_FOUND")
         return achievement
 
@@ -42,8 +46,11 @@ class KeyAchievementService:
         company: str | None,
         description: str | None,
         occurred_on: date | None,
+        target_role_id: UUID | None = None,
     ) -> KeyAchievement:
-        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
         now = datetime.now(UTC)
         return await self._achievements.create(
             KeyAchievement(
@@ -61,9 +68,11 @@ class KeyAchievementService:
         )
 
     async def list_for_current_user(
-        self, *, tenant_id: UUID, user_id: UUID
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None = None
     ) -> list[KeyAchievement]:
-        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
         return await self._achievements.list_for_profile(tenant_id, profile.id)
 
     async def update(
@@ -99,3 +108,11 @@ class KeyAchievementService:
             tenant_id=tenant_id, user_id=user_id, achievement_id=achievement_id
         )
         await self._achievements.move(tenant_id, achievement_id, direction)
+
+    async def clear_all(
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None = None
+    ) -> None:
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
+        await self._achievements.soft_delete_all_for_profile(tenant_id, profile.id)

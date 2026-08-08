@@ -30,6 +30,7 @@ class ObjectStorageError(CareerCompassError):
 class S3ObjectStorageRepository:
     def __init__(self, settings: Settings) -> None:
         self._bucket = settings.object_storage_bucket
+        self._resumes_bucket = settings.object_storage_resumes_bucket
         # Deliberately NOT the same value as endpoint_url below — see
         # Settings.object_storage_public_url's docstring. Using the
         # internal endpoint here would produce photo_url values the
@@ -44,6 +45,7 @@ class S3ObjectStorageRepository:
             region_name="us-east-1",  # required by boto3's S3 client; MinIO ignores the value
         )
         self._bucket_checked = False
+        self._resumes_bucket_checked = False
 
     async def _ensure_bucket_exists(self) -> None:
         """MinIO (unlike some managed S3 setups) does not create a
@@ -106,6 +108,64 @@ class S3ObjectStorageRepository:
             ) from exc
 
         self._bucket_checked = True
+
+    async def _ensure_resumes_bucket_exists(self) -> None:
+        """Same existence check as _ensure_bucket_exists(), but deliberately
+        does NOT apply a public-read policy — resumes carry real PII
+        (name, contact info, employer history), unlike profile photos.
+        MinIO/S3 buckets default to private, which is what we want here,
+        so there is no policy step at all.
+        """
+        if self._resumes_bucket_checked:
+            return
+        try:
+            await asyncio.to_thread(self._client.head_bucket, Bucket=self._resumes_bucket)
+        except (ClientError, BotoCoreError):
+            try:
+                await asyncio.to_thread(self._client.create_bucket, Bucket=self._resumes_bucket)
+            except (ClientError, BotoCoreError) as exc:
+                raise ObjectStorageError(
+                    f"Object storage bucket '{self._resumes_bucket}' does not exist and could "
+                    f"not be created. Underlying error: {exc}"
+                ) from exc
+
+        self._resumes_bucket_checked = True
+
+    async def upload_private(self, *, key: str, content: bytes, content_type: str) -> None:
+        """Upload to the private resumes bucket. Unlike upload(), there is
+        no public URL to return — the object is only reachable via
+        get_presigned_url() or backend-mediated access.
+        """
+        await self._ensure_resumes_bucket_exists()
+        try:
+            await asyncio.to_thread(
+                self._client.put_object,
+                Bucket=self._resumes_bucket,
+                Key=key,
+                Body=content,
+                ContentType=content_type,
+            )
+        except (ClientError, BotoCoreError) as exc:
+            raise ObjectStorageError(f"Failed to upload private object '{key}'.") from exc
+
+    async def get_presigned_url(self, *, key: str, expires_in_seconds: int = 300) -> str:
+        try:
+            return await asyncio.to_thread(
+                self._client.generate_presigned_url,
+                "get_object",
+                Params={"Bucket": self._resumes_bucket, "Key": key},
+                ExpiresIn=expires_in_seconds,
+            )
+        except (ClientError, BotoCoreError) as exc:
+            raise ObjectStorageError(f"Failed to generate a presigned URL for '{key}'.") from exc
+
+    async def delete_private(self, *, key: str) -> None:
+        try:
+            await asyncio.to_thread(
+                self._client.delete_object, Bucket=self._resumes_bucket, Key=key
+            )
+        except (ClientError, BotoCoreError) as exc:
+            raise ObjectStorageError(f"Failed to delete private object '{key}'.") from exc
 
     async def upload(self, *, key: str, content: bytes, content_type: str) -> str:
         await self._ensure_bucket_exists()

@@ -1,4 +1,4 @@
-import { Gauge, LineChart, Settings, Sparkles, User, UserCircle } from "lucide-react";
+import { Bot, FileText, Gauge, LineChart, Settings, Sparkles, User, UserCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -37,6 +37,12 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Sparkles,
     purpose: "Get personalized, AI-guided career coaching.",
   },
+  {
+    to: "/resumes",
+    label: "Resume Intelligence",
+    icon: FileText,
+    purpose: "Upload resumes, review AI-extracted details, and manage your resume history.",
+  },
 ];
 
 /**
@@ -57,6 +63,13 @@ export const SETTINGS_NAV_ITEMS: NavItem[] = [
     icon: User,
     end: true,
     purpose: "View and update your name and title.",
+  },
+  {
+    to: "/settings/ai-model",
+    label: "AI Model",
+    icon: Bot,
+    end: true,
+    purpose: "Choose which AI model powers your Career Coach chat.",
   },
 ];
 

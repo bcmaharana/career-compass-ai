@@ -1,9 +1,12 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { CareerProfilePage } from "@/features/career-profile/CareerProfilePage";
+import { CoachPage } from "@/features/coach/CoachPage";
 import { DashboardPage } from "@/features/dashboard/DashboardPage";
 import { LoginPage } from "@/features/auth/LoginPage";
+import { SettingsAIModelPage } from "@/features/settings/SettingsAIModelPage";
 import { SettingsLandingPage } from "@/features/settings/SettingsLandingPage";
 import { SettingsProfilePage } from "@/features/settings/SettingsProfilePage";
+import { ResumeIntelligencePage } from "@/features/resume-intelligence/ResumeIntelligencePage";
 import { NotFoundPage } from "@/routes/NotFound";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 import { SkillIntelligencePage } from "@/features/skill-intelligence/SkillIntelligencePage";
@@ -33,11 +36,12 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <DashboardPage /> },
           { path: "profile", element: <CareerProfilePage /> },
+          { path: "resumes", element: <ResumeIntelligencePage /> },
           { path: "skills", element: <SkillIntelligencePage /> },
-          // /coach nav link exists in AppShell already; its route element
-          // arrives with Phase 8.
+          { path: "coach", element: <CoachPage /> },
           { path: "settings", element: <SettingsLandingPage /> },
           { path: "settings/profile", element: <SettingsProfilePage /> },
+          { path: "settings/ai-model", element: <SettingsAIModelPage /> },
         ],
       },
     ],

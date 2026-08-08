@@ -101,3 +101,7 @@ class PeerEndorsementService:
             tenant_id=tenant_id, user_id=user_id, endorsement_id=endorsement_id
         )
         await self._endorsements.move(tenant_id, endorsement_id, direction)
+
+    async def clear_all(self, *, tenant_id: UUID, user_id: UUID) -> None:
+        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
+        await self._endorsements.soft_delete_all_for_profile(tenant_id, profile.id)

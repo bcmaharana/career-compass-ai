@@ -13,7 +13,31 @@ AI is a governed platform capability, invoked by application services, never cal
 | Phase 3 | Agent orchestration — multi-step reasoning built on top of the same LLM service, not a replacement for it |
 | Phase 4 | Advanced autonomous workflows |
 
-Phase 0 (repository/backend foundation) only creates the **interface contracts and folder structure** for the above — `ai_platform/llm_service/`, `ai_platform/prompts/`, `ai_platform/models/`, `ai_platform/governance/` — with a stub in-memory implementation sufficient for tests. No real provider (Anthropic) call is wired until Phase 4 per the roadmap.
+Phase 0 (repository/backend foundation) created the **interface
+contracts and folder structure** for the above —
+`ai_platform/llm_service/`, `ai_platform/prompts/`, `ai_platform/models/`,
+`ai_platform/governance/` — with a stub in-memory implementation
+sufficient for tests. No RAG, no agents.
+
+**Phase 4 status: real wiring is live.** `app/adapters/ai_providers/anthropic_provider.py`
+implements `LLMProviderInterface` against the Anthropic Messages API.
+`app/ai_platform/llm_service/service.py`'s `LLMService` is the concrete
+orchestrator application services call — it resolves the active
+approved prompt and active model from Postgres-backed registries
+(`app/adapters/db/repositories/ai_platform.py`, tables `prompt_versions`
+/ `model_versions`, seeded by `scripts/seed_platform_defaults.py`),
+renders the template, calls the provider, and logs every invocation to
+`ai_invocations` (tenant-owned, RLS-enforced). The AI Career Coach
+footer chat (`app/application/chat/chat_service.py`) is the first real
+caller — its "career_coach_chat" prompt renders recent conversation
+history plus the latest message; a provider failure (missing API key,
+rate limit, network error) degrades to an apologetic in-chat message
+rather than a 500, since the conversation itself is still persisted
+either way. `LLMRequest` carries a `model_name` field (the literal
+provider model string, e.g. `"claude-sonnet-5"`) resolved from the
+active `ModelVersion` by `LLMService` — this was added in Phase 4 since
+the Phase 0 interface only had opaque registry IDs, which the provider
+adapter cannot call a model with directly.
 
 ## Component Responsibilities
 

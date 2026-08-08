@@ -90,6 +90,40 @@ class InternalJWTProvider:
             roles=role_names,
         )
 
+    async def authenticate_with_phone(self, *, phone_e164: str, tenant_id: str) -> IdentityClaims:
+        """Phone login's counterpart to authenticate_with_credentials — no
+        password check here because proof of phone ownership already
+        happened at the Firebase layer (see
+        app/adapters/identity_providers/firebase_phone.py and
+        AuthenticateUserService.execute_phone); this only has to find the
+        matching user and mint the same IdentityClaims shape either login
+        path produces.
+        """
+        user = await self._users.get_by_phone_e164(UUID(tenant_id), phone_e164)
+        if user is None or not user.is_active:
+            raise UnauthorizedError(
+                "Invalid phone number or code.", code="INVALID_CREDENTIALS"
+            )
+
+        roles = await self._roles.list_for_user(user.tenant_id, user.id)
+        role_names = tuple(role.name for role in roles)
+
+        previous_login_at = user.last_login_at.isoformat() if user.last_login_at else None
+        user.last_login_at = datetime.now(UTC)
+        await self._users.update(user)
+
+        return IdentityClaims(
+            user_id=str(user.id),
+            tenant_id=str(user.tenant_id),
+            email=user.email,
+            full_name=user.display_name,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            salutation=user.salutation,
+            last_login_at=previous_login_at,
+            roles=role_names,
+        )
+
     async def verify_token(self, *, token: str) -> IdentityClaims:
         return verify_access_token(token)
 

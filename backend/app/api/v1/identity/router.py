@@ -27,11 +27,13 @@ from app.api.v1.identity.schemas import (
     FeatureFlagResponse,
     LoginRequest,
     LoginResponse,
+    PhoneLoginRequest,
     RegisterTenantRequest,
     RegisterTenantResponse,
     UpdateCurrentUserRequest,
 )
 from app.application.identity.authenticate_user import AuthenticateUserService
+from app.application.identity.dto import LoginResult
 from app.application.identity.get_current_user import GetCurrentUserService
 from app.application.identity.list_audit_events import ListAuditEventsService
 from app.application.identity.list_feature_flags import ListFeatureFlagsService
@@ -65,14 +67,7 @@ async def register_tenant(
     )
 
 
-@router.post("/login", response_model=LoginResponse)
-async def login(
-    request: LoginRequest,
-    service: AuthenticateUserService = Depends(get_authenticate_user_service),
-) -> LoginResponse:
-    result = await service.execute(
-        subdomain=request.subdomain, email=request.email, password=request.password
-    )
+def _login_response(result: LoginResult) -> LoginResponse:
     return LoginResponse(
         access_token=result.access_token,
         token_type=result.token_type,
@@ -86,6 +81,28 @@ async def login(
         last_login_at=result.last_login_at,
         roles=list(result.roles),
     )
+
+
+@router.post("/login", response_model=LoginResponse)
+async def login(
+    request: LoginRequest,
+    service: AuthenticateUserService = Depends(get_authenticate_user_service),
+) -> LoginResponse:
+    result = await service.execute(
+        subdomain=request.subdomain, email=request.email, password=request.password
+    )
+    return _login_response(result)
+
+
+@router.post("/login/phone", response_model=LoginResponse)
+async def login_phone(
+    request: PhoneLoginRequest,
+    service: AuthenticateUserService = Depends(get_authenticate_user_service),
+) -> LoginResponse:
+    result = await service.execute_phone(
+        subdomain=request.subdomain, firebase_id_token=request.firebase_id_token
+    )
+    return _login_response(result)
 
 
 @router.get("/me", response_model=CurrentUserResponse)

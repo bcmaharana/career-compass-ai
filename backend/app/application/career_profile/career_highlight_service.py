@@ -28,8 +28,12 @@ class CareerHighlightService:
         self, *, tenant_id: UUID, user_id: UUID, highlight_id: UUID
     ) -> CareerHighlight:
         highlight = await self._highlights.get_by_id(tenant_id, highlight_id)
-        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
-        if highlight is None or highlight.career_profile_id != profile.id:
+        if highlight is None:
+            raise NotFoundError("Career highlight not found.", code="CAREER_HIGHLIGHT_NOT_FOUND")
+        profile = await self._career_profiles.get_by_id(
+            tenant_id=tenant_id, profile_id=highlight.career_profile_id
+        )
+        if profile is None or profile.user_id != user_id:
             raise NotFoundError("Career highlight not found.", code="CAREER_HIGHLIGHT_NOT_FOUND")
         return highlight
 
@@ -42,8 +46,11 @@ class CareerHighlightService:
         company: str | None,
         description: str | None,
         occurred_on: date | None,
+        target_role_id: UUID | None = None,
     ) -> CareerHighlight:
-        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
         now = datetime.now(UTC)
         return await self._highlights.create(
             CareerHighlight(
@@ -61,9 +68,11 @@ class CareerHighlightService:
         )
 
     async def list_for_current_user(
-        self, *, tenant_id: UUID, user_id: UUID
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None = None
     ) -> list[CareerHighlight]:
-        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
         return await self._highlights.list_for_profile(tenant_id, profile.id)
 
     async def update(
@@ -99,3 +108,11 @@ class CareerHighlightService:
             tenant_id=tenant_id, user_id=user_id, highlight_id=highlight_id
         )
         await self._highlights.move(tenant_id, highlight_id, direction)
+
+    async def clear_all(
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None = None
+    ) -> None:
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
+        await self._highlights.soft_delete_all_for_profile(tenant_id, profile.id)

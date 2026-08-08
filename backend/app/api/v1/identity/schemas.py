@@ -36,6 +36,15 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1)
 
 
+class PhoneLoginRequest(BaseModel):
+    subdomain: str = Field(min_length=1, max_length=63)
+    #: The ID token returned by the Firebase JS SDK's
+    #: confirmationResult.confirm(code) after the user enters the SMS
+    #: code — never the raw code itself, which never reaches this
+    #: backend at all (see app/adapters/identity_providers/firebase_phone.py).
+    firebase_id_token: str = Field(min_length=1)
+
+
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str

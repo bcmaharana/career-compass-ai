@@ -77,8 +77,44 @@
      */
     --shell-left-nav-w: 16rem;
     --shell-right-nav-w: 16rem;
-    --shell-header-h: 6rem;
+    /*
+     * Left Nav's collapsed (icon-only) width — see AppShell.tsx's
+     * leftNavCollapsed toggle. Wide enough for a centered 20px icon
+     * plus its hover/focus padding without feeling cramped; unlike
+     * --shell-left-nav-w/--shell-right-nav-w this one is never used
+     * directly as a fixed region's width — AppShell.tsx picks between
+     * this and --shell-left-nav-w at runtime via --current-left-nav-w.
+     */
+    --shell-icon-nav-w: 4.5rem;
+    /*
+     * Both rails' COLLAPSED bottom box height (Left Nav's last-login
+     * clock icon, Right Nav's Settings + Sign out icons stacked) — a
+     * single shared value so the two boxes' top edges line up exactly,
+     * the same "one variable, nothing can drift" reasoning as every
+     * other --shell-* token here. Sized to Right Nav's content, the
+     * taller of the two (two stacked h-9/h-8 icons + gap-1 + py-2 =
+     * 5.875rem) — Left Nav's single icon centers within the extra room
+     * via justify-center rather than the box shrinking to fit it.
+     */
+    --shell-icon-endbox-h: 5.875rem;
+    --shell-header-h: 4.5rem;
     --shell-footer-h: 4.5rem;
+    /*
+     * Originally shared by all four rail end boxes (brand/identity box
+     * up top, last-login / Settings+Sign-out box at the bottom, on both
+     * rails) — deliberately a separate variable from --shell-header-h
+     * and --shell-footer-h above, which size the page Header/Footer bars
+     * instead. Since both rails' top boxes became a two-row stack (a ☰
+     * toggle above the logo/photo — see AppShell.tsx's leftNavCollapsed,
+     * RightNav.tsx's isCollapsed), only Left Nav's EXPANDED bottom box
+     * (the "last logged in" text) still actually uses this token — its
+     * own collapsed state now uses --shell-icon-endbox-h above instead,
+     * and the other two end boxes size to their own content. Kept as
+     * its own variable regardless, both for that one remaining user and
+     * in case a future box goes
+     * back to a single fixed row.
+     */
+    --shell-side-footer-h: 5.75rem;
   }
 }
 

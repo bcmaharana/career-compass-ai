@@ -22,3 +22,9 @@ class ChatConversationRepository(Protocol):
 
 class ChatMessageRepository(Protocol):
     async def create(self, message: ChatMessage) -> ChatMessage: ...
+    async def list_by_conversation(
+        self, tenant_id: UUID, conversation_id: UUID
+    ) -> list[ChatMessage]:
+        """Return the conversation's messages in chronological order —
+        the context ChatService renders into the LLM prompt."""
+        ...

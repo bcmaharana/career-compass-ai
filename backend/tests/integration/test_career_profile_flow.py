@@ -350,14 +350,17 @@ class TestCoreCompetencies:
             json={
                 "headline": None,
                 "summary": None,
-                "core_competencies": ["Stakeholder Management", "Cloud Architecture"],
+                "core_competencies": [
+                    {"name": "Stakeholder Management", "category": "Leadership"},
+                    {"name": "Cloud Architecture", "category": None},
+                ],
             },
         )
 
         assert response.status_code == 200
         assert response.json()["core_competencies"] == [
-            "Stakeholder Management",
-            "Cloud Architecture",
+            {"name": "Stakeholder Management", "category": "Leadership"},
+            {"name": "Cloud Architecture", "category": None},
         ]
 
     async def test_omitting_core_competencies_leaves_them_unchanged(
@@ -367,7 +370,11 @@ class TestCoreCompetencies:
         await client.patch(
             "/api/v1/career-profile",
             headers=_auth(token),
-            json={"headline": None, "summary": None, "core_competencies": ["Leadership"]},
+            json={
+                "headline": None,
+                "summary": None,
+                "core_competencies": [{"name": "Leadership", "category": None}],
+            },
         )
 
         response = await client.patch(
@@ -376,7 +383,7 @@ class TestCoreCompetencies:
             json={"headline": "New headline", "summary": None},
         )
 
-        assert response.json()["core_competencies"] == ["Leadership"]
+        assert response.json()["core_competencies"] == [{"name": "Leadership", "category": None}]
 
 
 class TestCareerHighlights:
@@ -901,3 +908,418 @@ class TestReordering:
             json={"direction": "down"},
         )
         assert [g["target_role"] for g in response.json()] == ["Second Goal", "First Goal"]
+
+
+class TestClearSection:
+    async def test_clearing_one_section_does_not_touch_another(self, client: AsyncClient) -> None:
+        token, _ = await _register_and_login(client)
+        await client.post(
+            "/api/v1/career-profile/experiences",
+            headers=_auth(token),
+            json={
+                "title": "Engineer",
+                "company": "Co",
+                "location": None,
+                "start_date": "2020-01-01",
+                "end_date": None,
+                "description": None,
+            },
+        )
+        await client.post(
+            "/api/v1/career-profile/educations",
+            headers=_auth(token),
+            json={
+                "institution": "State University",
+                "degree": None,
+                "field_of_study": None,
+                "start_date": None,
+                "end_date": None,
+                "description": None,
+            },
+        )
+
+        response = await client.delete(
+            "/api/v1/career-profile/experiences", headers=_auth(token)
+        )
+        assert response.status_code == 204
+
+        experiences = await client.get(
+            "/api/v1/career-profile/experiences", headers=_auth(token)
+        )
+        educations = await client.get("/api/v1/career-profile/educations", headers=_auth(token))
+        assert experiences.json() == []
+        assert len(educations.json()) == 1
+
+    async def test_clearing_a_section_does_not_affect_another_users_data(
+        self, client: AsyncClient
+    ) -> None:
+        token_a, _ = await _register_and_login(client)
+        token_b, _ = await _register_and_login(client)
+        await client.post(
+            "/api/v1/career-profile/experiences",
+            headers=_auth(token_b),
+            json={
+                "title": "B's role",
+                "company": "Co",
+                "location": None,
+                "start_date": "2020-01-01",
+                "end_date": None,
+                "description": None,
+            },
+        )
+
+        response = await client.delete(
+            "/api/v1/career-profile/experiences", headers=_auth(token_a)
+        )
+        assert response.status_code == 204
+
+        experiences_b = await client.get(
+            "/api/v1/career-profile/experiences", headers=_auth(token_b)
+        )
+        assert len(experiences_b.json()) == 1
+
+    async def test_clear_career_goals_uses_the_dedicated_prefix(self, client: AsyncClient) -> None:
+        token, _ = await _register_and_login(client)
+        await client.post(
+            "/api/v1/career-goals",
+            headers=_auth(token),
+            json={"target_role": "X", "target_date": None, "description": None},
+        )
+
+        response = await client.delete("/api/v1/career-goals", headers=_auth(token))
+        assert response.status_code == 204
+
+        listing = await client.get("/api/v1/career-goals", headers=_auth(token))
+        assert listing.json() == []
+
+
+class TestClearWholeProfile:
+    async def test_clears_top_level_fields_and_every_section(self, client: AsyncClient) -> None:
+        token, _ = await _register_and_login(client)
+        await client.patch(
+            "/api/v1/career-profile",
+            headers=_auth(token),
+            json={
+                "headline": "Principal Engineer",
+                "summary": "15 years building things",
+                "core_competencies": [
+                    {"name": "Python", "category": None},
+                    {"name": "Leadership", "category": None},
+                ],
+            },
+        )
+        await client.post(
+            "/api/v1/career-profile/experiences",
+            headers=_auth(token),
+            json={
+                "title": "Engineer",
+                "company": "Co",
+                "location": None,
+                "start_date": "2020-01-01",
+                "end_date": None,
+                "description": None,
+            },
+        )
+        await client.post(
+            "/api/v1/career-profile/educations",
+            headers=_auth(token),
+            json={
+                "institution": "State University",
+                "degree": None,
+                "field_of_study": None,
+                "start_date": None,
+                "end_date": None,
+                "description": None,
+            },
+        )
+        await client.post(
+            "/api/v1/career-profile/certifications",
+            headers=_auth(token),
+            json={
+                "name": "AWS SA",
+                "issuing_organization": "AWS",
+                "issue_date": None,
+                "expiration_date": None,
+                "credential_id": None,
+                "credential_url": None,
+            },
+        )
+        await client.post(
+            "/api/v1/career-profile/highlights",
+            headers=_auth(token),
+            json={"title": "Shipped X", "company": None, "description": None, "occurred_on": None},
+        )
+        await client.post(
+            "/api/v1/career-profile/achievements",
+            headers=_auth(token),
+            json={"title": "Award", "company": None, "description": None, "occurred_on": None},
+        )
+        await client.post(
+            "/api/v1/career-profile/endorsements",
+            headers=_auth(token),
+            json={
+                "recommender_name": "Jane",
+                "recommender_title": None,
+                "relationship": None,
+                "content": "Great work.",
+            },
+        )
+        await client.post(
+            "/api/v1/career-goals",
+            headers=_auth(token),
+            json={"target_role": "Staff Engineer", "target_date": None, "description": None},
+        )
+
+        response = await client.delete("/api/v1/career-profile", headers=_auth(token))
+        assert response.status_code == 204
+
+        profile = await client.get("/api/v1/career-profile", headers=_auth(token))
+        body = profile.json()
+        assert body["headline"] is None
+        assert body["summary"] is None
+        assert body["core_competencies"] == []
+        assert body["photo_url"] is None
+
+        for path in (
+            "/api/v1/career-profile/experiences",
+            "/api/v1/career-profile/educations",
+            "/api/v1/career-profile/certifications",
+            "/api/v1/career-profile/highlights",
+            "/api/v1/career-profile/achievements",
+            "/api/v1/career-profile/endorsements",
+            "/api/v1/career-goals",
+        ):
+            listing = await client.get(path, headers=_auth(token))
+            assert listing.json() == [], f"{path} was not cleared"
+
+    async def test_does_not_affect_another_users_profile(self, client: AsyncClient) -> None:
+        token_a, _ = await _register_and_login(client)
+        token_b, _ = await _register_and_login(client)
+        await client.patch(
+            "/api/v1/career-profile",
+            headers=_auth(token_b),
+            json={"headline": "B's headline", "summary": None},
+        )
+
+        response = await client.delete("/api/v1/career-profile", headers=_auth(token_a))
+        assert response.status_code == 204
+
+        profile_b = await client.get("/api/v1/career-profile", headers=_auth(token_b))
+        assert profile_b.json()["headline"] == "B's headline"
+
+
+class TestTargetRoleProfileIsolation:
+    """Regression coverage for the actual bug that motivated this feature:
+    a resume upload silently accumulating data into the wrong profile
+    across sessions. Master and a Target Role Profile must be fully
+    independent — same user, same tenant, zero cross-contamination in
+    either direction.
+    """
+
+    async def test_master_and_target_role_profiles_hold_independent_data(
+        self, client: AsyncClient
+    ) -> None:
+        token, _ = await _register_and_login(client)
+        role = (
+            await client.post(
+                "/api/v1/career-profile/target-roles",
+                headers=_auth(token),
+                json={"role_name": "Staff Engineer", "tag": "SE"},
+            )
+        ).json()
+        role_id = role["id"]
+
+        await client.post(
+            "/api/v1/career-profile/experiences",
+            headers=_auth(token),
+            json={
+                "title": "Master Role",
+                "company": "Master Corp",
+                "location": None,
+                "start_date": "2019-01-01",
+                "end_date": None,
+                "description": None,
+            },
+        )
+        target_experience = await client.post(
+            f"/api/v1/career-profile/experiences?target_role_id={role_id}",
+            headers=_auth(token),
+            json={
+                "title": "Target Role",
+                "company": "Target Corp",
+                "location": None,
+                "start_date": "2022-01-01",
+                "end_date": None,
+                "description": None,
+            },
+        )
+        assert target_experience.status_code == 201, target_experience.text
+
+        await client.patch(
+            "/api/v1/career-profile", headers=_auth(token), json={"headline": "Master headline"}
+        )
+        await client.patch(
+            f"/api/v1/career-profile?target_role_id={role_id}",
+            headers=_auth(token),
+            json={"headline": "Target role headline"},
+        )
+
+        master_experiences = await client.get(
+            "/api/v1/career-profile/experiences", headers=_auth(token)
+        )
+        assert [e["title"] for e in master_experiences.json()] == ["Master Role"]
+
+        target_experiences = await client.get(
+            f"/api/v1/career-profile/experiences?target_role_id={role_id}", headers=_auth(token)
+        )
+        assert [e["title"] for e in target_experiences.json()] == ["Target Role"]
+
+        master_profile = await client.get("/api/v1/career-profile", headers=_auth(token))
+        assert master_profile.json()["headline"] == "Master headline"
+
+        target_profile = await client.get(
+            f"/api/v1/career-profile?target_role_id={role_id}", headers=_auth(token)
+        )
+        assert target_profile.json()["headline"] == "Target role headline"
+
+    async def test_editing_an_item_on_a_target_role_profile_succeeds(
+        self, client: AsyncClient
+    ) -> None:
+        """Regression for the _get_owned_or_raise bug this feature would
+        otherwise introduce: resolving ownership via get_or_create(...)
+        (which always means Master unless explicitly scoped) instead of
+        via the item's own career_profile_id would 404 here.
+        """
+        token, _ = await _register_and_login(client)
+        role_id = (
+            await client.post(
+                "/api/v1/career-profile/target-roles",
+                headers=_auth(token),
+                json={"role_name": "Staff Engineer", "tag": "SE"},
+            )
+        ).json()["id"]
+
+        created = await client.post(
+            f"/api/v1/career-profile/experiences?target_role_id={role_id}",
+            headers=_auth(token),
+            json={
+                "title": "Target Role",
+                "company": "Target Corp",
+                "location": None,
+                "start_date": "2022-01-01",
+                "end_date": None,
+                "description": None,
+            },
+        )
+        experience_id = created.json()["id"]
+
+        update = await client.patch(
+            f"/api/v1/career-profile/experiences/{experience_id}",
+            headers=_auth(token),
+            json={
+                "title": "Target Role, Promoted",
+                "company": "Target Corp",
+                "location": None,
+                "start_date": "2022-01-01",
+                "end_date": None,
+                "description": None,
+            },
+        )
+        assert update.status_code == 200, update.text
+        assert update.json()["title"] == "Target Role, Promoted"
+
+        delete = await client.delete(
+            f"/api/v1/career-profile/experiences/{experience_id}", headers=_auth(token)
+        )
+        assert delete.status_code == 204
+
+    async def test_clearing_a_target_role_profile_does_not_touch_master(
+        self, client: AsyncClient
+    ) -> None:
+        token, _ = await _register_and_login(client)
+        role_id = (
+            await client.post(
+                "/api/v1/career-profile/target-roles",
+                headers=_auth(token),
+                json={"role_name": "Staff Engineer", "tag": "SE"},
+            )
+        ).json()["id"]
+
+        await client.post(
+            "/api/v1/career-profile/experiences",
+            headers=_auth(token),
+            json={
+                "title": "Master Role",
+                "company": "Master Corp",
+                "location": None,
+                "start_date": "2019-01-01",
+                "end_date": None,
+                "description": None,
+            },
+        )
+        await client.post(
+            f"/api/v1/career-profile/experiences?target_role_id={role_id}",
+            headers=_auth(token),
+            json={
+                "title": "Target Role",
+                "company": "Target Corp",
+                "location": None,
+                "start_date": "2022-01-01",
+                "end_date": None,
+                "description": None,
+            },
+        )
+
+        clear = await client.delete(
+            f"/api/v1/career-profile?target_role_id={role_id}", headers=_auth(token)
+        )
+        assert clear.status_code == 204
+
+        master_experiences = await client.get(
+            "/api/v1/career-profile/experiences", headers=_auth(token)
+        )
+        assert [e["title"] for e in master_experiences.json()] == ["Master Role"]
+
+        target_experiences = await client.get(
+            f"/api/v1/career-profile/experiences?target_role_id={role_id}", headers=_auth(token)
+        )
+        assert target_experiences.json() == []
+
+    async def test_summary_reflects_the_scoped_profile_only(self, client: AsyncClient) -> None:
+        token, _ = await _register_and_login(client)
+        role_id = (
+            await client.post(
+                "/api/v1/career-profile/target-roles",
+                headers=_auth(token),
+                json={"role_name": "Staff Engineer", "tag": "SE"},
+            )
+        ).json()["id"]
+
+        master_summary = await client.get(
+            "/api/v1/career-profile/summary", headers=_auth(token)
+        )
+        assert master_summary.json()["has_any_data"] is False
+
+        await client.post(
+            f"/api/v1/career-profile/experiences?target_role_id={role_id}",
+            headers=_auth(token),
+            json={
+                "title": "Target Role",
+                "company": "Target Corp",
+                "location": None,
+                "start_date": "2022-01-01",
+                "end_date": None,
+                "description": None,
+            },
+        )
+
+        master_summary_after = await client.get(
+            "/api/v1/career-profile/summary", headers=_auth(token)
+        )
+        assert master_summary_after.json()["has_any_data"] is False
+
+        target_summary = await client.get(
+            f"/api/v1/career-profile/summary?target_role_id={role_id}", headers=_auth(token)
+        )
+        assert target_summary.json()["experience_count"] == 1
+        assert target_summary.json()["has_any_data"] is True

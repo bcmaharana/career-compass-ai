@@ -21,7 +21,10 @@
       "Bash(powershell -NoProfile -Command \"Get-Process 'Docker Desktop' -ErrorAction SilentlyContinue\" 2>&1)",
       "Bash(powershell -NoProfile -Command \"Start-Process 'C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe'\" 2>&1)",
       "Bash(docker info *)",
-      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File .\\\\start-dev.ps1)"
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File .\\\\start-dev.ps1)",
+      "PowerShell(.\\\\start-dev.ps1)",
+      "Skill(claude-api)",
+      "Skill(claude-api:*)"
     ]
   }
 }

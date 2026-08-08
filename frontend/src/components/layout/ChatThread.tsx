@@ -9,8 +9,9 @@ import { useChatStore } from "@/stores/chat-store";
  */
 export function ChatThread() {
   const messages = useChatStore((state) => state.messages);
+  const isSending = useChatStore((state) => state.isSending);
 
-  if (messages.length === 0) {
+  if (messages.length === 0 && !isSending) {
     return null;
   }
 
@@ -31,7 +32,32 @@ export function ChatThread() {
             {message.content}
           </div>
         ))}
+        {isSending && <TypingIndicator />}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Real LLM calls (Phase 4) can take several seconds — especially
+ * against a local Ollama model on modest hardware — so this bubble is
+ * the only signal the user gets that the AI Career Coach is actually
+ * working rather than having silently dropped the message.
+ */
+function TypingIndicator() {
+  return (
+    <div
+      className="mr-auto flex items-center gap-1 rounded-lg bg-muted px-4 py-3"
+      role="status"
+      aria-label="AI Career Coach is thinking"
+    >
+      {[0, 150, 300].map((delayMs) => (
+        <span
+          key={delayMs}
+          className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60"
+          style={{ animationDelay: `${delayMs}ms` }}
+        />
+      ))}
     </div>
   );
 }

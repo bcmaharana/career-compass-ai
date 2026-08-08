@@ -35,6 +35,14 @@ class FakeCareerGoalRepository:
     async def soft_delete(self, tenant_id: uuid.UUID, goal_id: uuid.UUID) -> None:
         self.goals.pop(goal_id, None)
 
+    async def soft_delete_all_for_user(self, tenant_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        for goal_id in [
+            g.id
+            for g in self.goals.values()
+            if g.tenant_id == tenant_id and g.user_id == user_id
+        ]:
+            self.goals.pop(goal_id, None)
+
 
 @pytest.fixture
 def service() -> tuple[CareerGoalService, FakeCareerGoalRepository]:
@@ -171,3 +179,53 @@ class TestDelete:
         await svc.delete(tenant_id=tenant_id, user_id=user_id, goal_id=goal.id)
 
         assert goal.id not in goals.goals
+
+
+@pytest.mark.unit
+class TestClearAll:
+    async def test_removes_every_goal_for_the_calling_user(self, service) -> None:
+        svc, goals = service
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        await svc.add(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            target_role="A",
+            target_date=None,
+            description=None,
+        )
+        await svc.add(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            target_role="B",
+            target_date=None,
+            description=None,
+        )
+
+        await svc.clear_all(tenant_id=tenant_id, user_id=user_id)
+
+        assert await svc.list_for_current_user(tenant_id=tenant_id, user_id=user_id) == []
+
+    async def test_does_not_touch_another_users_goals(self, service) -> None:
+        svc, goals = service
+        tenant_id = uuid.uuid4()
+        user_a, user_b = uuid.uuid4(), uuid.uuid4()
+        await svc.add(
+            tenant_id=tenant_id,
+            user_id=user_a,
+            target_role="A's goal",
+            target_date=None,
+            description=None,
+        )
+        await svc.add(
+            tenant_id=tenant_id,
+            user_id=user_b,
+            target_role="B's goal",
+            target_date=None,
+            description=None,
+        )
+
+        await svc.clear_all(tenant_id=tenant_id, user_id=user_a)
+
+        goals_for_b = await svc.list_for_current_user(tenant_id=tenant_id, user_id=user_b)
+        assert len(goals_for_b) == 1
+        assert goals_for_b[0].target_role == "B's goal"

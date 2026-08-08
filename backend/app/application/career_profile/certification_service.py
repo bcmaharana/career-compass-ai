@@ -27,8 +27,12 @@ class CertificationService:
         self, *, tenant_id: UUID, user_id: UUID, certification_id: UUID
     ) -> Certification:
         certification = await self._certifications.get_by_id(tenant_id, certification_id)
-        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
-        if certification is None or certification.career_profile_id != profile.id:
+        if certification is None:
+            raise NotFoundError("Certification not found.", code="CERTIFICATION_NOT_FOUND")
+        profile = await self._career_profiles.get_by_id(
+            tenant_id=tenant_id, profile_id=certification.career_profile_id
+        )
+        if profile is None or profile.user_id != user_id:
             raise NotFoundError("Certification not found.", code="CERTIFICATION_NOT_FOUND")
         return certification
 
@@ -43,8 +47,11 @@ class CertificationService:
         expiration_date: date | None,
         credential_id: str | None,
         credential_url: str | None,
+        target_role_id: UUID | None = None,
     ) -> Certification:
-        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
         now = datetime.now(UTC)
         return await self._certifications.create(
             Certification(
@@ -64,9 +71,11 @@ class CertificationService:
         )
 
     async def list_for_current_user(
-        self, *, tenant_id: UUID, user_id: UUID
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None = None
     ) -> list[Certification]:
-        profile = await self._career_profiles.get_or_create(tenant_id=tenant_id, user_id=user_id)
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
         return await self._certifications.list_for_profile(tenant_id, profile.id)
 
     async def update(
@@ -106,3 +115,11 @@ class CertificationService:
             tenant_id=tenant_id, user_id=user_id, certification_id=certification_id
         )
         await self._certifications.move(tenant_id, certification_id, direction)
+
+    async def clear_all(
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None = None
+    ) -> None:
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
+        await self._certifications.soft_delete_all_for_profile(tenant_id, profile.id)

@@ -26,7 +26,7 @@ export function GapAnalysisSection({ cardBackground }: GapAnalysisSectionProps) 
 
   return (
     <Card className={cardBackground === "background" ? "bg-background" : undefined}>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Gap Analysis</CardTitle>
         <CollapseToggle isOpen={isOpen} onToggle={() => setIsOpen(!isOpen)} label="Gap Analysis" />
       </CardHeader>
@@ -49,7 +49,12 @@ export function GapAnalysisSection({ cardBackground }: GapAnalysisSectionProps) 
             >
               <div className="flex items-center gap-2">
                 <Badge variant="accent">{gap.tag}</Badge>
-                <p className="font-medium">{gap.role_name}</p>
+                <p className="font-medium">
+                  {gap.role_name}{" "}
+                  <span className="text-sm font-normal italic text-muted-foreground">
+                    ({gap.missing_skills.length})
+                  </span>
+                </p>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {gap.missing_skills.map((skill) => (

@@ -51,6 +51,14 @@ class User:
     deleted_at: datetime | None = None
     last_login_at: datetime | None = None
     phone_number: str | None = None
+    #: E.164 form of phone_number (e.g. "+14155552671"), derived
+    #: automatically whenever phone_number+country are saved together
+    #: (see UpdateUserProfileService) — the only field phone login
+    #: (InternalJWTProvider.authenticate_with_phone) actually looks up
+    #: against, since it's what Firebase's verified token reports too.
+    #: None whenever phone_number can't be parsed for the given country,
+    #: which just means phone login isn't available yet, not an error.
+    phone_number_e164: str | None = None
     #: ISO 3166-1 alpha-2 (e.g. "US") — drives phone-number formatting on
     #: the frontend (libphonenumber-js needs a country to know which
     #: national format/length rules apply).
@@ -68,6 +76,10 @@ class User:
     city: str | None = None
     state: str | None = None
     postal_code: str | None = None
+    #: Explicit override of which AI Platform model powers this user's
+    #: chats (app/ai_platform/models/registry.py). None means "use the
+    #: platform default" — see ModelRegistry.get_active_model.
+    preferred_model_version_id: UUID | None = None
 
     @property
     def is_active(self) -> bool:

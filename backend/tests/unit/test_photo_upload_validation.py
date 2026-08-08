@@ -39,10 +39,17 @@ class FakeCareerProfileRepository:
         return replace(profile)
 
     async def get_by_user_id(
-        self, tenant_id: uuid.UUID, user_id: uuid.UUID
+        self,
+        tenant_id: uuid.UUID,
+        user_id: uuid.UUID,
+        target_role_id: uuid.UUID | None = None,
     ) -> CareerProfile | None:
         for profile in self.profiles.values():
-            if profile.tenant_id == tenant_id and profile.user_id == user_id:
+            if (
+                profile.tenant_id == tenant_id
+                and profile.user_id == user_id
+                and profile.target_role_id == target_role_id
+            ):
                 return replace(profile)
         return None
 

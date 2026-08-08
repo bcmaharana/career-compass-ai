@@ -15,13 +15,15 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, UploadFile, status
+from fastapi import APIRouter, Depends, Query, UploadFile, status
 
 from app.api.dependencies import (
     get_career_goal_service,
     get_career_highlight_service,
     get_career_profile_service,
+    get_career_profile_summary_service,
     get_certification_service,
+    get_clear_career_profile_service,
     get_current_identity,
     get_education_service,
     get_experience_service,
@@ -37,8 +39,10 @@ from app.api.v1.career_profile.schemas import (
     CareerHighlightRequest,
     CareerHighlightResponse,
     CareerProfileResponse,
+    CareerProfileSummaryResponse,
     CertificationRequest,
     CertificationResponse,
+    CoreCompetencyPayload,
     EducationRequest,
     EducationResponse,
     ExperienceRequest,
@@ -56,7 +60,11 @@ from app.api.v1.career_profile.schemas import (
 from app.application.career_profile.career_goal_service import CareerGoalService
 from app.application.career_profile.career_highlight_service import CareerHighlightService
 from app.application.career_profile.career_profile_service import CareerProfileService
+from app.application.career_profile.career_profile_summary_service import (
+    CareerProfileSummaryService,
+)
 from app.application.career_profile.certification_service import CertificationService
+from app.application.career_profile.clear_profile_service import ClearCareerProfileService
 from app.application.career_profile.education_service import EducationService
 from app.application.career_profile.experience_service import ExperienceService
 from app.application.career_profile.key_achievement_service import KeyAchievementService
@@ -67,6 +75,7 @@ from app.domain.career_profile.entities import (
     CareerGoal,
     CareerHighlight,
     Certification,
+    CoreCompetency,
     Education,
     Experience,
     KeyAchievement,
@@ -74,16 +83,23 @@ from app.domain.career_profile.entities import (
     TargetRole,
 )
 
+
+def _core_competency_response(competency: CoreCompetency) -> CoreCompetencyPayload:
+    return CoreCompetencyPayload(name=competency.name, category=competency.category)
+
 router = APIRouter(tags=["career-profile"])
 
 
 @router.get("/career-profile", response_model=CareerProfileResponse)
 async def get_career_profile(
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: CareerProfileService = Depends(get_career_profile_service),
 ) -> CareerProfileResponse:
     profile = await service.get_or_create(
-        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
     )
     return CareerProfileResponse(
         id=profile.id,
@@ -92,7 +108,7 @@ async def get_career_profile(
         summary=profile.summary,
         career_readiness_score=profile.career_readiness_score,
         photo_url=profile.photo_url,
-        core_competencies=profile.core_competencies,
+        core_competencies=[_core_competency_response(c) for c in profile.core_competencies],
         section_order=profile.section_order,
     )
 
@@ -100,6 +116,7 @@ async def get_career_profile(
 @router.patch("/career-profile", response_model=CareerProfileResponse)
 async def update_career_profile(
     request: UpdateCareerProfileRequest,
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: CareerProfileService = Depends(get_career_profile_service),
 ) -> CareerProfileResponse:
@@ -108,8 +125,13 @@ async def update_career_profile(
         user_id=UUID(identity.user_id),
         headline=request.headline,
         summary=request.summary,
-        core_competencies=request.core_competencies,
+        core_competencies=(
+            [CoreCompetency(name=c.name, category=c.category) for c in request.core_competencies]
+            if request.core_competencies is not None
+            else None
+        ),
         section_order=request.section_order,
+        target_role_id=target_role_id,
     )
     return CareerProfileResponse(
         id=profile.id,
@@ -118,8 +140,45 @@ async def update_career_profile(
         summary=profile.summary,
         career_readiness_score=profile.career_readiness_score,
         photo_url=profile.photo_url,
-        core_competencies=profile.core_competencies,
+        core_competencies=[_core_competency_response(c) for c in profile.core_competencies],
         section_order=profile.section_order,
+    )
+
+
+@router.delete("/career-profile", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_career_profile(
+    target_role_id: UUID | None = Query(default=None),
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ClearCareerProfileService = Depends(get_clear_career_profile_service),
+) -> None:
+    await service.clear_all(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
+    )
+
+
+@router.get("/career-profile/summary", response_model=CareerProfileSummaryResponse)
+async def get_career_profile_summary(
+    target_role_id: UUID | None = Query(default=None),
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: CareerProfileSummaryService = Depends(get_career_profile_summary_service),
+) -> CareerProfileSummaryResponse:
+    summary = await service.get_summary(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
+    )
+    return CareerProfileSummaryResponse(
+        experience_count=summary.experience_count,
+        education_count=summary.education_count,
+        certification_count=summary.certification_count,
+        career_highlight_count=summary.career_highlight_count,
+        key_achievement_count=summary.key_achievement_count,
+        competency_count=summary.competency_count,
+        has_headline=summary.has_headline,
+        has_summary=summary.has_summary,
+        has_any_data=summary.has_any_data,
     )
 
 
@@ -140,6 +199,14 @@ async def upload_profile_photo(
     return PhotoUploadResponse(photo_url=profile.photo_url)
 
 
+@router.delete("/career-profile/photo", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_profile_photo(
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: CareerProfileService = Depends(get_career_profile_service),
+) -> None:
+    await service.delete_photo(tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id))
+
+
 def _experience_response(experience: Experience) -> ExperienceResponse:
     return ExperienceResponse(
         id=experience.id,
@@ -155,11 +222,14 @@ def _experience_response(experience: Experience) -> ExperienceResponse:
 
 @router.get("/career-profile/experiences", response_model=list[ExperienceResponse])
 async def list_experiences(
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: ExperienceService = Depends(get_experience_service),
 ) -> list[ExperienceResponse]:
     experiences = await service.list_for_current_user(
-        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
     )
     return [_experience_response(e) for e in experiences]
 
@@ -171,6 +241,7 @@ async def list_experiences(
 )
 async def add_experience(
     request: ExperienceRequest,
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: ExperienceService = Depends(get_experience_service),
 ) -> ExperienceResponse:
@@ -183,6 +254,7 @@ async def add_experience(
         start_date=request.start_date,
         end_date=request.end_date,
         description=request.description,
+        target_role_id=target_role_id,
     )
     return _experience_response(experience)
 
@@ -223,12 +295,26 @@ async def delete_experience(
     )
 
 
+@router.delete("/career-profile/experiences", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_experiences(
+    target_role_id: UUID | None = Query(default=None),
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ExperienceService = Depends(get_experience_service),
+) -> None:
+    await service.clear_all(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
+    )
+
+
 @router.post(
     "/career-profile/experiences/{experience_id}/move", response_model=list[ExperienceResponse]
 )
 async def move_experience(
     experience_id: UUID,
     request: MoveRequest,
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: ExperienceService = Depends(get_experience_service),
 ) -> list[ExperienceResponse]:
@@ -238,8 +324,13 @@ async def move_experience(
         experience_id=experience_id,
         direction=request.direction,  # type: ignore[arg-type]
     )
+    # target_role_id here is only for re-fetching the right list to
+    # return — move() itself resolved ownership from the item's own
+    # career_profile_id, not from this param.
     experiences = await service.list_for_current_user(
-        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
     )
     return [_experience_response(e) for e in experiences]
 
@@ -259,11 +350,14 @@ def _education_response(education: Education) -> EducationResponse:
 
 @router.get("/career-profile/educations", response_model=list[EducationResponse])
 async def list_educations(
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: EducationService = Depends(get_education_service),
 ) -> list[EducationResponse]:
     educations = await service.list_for_current_user(
-        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
     )
     return [_education_response(e) for e in educations]
 
@@ -275,6 +369,7 @@ async def list_educations(
 )
 async def add_education(
     request: EducationRequest,
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: EducationService = Depends(get_education_service),
 ) -> EducationResponse:
@@ -287,6 +382,7 @@ async def add_education(
         start_date=request.start_date,
         end_date=request.end_date,
         description=request.description,
+        target_role_id=target_role_id,
     )
     return _education_response(education)
 
@@ -325,12 +421,26 @@ async def delete_education(
     )
 
 
+@router.delete("/career-profile/educations", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_educations(
+    target_role_id: UUID | None = Query(default=None),
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: EducationService = Depends(get_education_service),
+) -> None:
+    await service.clear_all(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
+    )
+
+
 @router.post(
     "/career-profile/educations/{education_id}/move", response_model=list[EducationResponse]
 )
 async def move_education(
     education_id: UUID,
     request: MoveRequest,
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: EducationService = Depends(get_education_service),
 ) -> list[EducationResponse]:
@@ -341,7 +451,9 @@ async def move_education(
         direction=request.direction,  # type: ignore[arg-type]
     )
     educations = await service.list_for_current_user(
-        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
     )
     return [_education_response(e) for e in educations]
 
@@ -361,11 +473,14 @@ def _certification_response(certification: Certification) -> CertificationRespon
 
 @router.get("/career-profile/certifications", response_model=list[CertificationResponse])
 async def list_certifications(
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: CertificationService = Depends(get_certification_service),
 ) -> list[CertificationResponse]:
     certifications = await service.list_for_current_user(
-        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
     )
     return [_certification_response(c) for c in certifications]
 
@@ -377,6 +492,7 @@ async def list_certifications(
 )
 async def add_certification(
     request: CertificationRequest,
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: CertificationService = Depends(get_certification_service),
 ) -> CertificationResponse:
@@ -389,6 +505,7 @@ async def add_certification(
         expiration_date=request.expiration_date,
         credential_id=request.credential_id,
         credential_url=request.credential_url,
+        target_role_id=target_role_id,
     )
     return _certification_response(certification)
 
@@ -431,6 +548,19 @@ async def delete_certification(
     )
 
 
+@router.delete("/career-profile/certifications", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_certifications(
+    target_role_id: UUID | None = Query(default=None),
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: CertificationService = Depends(get_certification_service),
+) -> None:
+    await service.clear_all(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
+    )
+
+
 @router.post(
     "/career-profile/certifications/{certification_id}/move",
     response_model=list[CertificationResponse],
@@ -438,6 +568,7 @@ async def delete_certification(
 async def move_certification(
     certification_id: UUID,
     request: MoveRequest,
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: CertificationService = Depends(get_certification_service),
 ) -> list[CertificationResponse]:
@@ -448,7 +579,9 @@ async def move_certification(
         direction=request.direction,  # type: ignore[arg-type]
     )
     certifications = await service.list_for_current_user(
-        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
     )
     return [_certification_response(c) for c in certifications]
 
@@ -466,11 +599,14 @@ def _highlight_response(highlight: CareerHighlight) -> CareerHighlightResponse:
 
 @router.get("/career-profile/highlights", response_model=list[CareerHighlightResponse])
 async def list_career_highlights(
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: CareerHighlightService = Depends(get_career_highlight_service),
 ) -> list[CareerHighlightResponse]:
     highlights = await service.list_for_current_user(
-        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
     )
     return [_highlight_response(h) for h in highlights]
 
@@ -482,6 +618,7 @@ async def list_career_highlights(
 )
 async def add_career_highlight(
     request: CareerHighlightRequest,
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: CareerHighlightService = Depends(get_career_highlight_service),
 ) -> CareerHighlightResponse:
@@ -492,6 +629,7 @@ async def add_career_highlight(
         company=request.company,
         description=request.description,
         occurred_on=request.occurred_on,
+        target_role_id=target_role_id,
     )
     return _highlight_response(highlight)
 
@@ -530,12 +668,26 @@ async def delete_career_highlight(
     )
 
 
+@router.delete("/career-profile/highlights", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_career_highlights(
+    target_role_id: UUID | None = Query(default=None),
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: CareerHighlightService = Depends(get_career_highlight_service),
+) -> None:
+    await service.clear_all(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
+    )
+
+
 @router.post(
     "/career-profile/highlights/{highlight_id}/move", response_model=list[CareerHighlightResponse]
 )
 async def move_career_highlight(
     highlight_id: UUID,
     request: MoveRequest,
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: CareerHighlightService = Depends(get_career_highlight_service),
 ) -> list[CareerHighlightResponse]:
@@ -546,7 +698,9 @@ async def move_career_highlight(
         direction=request.direction,  # type: ignore[arg-type]
     )
     highlights = await service.list_for_current_user(
-        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
     )
     return [_highlight_response(h) for h in highlights]
 
@@ -564,11 +718,14 @@ def _achievement_response(achievement: KeyAchievement) -> KeyAchievementResponse
 
 @router.get("/career-profile/achievements", response_model=list[KeyAchievementResponse])
 async def list_key_achievements(
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: KeyAchievementService = Depends(get_key_achievement_service),
 ) -> list[KeyAchievementResponse]:
     achievements = await service.list_for_current_user(
-        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
     )
     return [_achievement_response(a) for a in achievements]
 
@@ -580,6 +737,7 @@ async def list_key_achievements(
 )
 async def add_key_achievement(
     request: KeyAchievementRequest,
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: KeyAchievementService = Depends(get_key_achievement_service),
 ) -> KeyAchievementResponse:
@@ -590,6 +748,7 @@ async def add_key_achievement(
         company=request.company,
         description=request.description,
         occurred_on=request.occurred_on,
+        target_role_id=target_role_id,
     )
     return _achievement_response(achievement)
 
@@ -630,6 +789,19 @@ async def delete_key_achievement(
     )
 
 
+@router.delete("/career-profile/achievements", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_key_achievements(
+    target_role_id: UUID | None = Query(default=None),
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: KeyAchievementService = Depends(get_key_achievement_service),
+) -> None:
+    await service.clear_all(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
+    )
+
+
 @router.post(
     "/career-profile/achievements/{achievement_id}/move",
     response_model=list[KeyAchievementResponse],
@@ -637,6 +809,7 @@ async def delete_key_achievement(
 async def move_key_achievement(
     achievement_id: UUID,
     request: MoveRequest,
+    target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: KeyAchievementService = Depends(get_key_achievement_service),
 ) -> list[KeyAchievementResponse]:
@@ -647,7 +820,9 @@ async def move_key_achievement(
         direction=request.direction,  # type: ignore[arg-type]
     )
     achievements = await service.list_for_current_user(
-        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
     )
     return [_achievement_response(a) for a in achievements]
 
@@ -729,6 +904,14 @@ async def delete_peer_endorsement(
         user_id=UUID(identity.user_id),
         endorsement_id=endorsement_id,
     )
+
+
+@router.delete("/career-profile/endorsements", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_peer_endorsements(
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: PeerEndorsementService = Depends(get_peer_endorsement_service),
+) -> None:
+    await service.clear_all(tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id))
 
 
 @router.post(
@@ -821,6 +1004,14 @@ async def delete_career_goal(
     await service.delete(
         tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id), goal_id=goal_id
     )
+
+
+@router.delete("/career-goals", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_career_goals(
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: CareerGoalService = Depends(get_career_goal_service),
+) -> None:
+    await service.clear_all(tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id))
 
 
 @router.post("/career-goals/{goal_id}/move", response_model=list[CareerGoalResponse])

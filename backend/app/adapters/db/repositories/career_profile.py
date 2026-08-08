@@ -16,7 +16,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.db.models import (
@@ -38,12 +38,30 @@ from app.domain.career_profile.entities import (
     CareerProfile,
     CareerProfileVersion,
     Certification,
+    CoreCompetency,
     Education,
     Experience,
     KeyAchievement,
     PeerEndorsement,
     TargetRole,
 )
+
+
+def _competencies_to_domain(raw: list[dict[str, object]]) -> list[CoreCompetency]:
+    competencies = []
+    for item in raw:
+        category = item.get("category")
+        competencies.append(
+            CoreCompetency(
+                name=str(item["name"]),
+                category=category if isinstance(category, str) and category else None,
+            )
+        )
+    return competencies
+
+
+def _competencies_to_json(competencies: list[CoreCompetency]) -> list[dict[str, object]]:
+    return [{"name": c.name, "category": c.category} for c in competencies]
 
 
 def _profile_to_domain(model: CareerProfileModel) -> CareerProfile:
@@ -56,8 +74,9 @@ def _profile_to_domain(model: CareerProfileModel) -> CareerProfile:
         summary=model.summary,
         career_readiness_score=model.career_readiness_score,
         photo_url=model.photo_url,
-        core_competencies=list(model.core_competencies),
+        core_competencies=_competencies_to_domain(model.core_competencies),
         section_order=list(model.section_order) if model.section_order is not None else None,
+        target_role_id=model.target_role_id,
         created_at=model.created_at,
         updated_at=model.updated_at,
         deleted_at=model.deleted_at,
@@ -207,19 +226,32 @@ class SqlAlchemyCareerProfileRepository:
             summary=profile.summary,
             career_readiness_score=profile.career_readiness_score,
             photo_url=profile.photo_url,
-            core_competencies=profile.core_competencies,
+            core_competencies=_competencies_to_json(profile.core_competencies),
             section_order=profile.section_order,
+            target_role_id=profile.target_role_id,
         )
         self._session.add(model)
         await self._session.flush()
         await self._session.refresh(model)
         return _profile_to_domain(model)
 
-    async def get_by_user_id(self, tenant_id: UUID, user_id: UUID) -> CareerProfile | None:
+    async def get_by_user_id(
+        self, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None = None
+    ) -> CareerProfile | None:
+        # target_role_id IS NULL means Master — .is_(None) rather than
+        # == None, since SQL NULL comparison via == is never true even
+        # for a matching row (the same reason the migration needed two
+        # PARTIAL unique indexes instead of one plain composite one).
+        scope_filter = (
+            CareerProfileModel.target_role_id.is_(None)
+            if target_role_id is None
+            else CareerProfileModel.target_role_id == target_role_id
+        )
         result = await self._session.execute(
             select(CareerProfileModel).where(
                 CareerProfileModel.tenant_id == tenant_id,
                 CareerProfileModel.user_id == user_id,
+                scope_filter,
                 CareerProfileModel.deleted_at.is_(None),
             )
         )
@@ -245,7 +277,7 @@ class SqlAlchemyCareerProfileRepository:
         model.summary = profile.summary
         model.career_readiness_score = profile.career_readiness_score
         model.photo_url = profile.photo_url
-        model.core_competencies = profile.core_competencies
+        model.core_competencies = _competencies_to_json(profile.core_competencies)
         model.section_order = profile.section_order
         await self._session.flush()
         await self._session.refresh(model)
@@ -356,6 +388,18 @@ class SqlAlchemyExperienceRepository:
             model.deleted_at = datetime.now(UTC)
             await self._session.flush()
 
+    async def soft_delete_all_for_profile(self, tenant_id: UUID, career_profile_id: UUID) -> None:
+        await self._session.execute(
+            update(ExperienceModel)
+            .where(
+                ExperienceModel.tenant_id == tenant_id,
+                ExperienceModel.career_profile_id == career_profile_id,
+                ExperienceModel.deleted_at.is_(None),
+            )
+            .values(deleted_at=datetime.now(UTC))
+        )
+        await self._session.flush()
+
     async def move(self, tenant_id: UUID, experience_id: UUID, direction: Direction) -> None:
         model = await self._session.get(ExperienceModel, experience_id)
         if model is None:
@@ -444,6 +488,18 @@ class SqlAlchemyEducationRepository:
         if model is not None:
             model.deleted_at = datetime.now(UTC)
             await self._session.flush()
+
+    async def soft_delete_all_for_profile(self, tenant_id: UUID, career_profile_id: UUID) -> None:
+        await self._session.execute(
+            update(EducationModel)
+            .where(
+                EducationModel.tenant_id == tenant_id,
+                EducationModel.career_profile_id == career_profile_id,
+                EducationModel.deleted_at.is_(None),
+            )
+            .values(deleted_at=datetime.now(UTC))
+        )
+        await self._session.flush()
 
     async def move(self, tenant_id: UUID, education_id: UUID, direction: Direction) -> None:
         model = await self._session.get(EducationModel, education_id)
@@ -537,6 +593,18 @@ class SqlAlchemyCertificationRepository:
             model.deleted_at = datetime.now(UTC)
             await self._session.flush()
 
+    async def soft_delete_all_for_profile(self, tenant_id: UUID, career_profile_id: UUID) -> None:
+        await self._session.execute(
+            update(CertificationModel)
+            .where(
+                CertificationModel.tenant_id == tenant_id,
+                CertificationModel.career_profile_id == career_profile_id,
+                CertificationModel.deleted_at.is_(None),
+            )
+            .values(deleted_at=datetime.now(UTC))
+        )
+        await self._session.flush()
+
     async def move(self, tenant_id: UUID, certification_id: UUID, direction: Direction) -> None:
         model = await self._session.get(CertificationModel, certification_id)
         if model is None:
@@ -621,6 +689,18 @@ class SqlAlchemyCareerGoalRepository:
         if model is not None:
             model.deleted_at = datetime.now(UTC)
             await self._session.flush()
+
+    async def soft_delete_all_for_user(self, tenant_id: UUID, user_id: UUID) -> None:
+        await self._session.execute(
+            update(CareerGoalModel)
+            .where(
+                CareerGoalModel.tenant_id == tenant_id,
+                CareerGoalModel.user_id == user_id,
+                CareerGoalModel.deleted_at.is_(None),
+            )
+            .values(deleted_at=datetime.now(UTC))
+        )
+        await self._session.flush()
 
     async def move(self, tenant_id: UUID, goal_id: UUID, direction: Direction) -> None:
         model = await self._session.get(CareerGoalModel, goal_id)
@@ -710,6 +790,18 @@ class SqlAlchemyCareerHighlightRepository:
             model.deleted_at = datetime.now(UTC)
             await self._session.flush()
 
+    async def soft_delete_all_for_profile(self, tenant_id: UUID, career_profile_id: UUID) -> None:
+        await self._session.execute(
+            update(CareerHighlightModel)
+            .where(
+                CareerHighlightModel.tenant_id == tenant_id,
+                CareerHighlightModel.career_profile_id == career_profile_id,
+                CareerHighlightModel.deleted_at.is_(None),
+            )
+            .values(deleted_at=datetime.now(UTC))
+        )
+        await self._session.flush()
+
     async def move(self, tenant_id: UUID, highlight_id: UUID, direction: Direction) -> None:
         model = await self._session.get(CareerHighlightModel, highlight_id)
         if model is None:
@@ -798,6 +890,18 @@ class SqlAlchemyKeyAchievementRepository:
             model.deleted_at = datetime.now(UTC)
             await self._session.flush()
 
+    async def soft_delete_all_for_profile(self, tenant_id: UUID, career_profile_id: UUID) -> None:
+        await self._session.execute(
+            update(KeyAchievementModel)
+            .where(
+                KeyAchievementModel.tenant_id == tenant_id,
+                KeyAchievementModel.career_profile_id == career_profile_id,
+                KeyAchievementModel.deleted_at.is_(None),
+            )
+            .values(deleted_at=datetime.now(UTC))
+        )
+        await self._session.flush()
+
     async def move(self, tenant_id: UUID, achievement_id: UUID, direction: Direction) -> None:
         model = await self._session.get(KeyAchievementModel, achievement_id)
         if model is None:
@@ -885,6 +989,18 @@ class SqlAlchemyPeerEndorsementRepository:
         if model is not None:
             model.deleted_at = datetime.now(UTC)
             await self._session.flush()
+
+    async def soft_delete_all_for_profile(self, tenant_id: UUID, career_profile_id: UUID) -> None:
+        await self._session.execute(
+            update(PeerEndorsementModel)
+            .where(
+                PeerEndorsementModel.tenant_id == tenant_id,
+                PeerEndorsementModel.career_profile_id == career_profile_id,
+                PeerEndorsementModel.deleted_at.is_(None),
+            )
+            .values(deleted_at=datetime.now(UTC))
+        )
+        await self._session.flush()
 
     async def move(self, tenant_id: UUID, endorsement_id: UUID, direction: Direction) -> None:
         model = await self._session.get(PeerEndorsementModel, endorsement_id)

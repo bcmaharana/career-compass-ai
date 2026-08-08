@@ -23,17 +23,36 @@ export interface ApiErrorBody {
   };
 }
 
+/**
+ * Every handled error path on the backend responds with this shape (see
+ * backend/app/api/middleware/error_handling.py) — but "every handled
+ * path" isn't automatically "every possible path": a raw infrastructure
+ * failure (proxy timeout, a body that's valid JSON but not from this
+ * API at all) can still slip through with something else entirely. This
+ * app was already bitten by exactly that class of bug once — a FastAPI
+ * validation error responded with its own default `{"detail": [...]}}`
+ * shape before the backend wrapped it (fixed there too, but this guard
+ * is what stops the *next* unanticipated shape from crashing the
+ * frontend instead of just showing a generic message).
+ */
+function isApiErrorBody(body: unknown): body is ApiErrorBody {
+  if (typeof body !== "object" || body === null || !("error" in body)) return false;
+  const error = (body as { error: unknown }).error;
+  return typeof error === "object" && error !== null && "message" in error;
+}
+
 export class ApiError extends Error {
   readonly code: string;
   readonly requestId: string | null;
   readonly status: number;
 
-  constructor(status: number, body: ApiErrorBody) {
-    super(body.error.message);
+  constructor(status: number, body: unknown) {
+    const errorBody = isApiErrorBody(body) ? body.error : null;
+    super(errorBody?.message ?? "Something went wrong. Please try again.");
     this.name = "ApiError";
     this.status = status;
-    this.code = body.error.code;
-    this.requestId = body.error.request_id;
+    this.code = errorBody?.code ?? "UNKNOWN_ERROR";
+    this.requestId = errorBody?.request_id ?? null;
   }
 }
 
@@ -77,9 +96,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    let body: ApiErrorBody;
+    // Deliberately `unknown`, not asserted as ApiErrorBody — see
+    // isApiErrorBody's docstring for why that assertion was the bug.
+    let body: unknown;
     try {
-      body = (await response.json()) as ApiErrorBody;
+      body = await response.json();
     } catch {
       body = { error: { code: "UNKNOWN_ERROR", message: response.statusText, request_id: null } };
     }
@@ -115,17 +136,31 @@ export const apiClient = {
    * header `request()` normally sets — the browser needs to set its own
    * `multipart/form-data; boundary=...` header for a FormData body, so
    * this passes an empty headers override rather than reusing request().
+   * `extraFields` covers additional plain form fields sent alongside the
+   * file (e.g. resume-intelligence's optional target_role_id) — a
+   * multipart request can't carry a separate JSON body, so any non-file
+   * data has to travel as more form fields instead.
    */
-  uploadFile: async <T>(path: string, file: File, fieldName = "file"): Promise<T> => {
+  uploadFile: async <T>(
+    path: string,
+    file: File,
+    fieldName = "file",
+    extraFields?: Record<string, string>,
+    signal?: AbortSignal,
+  ): Promise<T> => {
     const accessToken = useAuthStore.getState().accessToken;
     const formData = new FormData();
     formData.append(fieldName, file);
+    for (const [key, value] of Object.entries(extraFields ?? {})) {
+      formData.append(key, value);
+    }
 
     const response = await fetch(`${BASE_URL}${path}`, {
       method: "POST",
       cache: "no-store",
       headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       body: formData,
+      signal,
     });
 
     const refreshedToken = response.headers.get("X-Refreshed-Token");
@@ -134,9 +169,9 @@ export const apiClient = {
     }
 
     if (!response.ok) {
-      let body: ApiErrorBody;
+      let body: unknown;
       try {
-        body = (await response.json()) as ApiErrorBody;
+        body = await response.json();
       } catch {
         body = { error: { code: "UNKNOWN_ERROR", message: response.statusText, request_id: null } };
       }

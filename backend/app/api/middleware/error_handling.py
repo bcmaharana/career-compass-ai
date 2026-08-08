@@ -10,6 +10,7 @@ to make that decision.
 from __future__ import annotations
 
 from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.adapters.storage.s3_object_storage import ObjectStorageError
@@ -67,6 +68,50 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=http_status,
             content=_error_body(code=exc.code, message=exc.message, request_id=request_id),
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def handle_request_validation_error(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        # FastAPI validates the request body/query/path against the
+        # route's Pydantic schema *before* the route (or any
+        # CareerCompassError it might raise) ever runs — e.g. a request
+        # exceeding a Field(max_length=...) constraint, like
+        # UpdateCareerProfileRequest.core_competencies' item cap. Without
+        # this handler, FastAPI's own default handler responds with its
+        # raw {"detail": [...]} shape instead of this app's
+        # {"error": {...}} envelope — every other error path in this app
+        # (including the frontend's ApiError parsing) assumes the latter
+        # unconditionally, so an unwrapped validation error doesn't just
+        # look different, it crashes the frontend outright reading
+        # `.error.message` off a body with no `error` key at all. This
+        # was a real bug, not a theoretical one — caught via that same
+        # core_competencies cap.
+        request_id = getattr(request.state, "request_id", None)
+
+        messages = []
+        for error in exc.errors():
+            # `loc` is e.g. ("body", "core_competencies") — drop the
+            # leading request-part marker so the message reads as a
+            # field name, not an implementation detail the caller has no
+            # way to act on.
+            field_path = ".".join(
+                str(part) for part in error["loc"] if part not in ("body", "query", "path")
+            )
+            messages.append(f"{field_path}: {error['msg']}" if field_path else error["msg"])
+        message = "; ".join(messages) or "Invalid request."
+
+        logger.info(
+            "handled_validation_error",
+            http_status=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            request_id=request_id,
+            detail=exc.errors(),
+        )
+
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content=_error_body(code="VALIDATION_ERROR", message=message, request_id=request_id),
         )
 
     @app.exception_handler(Exception)

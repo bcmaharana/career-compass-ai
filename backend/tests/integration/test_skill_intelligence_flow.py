@@ -72,7 +72,11 @@ class TestGapAnalysis:
         await client.patch(
             "/api/v1/career-profile",
             headers=_auth(token),
-            json={"headline": None, "summary": None, "core_competencies": ["Python"]},
+            json={
+                "headline": None,
+                "summary": None,
+                "core_competencies": [{"name": "Python", "category": None}],
+            },
         )
         role = (
             await client.post(
@@ -104,7 +108,11 @@ class TestGapAnalysis:
         await client.patch(
             "/api/v1/career-profile",
             headers=_auth(token),
-            json={"headline": None, "summary": None, "core_competencies": ["python"]},
+            json={
+                "headline": None,
+                "summary": None,
+                "core_competencies": [{"name": "python", "category": None}],
+            },
         )
         role = (
             await client.post(
@@ -129,7 +137,11 @@ class TestGapAnalysis:
         await client.patch(
             "/api/v1/career-profile",
             headers=_auth(token),
-            json={"headline": None, "summary": None, "core_competencies": ["Python"]},
+            json={
+                "headline": None,
+                "summary": None,
+                "core_competencies": [{"name": "Python", "category": None}],
+            },
         )
         role = (
             await client.post(

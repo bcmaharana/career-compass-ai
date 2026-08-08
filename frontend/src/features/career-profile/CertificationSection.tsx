@@ -1,6 +1,7 @@
 import {
   useAddCertification,
   useCertifications,
+  useClearCertifications,
   useDeleteCertification,
   useMoveCertification,
   useUpdateCertification,
@@ -14,11 +15,13 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
+import { Select } from "@/components/ui/select";
+import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Eraser, Pencil, Plus, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 type Certification = components["schemas"]["CertificationResponse"];
@@ -60,17 +63,22 @@ export function CertificationSection({
   moveDisabled,
   cardBackground,
 }: SectionOrderProps) {
-  const { data: certifications, isLoading } = useCertifications();
-  const addCertification = useAddCertification();
-  const updateCertification = useUpdateCertification();
-  const deleteCertification = useDeleteCertification();
-  const moveCertification = useMoveCertification();
+  const scope = useProfileScope();
+  const { data: certifications, isLoading } = useCertifications(scope);
+  const addCertification = useAddCertification(scope);
+  const updateCertification = useUpdateCertification(scope);
+  const deleteCertification = useDeleteCertification(scope);
+  const clearCertifications = useClearCertifications(scope);
+  const moveCertification = useMoveCertification(scope);
+  const { data: masterCertifications } = useCertifications(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Certification | null>(null);
+  const [clearSectionOpen, setClearSectionOpen] = useState(false);
 
   function openAddDialog() {
     setEditingId(null);
@@ -82,6 +90,11 @@ export function CertificationSection({
     setEditingId(certification.id);
     setForm(toFormState(certification));
     setDialogOpen(true);
+  }
+
+  function copyFromMaster(certificationId: string) {
+    const source = masterCertifications?.find((c) => c.id === certificationId);
+    if (source) setForm(toFormState(source));
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -99,7 +112,12 @@ export function CertificationSection({
       ? updateCertification.mutateAsync({ id: editingId, body })
       : addCertification.mutateAsync(body);
 
-    mutation.then(() => setDialogOpen(false)).catch(() => {});
+    mutation
+      .then(() => {
+        setDialogOpen(false);
+        if (!editingId) setIsOpen(true);
+      })
+      .catch(() => {});
   }
 
   const isSaving = addCertification.isPending || updateCertification.isPending;
@@ -107,13 +125,22 @@ export function CertificationSection({
 
   return (
     <Card className={cardBackground === "background" ? "bg-background" : undefined}>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Certifications</CardTitle>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" onClick={openAddDialog}>
+        <div className="flex items-start gap-1">
+          <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
+            {isEditMode ? "Done" : "Edit"}
+          </Button>
+          {!!certifications?.length && (
+            <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
+              <Eraser className="h-4 w-4" />
+              Clear
+            </Button>
+          )}
           <CollapseToggle
             isOpen={isOpen}
             onToggle={() => setIsOpen(!isOpen)}
@@ -142,15 +169,17 @@ export function CertificationSection({
               itemAlternateClass(cardBackground, index),
             )}
           >
-            <MoveButtons
-              onMoveUp={() => moveCertification.mutate({ id: certification.id, direction: "up" })}
-              onMoveDown={() =>
-                moveCertification.mutate({ id: certification.id, direction: "down" })
-              }
-              isFirst={index === 0}
-              isLast={index === certifications.length - 1}
-              disabled={moveCertification.isPending}
-            />
+            {isEditMode && (
+              <MoveButtons
+                onMoveUp={() => moveCertification.mutate({ id: certification.id, direction: "up" })}
+                onMoveDown={() =>
+                  moveCertification.mutate({ id: certification.id, direction: "down" })
+                }
+                isFirst={index === 0}
+                isLast={index === certifications.length - 1}
+                disabled={moveCertification.isPending}
+              />
+            )}
             <div className="flex-1">
               <p className="font-medium">{certification.name}</p>
               <p className="text-sm text-muted-foreground">
@@ -163,12 +192,16 @@ export function CertificationSection({
               )}
             </div>
             <div className="flex shrink-0 gap-1">
-              <Button variant="ghost" size="sm" onClick={() => openEditDialog(certification)}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(certification)}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {isEditMode && (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(certification)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(certification)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         ))}
@@ -181,6 +214,19 @@ export function CertificationSection({
         title={editingId ? "Edit certification" : "Add certification"}
       >
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+          {!editingId && scope !== null && !!masterCertifications?.length && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="cert-copy-from-master">Copy from Master (optional)</Label>
+              <Select id="cert-copy-from-master" value="" onChange={(e) => copyFromMaster(e.target.value)}>
+                <option value="">Start blank</option>
+                {masterCertifications.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="cert-name">Name</Label>
             <Input
@@ -257,6 +303,20 @@ export function CertificationSection({
         title="Delete certification?"
         description={deleteTarget ? `Remove "${deleteTarget.name}"? This can't be undone.` : ""}
         isPending={deleteCertification.isPending}
+      />
+
+      <ConfirmDialog
+        open={clearSectionOpen}
+        onCancel={() => setClearSectionOpen(false)}
+        onConfirm={() => {
+          clearCertifications.mutate();
+          setClearSectionOpen(false);
+        }}
+        title="Clear Certifications?"
+        description="Remove every certification from your profile? This can't be undone."
+        isPending={clearCertifications.isPending}
+        confirmLabel="Clear"
+        confirmPendingLabel="Clearing..."
       />
     </Card>
   );

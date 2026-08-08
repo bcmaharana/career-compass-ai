@@ -31,6 +31,12 @@ class FakeUserRepository:
                 return replace(user)
         return None
 
+    async def get_by_phone_e164(self, tenant_id: uuid.UUID, phone_e164: str) -> User | None:
+        for user in self.users.values():
+            if user.tenant_id == tenant_id and user.phone_number_e164 == phone_e164:
+                return replace(user)
+        return None
+
     async def update(self, user: User) -> User:
         self.users[user.id] = replace(user)
         return replace(user)
