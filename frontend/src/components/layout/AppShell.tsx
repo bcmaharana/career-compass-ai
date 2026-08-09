@@ -2,7 +2,6 @@ import { AppFooter } from "@/components/layout/AppFooter";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { ChatThread } from "@/components/layout/ChatThread";
 import { RightNav } from "@/components/layout/RightNav";
-import { UploadNavigationGuard } from "@/components/layout/UploadNavigationGuard";
 import { Tooltip } from "@/components/ui/tooltip";
 import { formatDisplayDate } from "@/lib/date-format";
 import { NAV_ITEMS, matchNavItem } from "@/lib/nav-items";
@@ -168,11 +167,6 @@ export function AppShell() {
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-background" style={navWidthStyle}>
-      {/* Rendered once, here, not inside any single route — needs to
-          catch navigation AWAY from wherever an upload started, so it
-          can't live inside that page itself. See its own docstring. */}
-      <UploadNavigationGuard />
-
       {/* Hidden defs only — provides #rainbow-accent-gradient for the
           logo icon's stroke below. Not rendered visually itself. */}
       <svg width="0" height="0" className="absolute" aria-hidden="true">
@@ -203,7 +197,7 @@ export function AppShell() {
             leftNavCollapsed ? "items-center" : "items-start",
           )}
         >
-          <Link to="/" className="flex min-w-0 items-center gap-2">
+          <Link to="/dashboard" className="flex min-w-0 items-center gap-2">
             <Compass
               className="h-7 w-7 shrink-0"
               strokeWidth={2}

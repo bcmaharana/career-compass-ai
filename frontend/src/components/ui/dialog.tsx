@@ -1,3 +1,4 @@
+import { RAINBOW_GRADIENT_HOVER_BG } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
@@ -61,7 +62,10 @@ export function Dialog({ open, onClose, title, description, children, className 
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1 text-muted-foreground hover:bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] hover:text-primary"
+            className={cn(
+              "rounded-md p-1 text-muted-foreground hover:text-primary",
+              RAINBOW_GRADIENT_HOVER_BG,
+            )}
           >
             <X className="h-4 w-4" />
           </button>

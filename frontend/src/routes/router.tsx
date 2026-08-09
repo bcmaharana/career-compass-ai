@@ -3,6 +3,8 @@ import { CareerProfilePage } from "@/features/career-profile/CareerProfilePage";
 import { CoachPage } from "@/features/coach/CoachPage";
 import { DashboardPage } from "@/features/dashboard/DashboardPage";
 import { LoginPage } from "@/features/auth/LoginPage";
+import { LandingPage } from "@/features/landing/LandingPage";
+import { SignupPage } from "@/features/landing/SignupPage";
 import { SettingsAIModelPage } from "@/features/settings/SettingsAIModelPage";
 import { SettingsLandingPage } from "@/features/settings/SettingsLandingPage";
 import { SettingsProfilePage } from "@/features/settings/SettingsProfilePage";
@@ -18,23 +20,33 @@ import { createBrowserRouter } from "react-router-dom";
  * app's URL structure, rather than routes being registered ad hoc from
  * inside feature components.
  *
- * /login is outside ProtectedRoute (it IS the escape hatch for
- * unauthenticated visitors). Everything under AppShell requires a
- * session — see routes/ProtectedRoute.tsx.
+ * "/" is the public landing page, "/login" and "/signup" are the other
+ * unauthenticated entry points — none of the three sit under
+ * ProtectedRoute. Everything under AppShell (now at /dashboard and
+ * beyond) requires a session — see routes/ProtectedRoute.tsx, which
+ * redirects an unauthenticated visitor to "/" (the pitch), not straight
+ * to the login form.
  */
 export const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <LandingPage />,
+  },
   {
     path: "/login",
     element: <LoginPage />,
   },
   {
+    path: "/signup",
+    element: <SignupPage />,
+  },
+  {
     element: <ProtectedRoute />,
     children: [
       {
-        path: "/",
         element: <AppShell />,
         children: [
-          { index: true, element: <DashboardPage /> },
+          { path: "dashboard", element: <DashboardPage /> },
           { path: "profile", element: <CareerProfilePage /> },
           { path: "resumes", element: <ResumeIntelligencePage /> },
           { path: "skills", element: <SkillIntelligencePage /> },

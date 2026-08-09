@@ -13,7 +13,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   {
-    to: "/",
+    to: "/dashboard",
     label: "Dashboard",
     icon: Gauge,
     end: true,

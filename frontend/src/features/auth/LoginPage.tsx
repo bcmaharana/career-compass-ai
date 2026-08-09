@@ -50,7 +50,7 @@ export function LoginPage() {
     event.preventDefault();
     login.mutate(
       { subdomain, email, password },
-      { onSuccess: () => navigate("/", { replace: true }) },
+      { onSuccess: () => navigate("/dashboard", { replace: true }) },
     );
   }
 
