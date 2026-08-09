@@ -111,7 +111,7 @@ export function TargetRolesWidget() {
             : "bg-card/60 text-primary-foreground hover:bg-card",
         )}
       >
-        Master Profile
+        Master Career Profile
       </button>
 
       <div className="flex items-center justify-between">

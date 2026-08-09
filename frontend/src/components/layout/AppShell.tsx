@@ -26,22 +26,28 @@ function getIsNarrow(): boolean {
   return typeof window !== "undefined" && window.matchMedia(NARROW_QUERY).matches;
 }
 
-/** Shared by Left Nav and Right Nav: starts at the width-based default
- * (collapsed below `lg`, expanded at/above it) and stays free to be
- * toggled manually — but crossing the breakpoint in either direction
- * always resets back to that default, discarding whatever was manually
- * chosen. Each rail gets its own independent instance/state. */
-function useNarrowDefaultCollapse(): [boolean, (collapsed: boolean) => void] {
-  const [collapsed, setCollapsed] = useState(getIsNarrow);
+/** Shared by Left Nav and Right Nav: starts collapsed below `lg` and at
+ * `alwaysCollapsedWhenWide ? true : false` at/above it, then stays free
+ * to be toggled manually — but crossing the breakpoint in either
+ * direction always resets back to that default, discarding whatever was
+ * manually chosen. Each rail gets its own independent instance/state.
+ * Right Nav passes `alwaysCollapsedWhenWide: true` (2026-08-09, explicit
+ * request) so it starts thin regardless of viewport width, expandable
+ * only via its own ☰ toggle — Left Nav keeps the original width-only
+ * default (collapsed below `lg`, expanded at/above it). */
+function useNarrowDefaultCollapse(
+  alwaysCollapsedWhenWide = false,
+): [boolean, (collapsed: boolean) => void] {
+  const [collapsed, setCollapsed] = useState(() => alwaysCollapsedWhenWide || getIsNarrow());
 
   useEffect(() => {
     const mediaQueryList = window.matchMedia(NARROW_QUERY);
     function handleChange(event: MediaQueryListEvent) {
-      setCollapsed(event.matches);
+      setCollapsed(alwaysCollapsedWhenWide || event.matches);
     }
     mediaQueryList.addEventListener("change", handleChange);
     return () => mediaQueryList.removeEventListener("change", handleChange);
-  }, []);
+  }, [alwaysCollapsedWhenWide]);
 
   return [collapsed, setCollapsed];
 }
@@ -99,7 +105,7 @@ export function AppShell() {
   // docstring for the width-based default / manual-override rules,
   // which are identical for both rails but tracked independently.
   const [leftNavCollapsed, setLeftNavCollapsed] = useNarrowDefaultCollapse();
-  const [rightNavCollapsed, setRightNavCollapsed] = useNarrowDefaultCollapse();
+  const [rightNavCollapsed, setRightNavCollapsed] = useNarrowDefaultCollapse(true);
 
   function toggleLeftNav() {
     setLeftNavCollapsed(!leftNavCollapsed);
@@ -181,7 +187,7 @@ export function AppShell() {
         </defs>
       </svg>
 
-      <aside className="fixed inset-y-0 left-0 z-20 flex w-[var(--current-left-nav-w)] flex-col bg-primary text-primary-foreground transition-[width] duration-200 ease-out">
+      <aside className="fixed inset-y-0 left-0 z-20 flex w-[var(--current-left-nav-w)] flex-col rainbow-border-r bg-primary text-primary-foreground transition-[width] duration-200 ease-out">
         <div
           className={cn(
             // No longer --shell-side-footer-h: that height was sized for
@@ -224,7 +230,7 @@ export function AppShell() {
           </button>
         </div>
 
-        <div className="border-t border-gray-500" />
+        <div className="h-px bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)]" />
 
         <nav className="mt-4 flex flex-1 flex-col gap-1 overflow-y-auto px-3">
           {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => {
@@ -260,7 +266,7 @@ export function AppShell() {
         </nav>
 
         {leftNavCollapsed ? (
-          <div className="mt-auto flex min-h-[var(--shell-icon-endbox-h)] flex-col items-center justify-center border-t border-gray-500 bg-[hsl(var(--primary-light))] px-3 py-2">
+          <div className="relative mt-auto flex min-h-[var(--shell-icon-endbox-h)] flex-col items-center justify-center rainbow-border-t bg-[hsl(var(--primary-light))] px-3 py-2">
             <Tooltip
               content={
                 user?.lastLoginAt
@@ -279,7 +285,7 @@ export function AppShell() {
             </Tooltip>
           </div>
         ) : (
-          <div className="mt-auto flex h-[var(--shell-side-footer-h)] shrink-0 flex-col justify-center border-t border-gray-500 bg-[hsl(var(--primary-light))] px-3 py-2">
+          <div className="relative mt-auto flex h-[var(--shell-side-footer-h)] shrink-0 flex-col justify-center rainbow-border-t bg-[hsl(var(--primary-light))] px-3 py-2">
             <p className="px-3 text-sm leading-snug text-primary-foreground/70">
               {user?.lastLoginAt
                 ? formatLastLogin(user.lastLoginAt)
@@ -295,7 +301,7 @@ export function AppShell() {
 
       <main
         ref={mainRef}
-        className="fixed bottom-[var(--shell-footer-h)] left-[var(--current-left-nav-w)] right-[var(--current-right-nav-w)] top-[var(--shell-header-h)] overflow-y-auto bg-[hsl(var(--center-bg))] transition-[left,right] duration-200 ease-out"
+        className="fixed bottom-[var(--shell-footer-h)] left-[var(--current-left-nav-w)] right-[var(--current-right-nav-w)] top-[var(--shell-header-h)] overflow-y-auto scrollbar-hide bg-[hsl(var(--center-bg))] transition-[left,right] duration-200 ease-out"
       >
         <div className="container py-8">
           <Outlet />

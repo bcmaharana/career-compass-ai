@@ -2,6 +2,7 @@ import { useCareerProfile, useUpdateCareerProfile } from "@/api/queries/career-p
 import type { components } from "@/api/schema.gen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollapseToggle } from "@/components/ui/collapse-toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -11,6 +12,7 @@ import { RenameCategoryDialog } from "@/features/skill-intelligence/RenameCatego
 import { RenameSkillDialog } from "@/features/skill-intelligence/RenameSkillDialog";
 import { getErrorMessage } from "@/lib/errors";
 import { groupCompetenciesByCategoryWithMoveIndex, moveCategoryGroup } from "@/lib/group-by-category";
+import { cn } from "@/lib/utils";
 import { ArrowDown, ArrowUp, PencilLine, Plus, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
@@ -133,7 +135,7 @@ export function MySkillsSection({ cardBackground }: MySkillsSectionProps) {
             ({skills.length}/{MAX_SKILLS})
           </span>
         </CardTitle>
-        <div className="flex items-start gap-2">
+        <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add

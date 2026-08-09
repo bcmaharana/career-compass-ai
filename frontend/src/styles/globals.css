@@ -49,19 +49,17 @@
 
     --radius: 0.625rem;
 
-    /* Fixed Header background (Part 1.3) — also used by the Right Nav's
-       lower contextual section (Part 1.4), so darkening this one token
-       keeps both in sync. Desaturated toward gray rather than the
-       lighter blue tint used elsewhere, per explicit request. */
-    --header-bg: 222 16% 83%;
-    /* Footer's background (AppFooter.tsx). Previously also doubled as
-       the Header purpose line's text color — split into its own
-       `--header-purpose-text` token below (2026-07-27) so darkening the
-       purpose text doesn't also darken the Footer. */
-    --footer-bg: 218 12% 52%;
-    /* Header purpose line's text color (AppHeader.tsx) — darker than
-       --footer-bg (which it used to share) for readability. */
-    --header-purpose-text: 218 15% 30%;
+    /* Header/Footer backgrounds (Part 1.3/1.2) went through several
+       rounds as a standalone gray gradient (--header-bg/--header-bg-dark/
+       --footer-bg/--footer-bg-dark, since removed) before independent
+       review feedback (2026-08-09) landed on reusing the exact Left/
+       Right Nav colors instead of a separate gray — see AppHeader.tsx/
+       AppFooter.tsx, which now build their gradients directly from
+       --primary/--primary-light rather than their own tokens. Header:
+       darker --primary at the top, lighter --primary-light at the
+       bottom (adjacent to the center panel). Footer: reversed —
+       lighter --primary-light at the top (adjacent to the center
+       panel), darker --primary at the bottom. */
     /* Scrollable center panel background — its own token (not reusing
        --background directly) so it can be tuned independently as each
        shell region gets adjusted one at a time. */
@@ -115,6 +113,160 @@
      * back to a single fixed row.
      */
     --shell-side-footer-h: 5.75rem;
+  }
+}
+
+@layer components {
+  /*
+   * Rainbow gradient ring for center-pane buttons (primary/accent/
+   * outline/ghost — destructive intentionally excluded so red still
+   * reads as a warning). A ::before overlay rather than `border-image`
+   * (ignores border-radius, see CLAUDE.md) or a layered background
+   * (would fight with the hover rainbow-fill background already set
+   * directly on the button in button-variants.ts) — this stays fully
+   * independent of whatever background the button itself has, at rest
+   * or on hover. Same gradient literal as RAINBOW_GRADIENT_BG in
+   * button-variants.ts, duplicated here since CSS can't import a JS/TS
+   * constant — keep both in sync if the gradient ever changes.
+   */
+  .rainbow-border {
+    position: relative;
+  }
+  .rainbow-border::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(
+      90deg,
+      #a855f7 12.5%,
+      #3b82f6 37.5%,
+      #22c55e 58.33%,
+      #fdba74 75%,
+      #fca5a5 91.67%
+    );
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /*
+   * Rainbow edge strips for Left Nav's/Right Nav's top and bottom
+   * bookend boxes (right edge on Left Nav, left edge on Right Nav —
+   * the rail-facing-center-panel side). A plain absolutely-positioned
+   * strip rather than the `.rainbow-border` mask trick above — these
+   * boxes have square (non-rounded) corners, so there's no border-
+   * radius to fight with, and unlike a button we only need one flat
+   * edge, not a full ring, so the interior-masking step isn't needed.
+   * Gradient runs vertically (180deg, not the usual 90deg) since the
+   * strip itself is vertical — a horizontal gradient squeezed into a
+   * 2px-wide strip would just look like one flat color.
+   */
+  .rainbow-border-r,
+  .rainbow-border-l {
+    position: relative;
+  }
+  .rainbow-border-r::after,
+  .rainbow-border-l::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: linear-gradient(
+      180deg,
+      #a855f7 12.5%,
+      #3b82f6 37.5%,
+      #22c55e 58.33%,
+      #fdba74 75%,
+      #fca5a5 91.67%
+    );
+    pointer-events: none;
+  }
+  .rainbow-border-r::after {
+    right: 0;
+  }
+  .rainbow-border-l::after {
+    left: 0;
+  }
+
+  /*
+   * Rainbow version of the horizontal divider between each rail's top/
+   * bottom bookend box and its middle nav section — same idea as
+   * `.rainbow-border-r`/`.rainbow-border-l` above but horizontal, so it
+   * reuses the standard 90deg (horizontal) gradient rather than the
+   * vertical one those use. A `::before` (not `::after`, which the
+   * edge-strip classes already occupy on the same bookend-box elements)
+   * so both can be applied together on one element without colliding.
+   */
+  .rainbow-border-t {
+    position: relative;
+  }
+  .rainbow-border-t::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      #a855f7 12.5%,
+      #3b82f6 37.5%,
+      #22c55e 58.33%,
+      #fdba74 75%,
+      #fca5a5 91.67%
+    );
+    pointer-events: none;
+  }
+
+  /*
+   * Rainbow version of AppHeader.tsx's bottom border — mirror of
+   * `.rainbow-border-t` above (same horizontal gradient), just anchored
+   * to the opposite edge. AppFooter.tsx's top border reuses
+   * `.rainbow-border-t` directly rather than needing its own class,
+   * since that's already anchored to the top.
+   */
+  .rainbow-border-b {
+    position: relative;
+  }
+  .rainbow-border-b::before {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      #a855f7 12.5%,
+      #3b82f6 37.5%,
+      #22c55e 58.33%,
+      #fdba74 75%,
+      #fca5a5 91.67%
+    );
+    pointer-events: none;
+  }
+
+  /*
+   * Hides the scrollbar track/thumb on the center panel (AppShell.tsx's
+   * <main>) without disabling scrolling itself — mouse wheel, trackpad,
+   * and arrow-key scrolling all still work via the element's own
+   * `overflow-y-auto`; this only suppresses the browser's visible
+   * scrollbar chrome. Needs all three vendor forms since there's no
+   * unprefixed standard property that alone covers Firefox, old Edge/
+   * IE, and Chromium-based browsers.
+   */
+  .scrollbar-hide {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE, legacy Edge */
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Chromium-based Edge */
   }
 }
 

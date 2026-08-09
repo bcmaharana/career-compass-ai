@@ -43,7 +43,23 @@ export const RAINBOW_GRADIENT_HOVER_BG =
 // misreading of "normal" as "a solid brand color" rather than "no
 // special background at all." Corrected after live comparison against
 // the Career Profile buttons specifically.
-const _INTERACTIVE_VARIANT = `${RAINBOW_GRADIENT_HOVER_BG} hover:text-primary`;
+// `relative rainbow-border` adds the always-visible rainbow ring (see
+// `.rainbow-border` in globals.css) — a ::before overlay, not a real
+// `border`, so it doesn't interact with the rainbow-fill background
+// below at all: transparent interior at rest shows the ring; on hover
+// the fill and the ring are the same gradient, so they read as one
+// seamless rainbow button.
+const _INTERACTIVE_VARIANT = `${RAINBOW_GRADIENT_HOVER_BG} hover:text-primary relative rainbow-border`;
+
+// Standard gap between buttons in a row of section-level actions (e.g.
+// Add/Edit/Clear/Collapse/MoveButtons in a card header, or Edit/Delete
+// next to a list item) — every section across Career Profile and Skill
+// Intelligence should import this rather than hardcoding "gap-1"
+// directly, so a future spacing change (or a one-off page drifting to
+// "gap-2" without noticing, which is what happened to Skill
+// Intelligence's My Skills header) is a single edit here instead of a
+// hunt across every section file.
+export const ACTION_BUTTON_ROW_GAP = "gap-1";
 
 export const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium " +

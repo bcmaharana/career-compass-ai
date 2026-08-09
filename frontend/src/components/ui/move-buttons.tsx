@@ -16,8 +16,8 @@ interface MoveButtonsProps {
    * down`; omit for the plain "Move up"/"Move down" every existing
    * (single-pair-per-view) caller already uses. */
   label?: string;
-  /** "vertical" (default, stacked — every existing caller) or
-   * "horizontal" (side-by-side). */
+  /** "horizontal" (default, side-by-side — every existing caller as of
+   * 2026-08-09) or "vertical" (stacked). */
   orientation?: "vertical" | "horizontal";
   /** Override the up/down icon components — defaults to ChevronUp/
    * ChevronDown (every existing caller). */
@@ -44,12 +44,12 @@ export function MoveButtons({
   isLast,
   disabled,
   label,
-  orientation = "vertical",
+  orientation = "horizontal",
   upIcon: UpIcon = ChevronUp,
   downIcon: DownIcon = ChevronDown,
 }: MoveButtonsProps) {
   return (
-    <div className={orientation === "horizontal" ? "flex flex-row" : "flex flex-col"}>
+    <div className={orientation === "horizontal" ? "flex flex-row gap-1" : "flex flex-col gap-1"}>
       <Button
         variant="ghost"
         size="sm"

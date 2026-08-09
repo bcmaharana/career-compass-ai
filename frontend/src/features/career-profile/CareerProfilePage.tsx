@@ -109,7 +109,7 @@ export function CareerProfilePage() {
 
   return (
     <ProfileScopeProvider targetRoleId={targetRoleId}>
-      <div className="-mt-8 grid gap-3">
+      <div className="-mt-6 grid gap-3">
         <div className="-mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-lg font-semibold text-foreground">

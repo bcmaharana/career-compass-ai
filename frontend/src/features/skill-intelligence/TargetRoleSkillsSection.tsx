@@ -7,6 +7,7 @@ import {
 import type { components } from "@/api/schema.gen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollapseToggle } from "@/components/ui/collapse-toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -111,7 +112,7 @@ function TargetRoleRequirementsRow({
             </span>
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className={cn("flex items-center", ACTION_BUTTON_ROW_GAP)}>
           <form onSubmit={handleAdd} className="flex items-center gap-1.5">
             <Input
               value={draft}

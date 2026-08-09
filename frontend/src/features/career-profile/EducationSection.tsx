@@ -8,6 +8,7 @@ import {
 } from "@/api/queries/career-profile";
 import type { components } from "@/api/schema.gen";
 import { Button } from "@/components/ui/button";
+import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollapseToggle } from "@/components/ui/collapse-toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -128,7 +129,7 @@ export function EducationSection({
     <Card className={cardBackground === "background" ? "bg-background" : undefined}>
       <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Education</CardTitle>
-        <div className="flex items-start gap-1">
+        <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
@@ -187,7 +188,7 @@ export function EducationSection({
                 </p>
               )}
             </div>
-            <div className="flex shrink-0 gap-1">
+            <div className={cn("flex shrink-0", ACTION_BUTTON_ROW_GAP)}>
               {isEditMode && (
                 <>
                   <Button variant="ghost" size="sm" onClick={() => openEditDialog(education)}>

@@ -2,6 +2,7 @@ import { useCareerProfile, useUpdateCareerProfile } from "@/api/queries/career-p
 import type { components } from "@/api/schema.gen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollapseToggle } from "@/components/ui/collapse-toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -12,6 +13,7 @@ import { useProfileScope } from "@/features/career-profile/profile-scope";
 import type { SectionOrderProps } from "@/features/career-profile/section-order";
 import { getErrorMessage } from "@/lib/errors";
 import { groupCompetenciesByCategoryWithMoveIndex, moveCategoryGroup } from "@/lib/group-by-category";
+import { cn } from "@/lib/utils";
 import { ArrowDown, ArrowUp, Eraser, PencilLine, Plus, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
@@ -145,7 +147,7 @@ export function CoreCompetenciesSection({
     <Card className={cardBackground === "background" ? "bg-background" : undefined}>
       <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Core Competencies</CardTitle>
-        <div className="flex items-start gap-1">
+        <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add

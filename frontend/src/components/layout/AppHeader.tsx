@@ -35,18 +35,20 @@ export function AppHeader() {
 
   return (
     <header
-      className="fixed left-[var(--current-left-nav-w)] right-[var(--current-right-nav-w)] top-0 z-10 flex h-[var(--shell-header-h)] flex-col justify-center gap-0.5 border-b border-gray-700 bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] px-6 transition-[left,right] duration-200 ease-out"
+      className="fixed left-[var(--current-left-nav-w)] right-[var(--current-right-nav-w)] top-0 z-10 flex h-[var(--shell-header-h)] flex-col justify-center gap-0.5 rainbow-border-b bg-[linear-gradient(to_top,#2A4382,#18284E)] px-6 transition-[left,right] duration-200 ease-out"
       aria-label="Page header"
     >
       <div className="flex items-baseline justify-between gap-4">
-        <h1 className="truncate font-display text-2xl font-semibold leading-tight">{label}</h1>
+        <h1 className="truncate bg-[linear-gradient(90deg,#c084fc_12.5%,#60a5fa_37.5%,#4ade80_58.33%,#fb923c_75%,#e08585_91.67%)] bg-clip-text font-display text-2xl font-semibold leading-tight text-transparent">
+          {label}
+        </h1>
         {quote && (
-          <p className="min-w-0 shrink truncate text-right text-xs font-bold italic text-accent">
+          <p className="min-w-0 shrink truncate text-right text-xs font-bold italic text-white">
             "{quote.content}"{quote.author ? ` — ${quote.author}` : ""}
           </p>
         )}
       </div>
-      <p className="truncate text-base text-[hsl(var(--header-purpose-text))]">{purpose}</p>
+      <p className="truncate text-base text-primary-foreground/80">{purpose}</p>
     </header>
   );
 }

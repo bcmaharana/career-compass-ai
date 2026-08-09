@@ -4,11 +4,23 @@ import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 interface TooltipProps {
-  content: string;
+  /** Plain string for every existing caller — also accepts a ReactNode
+   * (e.g. a fragment with `<br />`s) for a multi-line tooltip, like
+   * RightNav's collapsed profile photo. `<br />` forces a real line
+   * break regardless of the `whitespace-nowrap` these tooltips render
+   * with (nowrap only collapses source whitespace/newlines in text; it
+   * doesn't suppress an actual `<br />` element). */
+  content: ReactNode;
   children: ReactNode;
   className?: string;
-  /** "bottom" (default, unchanged): below and left-aligned with the
-   * trigger — for a truncated inline label like TargetRolesWidget's.
+  /** "bottom" (default): below and left-aligned with the trigger — for
+   * a truncated inline label like TargetRolesWidget's. Renders nowrap
+   * (2026-08-09, was whitespace-normal + max-w-xs) — a narrow icon-only
+   * trigger (no explicit width) sizes its containing block to the
+   * icon's own width, and the old wrapping rules let a short tooltip
+   * like "Sign in" break across two lines inside that narrow box;
+   * TargetRolesWidget's trigger is a wide flex-1 row, so nowrap doesn't
+   * change anything there.
    * "right"/"left": vertically centered beside the trigger, opening
    * away from whichever screen edge the rail sits against — "right" for
    * Left Nav's collapsed icon rail, "left" for Right Nav's (opening
@@ -45,7 +57,16 @@ export function Tooltip({ content, children, className, placement = "bottom" }: 
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const left = placement === "left" ? rect.left - 8 : rect.right + 8;
-    setCoords({ top: rect.top + rect.height / 2, left });
+    // Vertically centered on the trigger via -translate-y-1/2 below —
+    // fine for every existing short single-line tooltip, but a taller
+    // multi-line one (e.g. RightNav's collapsed profile photo) centered
+    // on a trigger near the very top of the viewport pushes its own top
+    // edge above y=0, clipping it. A floor keeps the centering point far
+    // enough down that even a several-line tooltip stays fully on-screen
+    // for a trigger that close to the top; it's a no-op for every
+    // trigger already below this point.
+    const top = Math.max(rect.top + rect.height / 2, 56);
+    setCoords({ top, left });
     setSidePlacementVisible(true);
   }
   function hide() {
@@ -86,7 +107,7 @@ export function Tooltip({ content, children, className, placement = "bottom" }: 
       {children}
       <div
         role="tooltip"
-        className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden max-w-xs whitespace-normal rounded-md bg-foreground px-2 py-1 text-xs font-normal text-background shadow-card group-hover:block"
+        className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-normal text-background shadow-card group-hover:block"
       >
         {content}
       </div>

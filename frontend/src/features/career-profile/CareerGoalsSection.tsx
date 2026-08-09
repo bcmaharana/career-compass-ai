@@ -9,6 +9,7 @@ import {
 import type { components } from "@/api/schema.gen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollapseToggle } from "@/components/ui/collapse-toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -139,7 +140,7 @@ export function CareerGoalsSection({
           <CardTitle>Career Goals</CardTitle>
           {isTargetRoleView && <Badge variant="default">Master profile</Badge>}
         </div>
-        <div className="flex items-start gap-1">
+        <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
@@ -204,7 +205,7 @@ export function CareerGoalsSection({
                 <p className="mt-1 whitespace-pre-line text-sm">{goal.description}</p>
               )}
             </div>
-            <div className="flex shrink-0 gap-1">
+            <div className={cn("flex shrink-0", ACTION_BUTTON_ROW_GAP)}>
               {isEditMode && (
                 <>
                   <Button variant="ghost" size="sm" onClick={() => openEditDialog(goal)}>

@@ -91,6 +91,28 @@ export function RightNav({ onLogout, isCollapsed, onToggle }: RightNavProps) {
       ? `${user.salutation ? `${user.salutation} ` : ""}${user.lastName}, ${user.firstName}`
       : undefined;
   const displayName = formalName || user?.email || "—";
+  const formattedTime = now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  // Collapsed rail hides the greeting/name/email/date text block
+  // entirely (see the `!isCollapsed` block below) — this mirrors that
+  // same line-by-line breakdown (greeting, name, optional email, date)
+  // into the profile photo's hover tooltip instead, plus a live clock
+  // time folded onto the date line (that block has no separate time
+  // display to mirror), so none of it is lost while collapsed.
+  const collapsedIdentitySummary = (
+    <>
+      {greeting},
+      <br />
+      {displayName}
+      {user?.fullName && user?.email && (
+        <>
+          <br />
+          {user.email}
+        </>
+      )}
+      <br />
+      {formattedDate}, {formattedTime}
+    </>
+  );
 
   const activeGradientClasses =
     "bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] text-primary";
@@ -99,7 +121,7 @@ export function RightNav({ onLogout, isCollapsed, onToggle }: RightNavProps) {
 
   return (
     <nav
-      className="fixed inset-y-0 right-0 z-20 flex w-[var(--current-right-nav-w)] flex-col transition-[width] duration-200 ease-out"
+      className="fixed inset-y-0 right-0 z-20 flex w-[var(--current-right-nav-w)] flex-col rainbow-border-l transition-[width] duration-200 ease-out"
       aria-label="Right navigation"
     >
       <div
@@ -117,21 +139,41 @@ export function RightNav({ onLogout, isCollapsed, onToggle }: RightNavProps) {
         )}
       >
         <div className={cn("flex flex-col gap-1", isCollapsed ? "items-center" : "items-start")}>
-          <Link to="/profile" aria-label="Career Profile" className="hover:opacity-80">
-            {profile?.photo_url && !photoLoadFailed ? (
-              <img
-                src={profile.photo_url}
-                alt=""
-                className="h-9 w-9 shrink-0 rounded-full object-cover"
-                onError={() => setPhotoLoadFailed(true)}
-              />
-            ) : (
-              <UserCircle
-                className="h-9 w-9 shrink-0 text-primary-foreground/70"
-                strokeWidth={1.5}
-              />
-            )}
-          </Link>
+          {isCollapsed ? (
+            <Tooltip content={collapsedIdentitySummary} placement="left">
+              <Link to="/profile" aria-label="Career Profile" className="hover:opacity-80">
+                {profile?.photo_url && !photoLoadFailed ? (
+                  <img
+                    src={profile.photo_url}
+                    alt=""
+                    className="h-9 w-9 shrink-0 rounded-full object-cover"
+                    onError={() => setPhotoLoadFailed(true)}
+                  />
+                ) : (
+                  <UserCircle
+                    className="h-9 w-9 shrink-0 text-primary-foreground/70"
+                    strokeWidth={1.5}
+                  />
+                )}
+              </Link>
+            </Tooltip>
+          ) : (
+            <Link to="/profile" aria-label="Career Profile" className="hover:opacity-80">
+              {profile?.photo_url && !photoLoadFailed ? (
+                <img
+                  src={profile.photo_url}
+                  alt=""
+                  className="h-9 w-9 shrink-0 rounded-full object-cover"
+                  onError={() => setPhotoLoadFailed(true)}
+                />
+              ) : (
+                <UserCircle
+                  className="h-9 w-9 shrink-0 text-primary-foreground/70"
+                  strokeWidth={1.5}
+                />
+              )}
+            </Link>
+          )}
 
           <button
             type="button"
@@ -164,7 +206,7 @@ export function RightNav({ onLogout, isCollapsed, onToggle }: RightNavProps) {
         )}
       </div>
 
-      <div className="border-t border-gray-500" />
+      <div className="h-px bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)]" />
 
       <div className="flex-1 overflow-y-auto bg-primary">
         {inSettings ? (
@@ -221,7 +263,7 @@ export function RightNav({ onLogout, isCollapsed, onToggle }: RightNavProps) {
 
       <div
         className={cn(
-          "mt-auto flex flex-col gap-1 border-t border-gray-500 bg-[hsl(var(--primary-light))] px-3 py-2",
+          "relative mt-auto flex flex-col gap-1 rainbow-border-t bg-[hsl(var(--primary-light))] px-3 py-2",
           isCollapsed && "min-h-[var(--shell-icon-endbox-h)]",
         )}
       >

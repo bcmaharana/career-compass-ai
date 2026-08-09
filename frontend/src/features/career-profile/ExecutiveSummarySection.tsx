@@ -1,11 +1,13 @@
 import { useCareerProfile, useUpdateCareerProfile } from "@/api/queries/career-profile";
 import { Button } from "@/components/ui/button";
+import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollapseToggle } from "@/components/ui/collapse-toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { getErrorMessage } from "@/lib/errors";
+import { cn } from "@/lib/utils";
 import { Eraser } from "lucide-react";
 import { useState } from "react";
 
@@ -74,7 +76,7 @@ export function ExecutiveSummarySection() {
     <Card className="bg-background">
       <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Executive Summary</CardTitle>
-        <div className="flex items-start gap-1">
+        <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
           {!isEditing && (
             <Button variant="ghost" size="sm" onClick={openEdit}>
               Edit

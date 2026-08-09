@@ -41,7 +41,7 @@ export function AppFooter() {
 
   return (
     <footer
-      className="fixed bottom-0 left-[var(--current-left-nav-w)] right-[var(--current-right-nav-w)] z-10 flex h-[var(--shell-footer-h)] items-center border-t border-border bg-[hsl(var(--footer-bg))] px-6 transition-[left,right] duration-200 ease-out"
+      className="fixed bottom-0 left-[var(--current-left-nav-w)] right-[var(--current-right-nav-w)] z-10 flex h-[var(--shell-footer-h)] items-center rainbow-border-t bg-[linear-gradient(to_bottom,#2A4382,#18284E)] px-6 transition-[left,right] duration-200 ease-out"
       aria-label="AI chat"
     >
       <form onSubmit={handleSubmit} className="relative flex w-full items-center gap-3">
