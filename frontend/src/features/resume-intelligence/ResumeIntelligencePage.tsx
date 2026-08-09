@@ -5,6 +5,7 @@ import {
   useTargetRoles,
 } from "@/api/queries/career-profile";
 import {
+  useCancelUpload,
   useDiscardResume,
   useMergeResume,
   useResume,
@@ -22,7 +23,7 @@ import { formatDisplayDate, formatDisplayDateTime } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { useUploadProgressStore } from "@/stores/upload-progress-store";
 import { Trash2, X } from "lucide-react";
-import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 type ResumeResponse = components["schemas"]["ResumeResponse"];
@@ -179,22 +180,21 @@ export function ResumeIntelligencePage() {
 function UploadCard({ onUploaded }: { onUploaded: (resumeId: string) => void }) {
   const { data: targetRoles } = useTargetRoles();
   const uploadResume = useUploadResume();
+  const cancelUpload = useCancelUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [targetRoleId, setTargetRoleId] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
-  const setUploading = useUploadProgressStore((state) => state.setUploading);
-
-  // Mirrors this mutation's own isPending into the shared store so
-  // UploadNavigationGuard (rendered once, up in AppShell — well outside
-  // this page) can warn before navigating away mid-upload. Cleared on
-  // unmount too, not just when the mutation settles — leaving this page
-  // entirely (e.g. via the guard's own "Leave anyway") must not leave a
-  // stale "still uploading" flag blocking every future navigation.
-  useEffect(() => {
-    setUploading(uploadResume.isPending);
-    return () => setUploading(false);
-  }, [uploadResume.isPending, setUploading]);
+  const isUploading = useUploadProgressStore((state) => state.isUploading);
+  // Stored globally, not a component-local ref — see upload-progress-store.ts's
+  // own docstring for the real bug this fixes: a fresh mount (e.g. the
+  // "may still be processing" notice, shown after leaving and returning
+  // to this page) has no local ref from whichever earlier mount actually
+  // started the upload, so it needs the token to live somewhere that
+  // survives the unmount too.
+  const uploadToken = useUploadProgressStore((state) => state.uploadToken);
+  const startUpload = useUploadProgressStore((state) => state.startUpload);
+  const clearUpload = useUploadProgressStore((state) => state.clearUpload);
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -207,29 +207,69 @@ function UploadCard({ onUploaded }: { onUploaded: (resumeId: string) => void }) 
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    // A fresh token per attempt is what lets a later handleCancel() call
+    // reach exactly THIS attempt's still-running server-side task (see
+    // the backend's /upload/{upload_token}/cancel) rather than some
+    // earlier or unrelated one.
+    const token = crypto.randomUUID();
+    // Set BEFORE mutate() (not mirrored from isPending via an effect,
+    // and deliberately NOT cleared on unmount) — see handleCancel's own
+    // comment for why: once true, this must stay true across a Cancel,
+    // and across leaving/returning to this page (a fresh mount gets a
+    // fresh, isPending=false mutation instance with no memory of the
+    // old one), until a real server response arrives or a confirmed
+    // cancel clears it. Clearing it on unmount was the actual gap this
+    // exists to close — the button re-enabled itself the moment a user
+    // clicked away, even though the server might still be working,
+    // inviting exactly the parallel-upload problem this flag exists to
+    // prevent — "Choose a resume file" now stays disabled and the
+    // notice below stays visible no matter what page the user is on
+    // until they cancel or the extraction genuinely finishes.
+    startUpload(token);
     uploadResume.mutate(
-      { file, targetRoleId: targetRoleId || null, signal: controller.signal },
-      { onSuccess: (data) => onUploaded(data.id) },
+      { file, targetRoleId: targetRoleId || null, uploadToken: token, signal: controller.signal },
+      {
+        onSuccess: (data) => {
+          clearUpload();
+          onUploaded(data.id);
+        },
+        onError: (error) => {
+          // An abort means the BROWSER gave up waiting, not that the
+          // server did — per this app's own documented Docker-Desktop
+          // networking gotcha, the extraction may well keep running to
+          // completion regardless. Only a genuine (non-abort) server
+          // response is a definitive enough signal to re-enable
+          // uploading; a plain abort (no confirmed cancel) leaves
+          // `isUploading` set until handleCancel's cancelUpload call
+          // actually confirms the server stopped.
+          if (!isAbortError(error)) {
+            clearUpload();
+          }
+        },
+      },
     );
   }
 
-  // Best-effort only: this aborts the browser's own wait for a response
-  // and asks the backend to stop (a disconnect-triggered task
-  // cancellation on the router side — see upload_resume's docstring),
-  // but there's no guarantee the server notices in time, especially
-  // once it's deep inside the LLM call. A real, confirmed-live gotcha:
-  // in local dev (Docker Desktop on Windows), the server-side
-  // cancellation reliably failed to fire even on a genuine client
-  // disconnect, so the extraction kept running for the full ~10 minutes
-  // and still wrote its own Resume row once Ollama eventually replied —
-  // one upload attempt, "cancelled" and retried twice more without
-  // realizing the earlier ones were still silently working, produced
-  // three separate failed entries in history. The warning below is
-  // deliberately not a quickly-dismissed toast — it stays until the
-  // user picks a new file, since the risk window is minutes long, not
-  // seconds.
+  // Two independent actions: abort() gives up on THIS browser tab's own
+  // wait for a response, and cancelUpload explicitly tells the backend
+  // (by upload_token, see the router's /upload/{upload_token}/cancel)
+  // to actually stop the still-running extraction task server-side.
+  // Earlier versions of this relied solely on the server detecting the
+  // browser's disconnect to decide whether to stop its own work — a
+  // real, confirmed-live gotcha: in local dev (Docker Desktop on
+  // Windows), that detection reliably failed to fire even on a genuine
+  // client disconnect, so the extraction kept running for the full ~10
+  // minutes and still wrote its own Resume row once Ollama eventually
+  // replied. The explicit cancelUpload call sidesteps that entirely —
+  // it's a normal, independent HTTP request the server definitely
+  // receives, not something inferred from a dropped connection. Reads
+  // the token from the shared store, not a local ref, so this works
+  // identically regardless of whether this mount is the one that
+  // originally started the upload (see upload-progress-store.ts).
   function handleCancel() {
     abortControllerRef.current?.abort();
+    if (!uploadToken) return;
+    cancelUpload.mutate(uploadToken, { onSuccess: () => clearUpload() });
   }
 
   // A local validation failure takes precedence over the previous
@@ -240,8 +280,6 @@ function UploadCard({ onUploaded }: { onUploaded: (resumeId: string) => void }) 
     (uploadResume.isError && !isAbortError(uploadResume.error)
       ? getErrorMessage(uploadResume.error)
       : null);
-  const showCancelNotice =
-    !validationError && uploadResume.isError && isAbortError(uploadResume.error);
 
   return (
     <Card>
@@ -270,24 +308,48 @@ function UploadCard({ onUploaded }: { onUploaded: (resumeId: string) => void }) 
               </Select>
             </div>
           )}
-          <div className="flex flex-col items-start gap-1">
-            <div className="flex items-center gap-2">
+          {/* min-w-0 overrides flex items' default min-width:auto, which
+              otherwise refuses to shrink a box below its text's
+              preferred (unwrapped) width — without it, the processing
+              message below (bounded by max-w-sm, but still "wanting"
+              that full width) pushed this whole group's hypothetical
+              size past the row's remaining space, forcing the entire
+              row to wrap onto a new line instead of just letting the
+              message's own text wrap tighter. With it, the dropdown and
+              this button group stay side by side whenever there's room
+              (matching the original layout), and only the message
+              text's own line-wrapping adapts to however much space is
+              actually left. */}
+          <div className="flex min-w-0 items-start gap-2">
+            <div className="flex min-w-0 flex-col items-center gap-1">
               <Button
                 type="button"
                 variant="primary"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploadResume.isPending}
+                disabled={isUploading}
               >
-                {uploadResume.isPending ? "Analyzing your resume..." : "Choose a resume file"}
+                {isUploading ? "Analyzing your resume..." : "Choose a resume file"}
               </Button>
-              {uploadResume.isPending && (
-                <Button type="button" variant="ghost" size="sm" onClick={handleCancel}>
-                  <X className="h-4 w-4" />
-                  Cancel
-                </Button>
+              <p className="text-center text-xs text-muted-foreground">PDF or DOCX, up to 10MB</p>
+              {isUploading && (
+                <p className="mt-4 max-w-sm text-center text-sm text-muted-foreground">
+                  Your resume upload is currently processing in the background. You may cancel it
+                  to stop the extraction and may "Choose a resume file" right away.
+                </p>
               )}
             </div>
-            <p className="text-xs text-muted-foreground">PDF or DOCX, up to 10MB</p>
+            {isUploading && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleCancel}
+                disabled={cancelUpload.isPending}
+              >
+                <X className="h-4 w-4" />
+                {cancelUpload.isPending ? "Cancelling..." : "Cancel"}
+              </Button>
+            )}
           </div>
         </div>
         <input
@@ -300,13 +362,6 @@ function UploadCard({ onUploaded }: { onUploaded: (resumeId: string) => void }) 
         {displayError && (
           <p role="alert" className="text-sm text-destructive">
             {displayError}
-          </p>
-        )}
-        {showCancelNotice && (
-          <p className="max-w-sm text-sm text-muted-foreground">
-            Upload cancelled. Note: the analysis may still be running on the server and could
-            still add an entry to your history in a few minutes — check back before uploading
-            the same file again.
           </p>
         )}
       </CardContent>

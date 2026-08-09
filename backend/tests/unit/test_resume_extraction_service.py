@@ -87,8 +87,16 @@ class FakeStorage:
         self.uploaded.pop(key, None)
 
 
+DEFAULT_RESUME_TEXT = (
+    "Some resume text. Led migration of monolith to microservices, cutting deploy time 40%.\n"
+    "SKILLS\nPython, PostgreSQL"
+)
+
+
 class FakeExtractor:
-    def __init__(self, *, text: str = "Some resume text", error: Exception | None = None) -> None:
+    def __init__(
+        self, *, text: str = DEFAULT_RESUME_TEXT, error: Exception | None = None
+    ) -> None:
         self.text = text
         self.error = error
 
@@ -450,10 +458,172 @@ class TestUploadAndExtract:
         assert len(resume.extracted_data["experience"]) == 1
         assert resume.extracted_data["experience"][0]["company"] == "Acme"
 
+    async def test_dropped_bullet_markers_are_restored_from_source(self) -> None:
+        """Live-observed with Groq's llama-3.3-70b-versatile: the prompt
+        has explicit, worked-example instructions to preserve a source
+        line's "• " prefix into the description field (the UI renders
+        "• "-prefixed lines as an actual bulleted list — see
+        ExperienceSection.tsx's DescriptionText) — this holds on some
+        models but not others. Groq kept every line's content, order,
+        and the newlines between them completely intact, but stripped
+        the "• " prefix from every single line, even the ones a
+        different model preserved correctly from the exact same prompt.
+        Restored deterministically from the resume's own text rather
+        than chasing another provider-specific prompt tweak. Mirrors the
+        real resume structure that surfaced this: a plain intro line
+        with no bullet, followed by genuinely bulleted lines.
+        """
+        resume_text = (
+            "EXPERIENCE\n"
+            "Acme Corp | Engineer | Jan 2020 - Present\n"
+            "Led a distributed team across three time zones.\n"
+            "• Reduced infrastructure spend by 30%.\n"
+            "• Shipped three major releases this year.\n"
+        )
+        description_value = (
+            "Led a distributed team across three time zones.\\n"
+            "Reduced infrastructure spend by 30%.\\n"
+            "Shipped three major releases this year."
+        )
+        reply = f"""{{
+          "headline": null, "summary": null, "skills": [],
+          "experience": [
+            {{"title": "Engineer", "company": "Acme Corp", "location": null,
+             "start_date": "2020-01-01", "end_date": null,
+             "description": "{description_value}"}}
+          ],
+          "education": [], "certifications": []
+        }}"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        description = resume.extracted_data["experience"][0]["description"]
+        assert description == (
+            "Led a distributed team across three time zones.\n"
+            "• Reduced infrastructure spend by 30%.\n"
+            "• Shipped three major releases this year."
+        )
+
+    async def test_wrongly_added_bullet_marker_is_stripped(self) -> None:
+        """Live-observed on qwen2.5:3b: a two-role resume where the
+        FIRST role was 100% bulleted in the source (no intro line) and
+        the SECOND role had a genuine plain intro line before its
+        bullets. The model correctly bulleted every line of the first
+        role, then over-generalized that pattern onto the second role's
+        intro line too — bulleting a line the source never bulleted.
+        The earlier, add-only version of this fix couldn't catch this
+        at all; it must now be stripped back off.
+        """
+        resume_text = (
+            "EXPERIENCE\n"
+            "Acme Corp | Engineer | Jan 2020 - Present\n"
+            "Led a distributed team across three time zones on a major platform.\n"
+            "• Reduced infrastructure spend by 30% within the first year.\n"
+            "• Shipped three major releases across the fiscal year.\n"
+        )
+        description_value = (
+            "• Led a distributed team across three time zones on a major platform.\\n"
+            "• Reduced infrastructure spend by 30% within the first year.\\n"
+            "• Shipped three major releases across the fiscal year."
+        )
+        reply = f"""{{
+          "headline": null, "summary": null, "skills": [],
+          "experience": [
+            {{"title": "Engineer", "company": "Acme Corp", "location": null,
+             "start_date": "2020-01-01", "end_date": null,
+             "description": "{description_value}"}}
+          ],
+          "education": [], "certifications": []
+        }}"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        description = resume.extracted_data["experience"][0]["description"]
+        assert description == (
+            "Led a distributed team across three time zones on a major platform.\n"
+            "• Reduced infrastructure spend by 30% within the first year.\n"
+            "• Shipped three major releases across the fiscal year."
+        )
+
+    async def test_bullet_restored_despite_a_dropped_trademark_symbol(self) -> None:
+        """Real bug caught live: the source line was genuinely bulleted
+        and read "...AI-Empowered SAFe® programs...", but the model
+        reproduced every actual word correctly while dropping the "®"
+        trademark symbol — which broke the exact/substring match this
+        restoration relies on, since a plain lowercase+whitespace
+        normalization doesn't account for decorative symbols a model can
+        silently drop. The bullet must still be restored.
+        """
+        resume_text = (
+            "EXPERIENCE\n"
+            "Acme Corp | Engineer | Jan 2020 - Present\n"
+            "Some intro line that is long enough to be checked properly here.\n"
+            "• Design and deliver AI-Empowered SAFe® programs for enterprise teams.\n"
+        )
+        description_value = (
+            "Some intro line that is long enough to be checked properly here.\\n"
+            "Design and deliver AI-Empowered SAFe programs for enterprise teams."
+        )
+        reply = f"""{{
+          "headline": null, "summary": null, "skills": [],
+          "experience": [
+            {{"title": "Engineer", "company": "Acme Corp", "location": null,
+             "start_date": "2020-01-01", "end_date": null,
+             "description": "{description_value}"}}
+          ],
+          "education": [], "certifications": []
+        }}"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        description = resume.extracted_data["experience"][0]["description"]
+        assert description == (
+            "Some intro line that is long enough to be checked properly here.\n"
+            "• Design and deliver AI-Empowered SAFe programs for enterprise teams."
+        )
+
     async def test_career_highlights_without_a_title_are_dropped_not_fatal(self) -> None:
         resumes = FakeResumeRepository()
         storage = FakeStorage()
-        extractor = FakeExtractor()
+        extractor = FakeExtractor(
+            text="Some resume text. Improved flow efficiency by 25%. More text."
+        )
         reply = """{
           "headline": null, "summary": null, "skills": [],
           "experience": [], "education": [], "certifications": [],
@@ -516,7 +686,7 @@ class TestUploadAndExtract:
         }"""
         resumes = FakeResumeRepository()
         storage = FakeStorage()
-        extractor = FakeExtractor()
+        extractor = FakeExtractor(text="CERTIFICATIONS\nPMP, PMI-ACP, CSM\nEXPERIENCE\nfoo")
         llm = FakeLLMService(replies=[incomplete_reply, complete_reply])
         svc = ResumeExtractionService(resumes, storage, extractor, llm)
 
@@ -546,7 +716,7 @@ class TestUploadAndExtract:
         }"""
         resumes = FakeResumeRepository()
         storage = FakeStorage()
-        extractor = FakeExtractor()
+        extractor = FakeExtractor(text="CERTIFICATIONS\nPMP\nEXPERIENCE\nfoo")
         llm = FakeLLMService(reply=reply)
         svc = ResumeExtractionService(resumes, storage, extractor, llm)
 
@@ -577,7 +747,14 @@ class TestUploadAndExtract:
         }"""
         resumes = FakeResumeRepository()
         storage = FakeStorage()
-        extractor = FakeExtractor()
+        # Deliberately only "PMP" in the source text (matching the
+        # model's own certifications array exactly) — the retry itself
+        # is still triggered by the self-reported certification_names_found
+        # mismatch (3 vs 1) below, independent of the heuristic source
+        # count; keeping the two aligned here isolates this test to the
+        # retry-cap behavior alone, without also exercising the separate,
+        # already-tested backfill-of-missing-names path.
+        extractor = FakeExtractor(text="CERTIFICATIONS\nPMP\nEXPERIENCE\nfoo")
         llm = FakeLLMService(reply=incomplete_reply)
         svc = ResumeExtractionService(resumes, storage, extractor, llm)
 
@@ -637,13 +814,17 @@ class TestUploadAndExtract:
         assert resume.extracted_data is not None
         assert len(resume.extracted_data["certifications"]) == 3
 
-    async def test_a_name_still_missing_after_retry_is_backfilled_via_a_separate_call(
+    async def test_a_name_still_missing_after_retry_is_backfilled_as_not_specified(
         self,
     ) -> None:
-        """The real fix for the live-observed failure: a name the model
-        never wrote at all, even after a retry, is unioned in afterward
-        via a small, separate issuer-inference call — rather than being
-        silently lost the way it was before this existed.
+        """A name the model never wrote at all, even after a retry, is
+        unioned in afterward with the honest "not specified" issuer —
+        deterministic, no extra LLM call. This used to ask a small,
+        separate call to infer a real issuer for exactly this kind of
+        name; removed after a real, explicitly requested product change
+        (see _verified_issuer's docstring): a name reaching this path
+        already means no issuer was ever stated for it in the resume's
+        own text, so there's nothing legitimate to look up.
         """
         resume_text = (
             "CERTIFICATIONS\nPMP | CSM | Digital Product Management\nEXPERIENCE\nfoo"
@@ -657,13 +838,12 @@ class TestUploadAndExtract:
           ],
           "career_highlights": []
         }"""
-        backfill_reply = '{"Digital Product Management": "Product School"}'
         resumes = FakeResumeRepository()
         storage = FakeStorage()
         extractor = FakeExtractor(text=resume_text)
-        # Both extraction attempts return the same incomplete result (a
-        # genuinely stubborn miss), then the 3rd call is the backfill.
-        llm = FakeLLMService(replies=[incomplete_reply, incomplete_reply, backfill_reply])
+        # Both extraction attempts return the same incomplete result — a
+        # genuinely stubborn miss, no 3rd (backfill) call anymore.
+        llm = FakeLLMService(replies=[incomplete_reply, incomplete_reply])
         svc = ResumeExtractionService(resumes, storage, extractor, llm)
 
         resume = await svc.upload_and_extract(
@@ -674,23 +854,243 @@ class TestUploadAndExtract:
             content_type=PDF_CONTENT_TYPE,
         )
 
-        assert len(llm.calls) == 3  # 2 extraction attempts + 1 backfill call
-        assert llm.calls[2]["use_case"] == "resume_certification_issuer_backfill"
+        assert len(llm.calls) == 2  # both are the extraction retry, nothing else
         assert resume.extracted_data is not None
         certifications = resume.extracted_data["certifications"]
         assert len(certifications) == 3
         backfilled = next(c for c in certifications if c["name"] == "Digital Product Management")
-        assert backfilled["issuing_organization"] == "Product School"
+        assert backfilled["issuing_organization"] == "Not specified in resume"
 
-    async def test_backfill_failure_does_not_fail_the_whole_resume(self) -> None:
-        """The bonus enrichment step is best-effort — a provider error
-        on the small backfill call must not turn an otherwise-successful
-        extraction into a failed resume."""
-        resume_text = (
-            "CERTIFICATIONS\nPMP | CSM | Digital Product Management\nEXPERIENCE\nfoo"
-        )
-        incomplete_reply = """{
+    async def test_unstated_issuer_is_overwritten_even_for_well_known_credentials(self) -> None:
+        """Live-observed on a real resume that lists certifications as a
+        bare flat list with zero issuer information anywhere ("PMP |
+        CSM | SSGB | ..."): the model filled in real-world issuers from
+        general knowledge for the well-known ones — some correct (PMP ->
+        PMI), but at least one factually wrong (the user's actual SSGB
+        is from a different organization than the model's guess), with
+        nothing distinguishing a right guess from a wrong one. Per an
+        explicit product decision after that finding, issuing_organization
+        must now come ONLY from what the resume text itself states, no
+        matter how well-known the credential — this resume states none,
+        so every certification's issuer is overwritten to "Not specified
+        in resume" regardless of what the model returned. A genuinely
+        resume-stated issuer must still survive.
+        """
+        resume_text = "CERTIFICATIONS\nPMP | CSM | SSGB\nEXPERIENCE\nfoo"
+        reply = """{
           "headline": null, "summary": null, "skills": [],
+          "experience": [], "education": [],
+          "certifications": [
+            {"name": "PMP", "issuing_organization": "PMI (Project Management Institute)"},
+            {"name": "CSM", "issuing_organization": "Scrum Alliance"},
+            {"name": "SSGB", "issuing_organization": "Six Sigma/ASQ"}
+          ],
+          "career_highlights": []
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        certifications = resume.extracted_data["certifications"]
+        assert len(certifications) == 3
+        assert all(c["issuing_organization"] == "Not specified in resume" for c in certifications)
+
+    async def test_null_issuer_gets_the_fallback_not_dropped(self) -> None:
+        """Real regression caught live on qwen2.5:3b: a weaker model
+        correctly extracted every certification name but wrote null for
+        issuing_organization on ALL of them instead of the literal "Not
+        specified in resume" string the prompt asks for. The code used
+        to require a non-empty issuer just to keep the entry at all —
+        with every issuer null, every certification was silently
+        dropped, tripping the "all discarded" safety check and failing
+        the whole upload outright (a much worse outcome than the
+        original bug). Now that "not specified" is the expected common
+        case rather than a rare fallback, a missing issuer must not cost
+        the certification name itself — it defaults to the honest
+        fallback in code instead of depending on the model to write it.
+        """
+        resume_text = "CERTIFICATIONS\nPMP | CSM\nEXPERIENCE\nfoo"
+        reply = """{
+          "headline": null, "summary": null, "skills": [],
+          "experience": [], "education": [],
+          "certifications": [
+            {"name": "PMP", "issuing_organization": null},
+            {"name": "CSM", "issuing_organization": null}
+          ],
+          "career_highlights": []
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.status == "parsed"  # not "failed" — this is the actual regression
+        assert resume.extracted_data is not None
+        certifications = resume.extracted_data["certifications"]
+        assert len(certifications) == 2
+        assert all(c["issuing_organization"] == "Not specified in resume" for c in certifications)
+
+    async def test_issuer_actually_stated_in_the_resume_is_kept(self) -> None:
+        """The opposite case: when the resume text itself explicitly
+        pairs a certification with an issuer, that stated issuer must
+        survive verification, not be discarded along with the inferred
+        ones."""
+        resume_text = (
+            "CERTIFICATIONS\n"
+            "PMP - Project Management Institute\n"
+            "EXPERIENCE\nfoo"
+        )
+        reply = """{
+          "headline": null, "summary": null, "skills": [],
+          "experience": [], "education": [],
+          "certifications": [
+            {"name": "PMP", "issuing_organization": "Project Management Institute"}
+          ],
+          "career_highlights": []
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        certifications = resume.extracted_data["certifications"]
+        assert len(certifications) == 1
+        assert certifications[0]["issuing_organization"] == "Project Management Institute"
+
+    async def test_reversed_skill_name_and_category_are_swapped_back(self) -> None:
+        """Live-observed on qwen2.5:3b, and a striking case: the prompt's
+        own worked example explicitly shows {"name": "Agile & Scaling",
+        "category": "SAFe 6"} as a WRONG output to avoid — the model
+        reproduced that exact reversed shape for real, on a resume whose
+        real "CORE COMPETENCIES" section genuinely groups skills under
+        "Agile & Scaling" as a subheading with several individual skills
+        beneath it. Detected without needing the source text at all: a
+        subheading legitimately repeats across several skill entries, an
+        individual skill name essentially never does — so whichever
+        value repeats is treated as the subheading regardless of which
+        JSON key the model put it under, and swapped into "category" if
+        it was wrongly sitting in "name".
+        """
+        resume_text = (
+            "CORE COMPETENCIES\n"
+            "Agile & Scaling: SAFe 6, Lean Portfolio Management, Scrum\n"
+            "EXPERIENCE\nfoo"
+        )
+        reply = """{
+          "headline": null, "summary": null,
+          "skills": [
+            {"name": "Agile & Scaling", "category": "SAFe 6"},
+            {"name": "Agile & Scaling", "category": "Lean Portfolio Management"},
+            {"name": "Agile & Scaling", "category": "Scrum"}
+          ],
+          "experience": [], "education": [], "certifications": []
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        skills = resume.extracted_data["skills"]
+        assert len(skills) == 3
+        assert {s["name"] for s in skills} == {"SAFe 6", "Lean Portfolio Management", "Scrum"}
+        assert all(s["category"] == "Agile & Scaling" for s in skills)
+
+    async def test_skill_name_that_happens_to_repeat_without_a_category_is_untouched(
+        self,
+    ) -> None:
+        """A skill name repeated with no category attached at all isn't
+        the reversed-subheading pattern (nothing to swap it with) — left
+        exactly as the model returned it rather than guessing."""
+        resume_text = "SKILLS\nPython, Python, SQL\nEXPERIENCE\nfoo"
+        reply = """{
+          "headline": null, "summary": null,
+          "skills": [
+            {"name": "Python", "category": null},
+            {"name": "Python", "category": null},
+            {"name": "SQL", "category": null}
+          ],
+          "experience": [], "education": [], "certifications": []
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        skills = resume.extracted_data["skills"]
+        assert len(skills) == 3
+        assert all(s["name"] == "Python" or s["name"] == "SQL" for s in skills)
+        assert all(s["category"] is None for s in skills)
+
+    async def test_no_skills_section_forces_empty_skills_list(self) -> None:
+        """Live-observed on a real resume with no Skills/Core
+        Competencies heading anywhere (only Executive Summary,
+        Certifications, Professional Experience): the model invented a
+        "skills" list anyway by mining noun phrases out of the Executive
+        Summary's prose and lifting a near-duplicate of a certification
+        name — a prompt instruction for this exact failure mode ("empty
+        skills array is correct when no dedicated section exists") had
+        already been tried and did not hold. Caught deterministically
+        now: no heading means the model's entire skills output for this
+        resume is discarded, not just the parts that happen to overlap
+        certifications (see skills_section_detector.py)."""
+        resume_text = "CERTIFICATIONS\nPMP | CSM\nEXPERIENCE\nSome text here."
+        reply = """{
+          "headline": null, "summary": null,
+          "skills": [
+            {"name": "PMP", "category": null},
+            {"name": "CSM", "category": null},
+            {"name": "Stakeholder Management", "category": null}
+          ],
           "experience": [], "education": [],
           "certifications": [
             {"name": "PMP", "issuing_organization": "PMI"},
@@ -698,18 +1098,10 @@ class TestUploadAndExtract:
           ],
           "career_highlights": []
         }"""
-
-        class FlakyOnThirdCallLLM(FakeLLMService):
-            async def generate(self, **kwargs):  # type: ignore[no-untyped-def]
-                if len(self.calls) == 2:  # about to be the 3rd (backfill) call
-                    self.calls.append({"use_case": kwargs["use_case"], "input_variables": {}})
-                    raise CareerCompassError("provider down", code="AI_PROVIDER_REQUEST_FAILED")
-                return await super().generate(**kwargs)
-
         resumes = FakeResumeRepository()
         storage = FakeStorage()
         extractor = FakeExtractor(text=resume_text)
-        llm = FlakyOnThirdCallLLM(replies=[incomplete_reply, incomplete_reply])
+        llm = FakeLLMService(reply=reply)
         svc = ResumeExtractionService(resumes, storage, extractor, llm)
 
         resume = await svc.upload_and_extract(
@@ -720,9 +1112,437 @@ class TestUploadAndExtract:
             content_type=PDF_CONTENT_TYPE,
         )
 
-        assert resume.status == "parsed"  # not "failed" — backfill errors are swallowed
         assert resume.extracted_data is not None
-        assert len(resume.extracted_data["certifications"]) == 2  # missing name just not added
+        assert resume.extracted_data["skills"] == []
+
+    async def test_no_certifications_section_forces_empty_certifications_list(self) -> None:
+        """Live-observed on a real resume with only a Professional
+        Experience section (no Certifications/Licenses heading
+        anywhere): the model produced 7 "certifications" that were
+        never invented from nothing — they were pulled verbatim out of
+        an experience bullet like "Delivered SAFe® certification
+        programs, including Leading SAFe, Scrum Master, Product Owner/
+        Product Manager, DevOps, and Agile Software Engineer", confusing
+        certification programs this person DELIVERS to others with
+        certifications this person HOLDS. Caught deterministically, same
+        rule as the skills-section gate above: no dedicated
+        Certifications heading anywhere means the model's entire
+        certifications output for this resume is discarded, reusing
+        certification_line_parser's own heading detection.
+        """
+        resume_text = (
+            "PROFESSIONAL EXPERIENCE\n"
+            "Acme Corp | Agile Coach | Jan 2020 - Present\n"
+            "Delivered SAFe certification programs, including Leading SAFe, "
+            "Scrum Master, and Product Owner/Product Manager.\n"
+        )
+        reply = """{
+          "headline": null, "summary": null, "skills": [],
+          "experience": [], "education": [],
+          "certifications": [
+            {"name": "Leading SAFe", "issuing_organization": null},
+            {"name": "Scrum Master", "issuing_organization": null},
+            {"name": "Product Owner/Product Manager", "issuing_organization": null}
+          ],
+          "career_highlights": []
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        assert resume.extracted_data["certifications"] == []
+
+    async def test_skills_near_duplicating_a_certification_are_dropped(self) -> None:
+        """With a genuine Skills section present (so the no-section rule
+        above doesn't apply), a skill entry that's merely a differently-
+        worded near-duplicate of a certification name — not an exact
+        match — must still be dropped. Real bug caught live: "SAFe 6
+        Practice Consultant" (skill) vs. "Advanced SAFe 6 Practice
+        Consultant" (certification) slipped through the old exact-match
+        check into Core Competencies. A genuinely distinct skill in the
+        same list must survive."""
+        resume_text = (
+            "CERTIFICATIONS\nAdvanced SAFe 6 Practice Consultant\n"
+            "SKILLS\nSAFe 6 Practice Consultant, Stakeholder Management\n"
+            "EXPERIENCE\nSome text here."
+        )
+        reply = """{
+          "headline": null, "summary": null,
+          "skills": [
+            {"name": "SAFe 6 Practice Consultant", "category": null},
+            {"name": "Stakeholder Management", "category": null}
+          ],
+          "experience": [], "education": [],
+          "certifications": [
+            {"name": "Advanced SAFe 6 Practice Consultant",
+             "issuing_organization": "Scaled Agile, Inc."}
+          ],
+          "career_highlights": []
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        assert resume.extracted_data["skills"] == [
+            {"name": "Stakeholder Management", "category": None}
+        ]
+
+    async def test_short_skill_name_matching_a_certification_is_not_dropped(self) -> None:
+        """Real regression caught live on a genuine resume: "LeSS" and
+        "SAFe 6" are both legitimately listed as BOTH a Core Competencies
+        skill AND (separately) a held certification — a person can know
+        a framework/methodology (the skill) and also hold a specific
+        credential related to it (the certification), and a resume can
+        deliberately mention both. Both got wrongly dropped from
+        skills: "LeSS" via an exact name collision with the
+        certification "LeSS" itself, "SAFe 6" as a coincidental
+        substring of the much longer certification "Advanced SAFe 6
+        Practice Consultant". Short names are now exempt from this
+        dedup check entirely — a longer, genuinely-duplicated name (see
+        the test above) must still be caught.
+        """
+        resume_text = (
+            "CERTIFICATIONS\nAdvanced SAFe 6 Practice Consultant, LeSS\n"
+            "SKILLS\nSAFe 6, LeSS, Stakeholder Management\n"
+            "EXPERIENCE\nSome text here."
+        )
+        reply = """{
+          "headline": null, "summary": null,
+          "skills": [
+            {"name": "SAFe 6", "category": null},
+            {"name": "LeSS", "category": null},
+            {"name": "Stakeholder Management", "category": null}
+          ],
+          "experience": [], "education": [],
+          "certifications": [
+            {"name": "Advanced SAFe 6 Practice Consultant",
+             "issuing_organization": "Scaled Agile, Inc."},
+            {"name": "LeSS", "issuing_organization": "Not specified in resume"}
+          ],
+          "career_highlights": []
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        skill_names = {s["name"] for s in resume.extracted_data["skills"]}
+        assert skill_names == {"SAFe 6", "LeSS", "Stakeholder Management"}
+
+    async def test_career_highlight_not_present_in_source_text_is_dropped(self) -> None:
+        """The deterministic backstop for a real observed hallucination:
+        the model reproduced this prompt's own fictional worked example
+        text almost verbatim instead of leaving the list empty, on a
+        resume with no such content at all."""
+        resume_text = "JANE DOE\nSUMMARY\nSome real resume content.\nEXPERIENCE\nfoo"
+        reply = """{
+          "headline": null, "summary": null, "skills": [],
+          "experience": [], "education": [], "certifications": [],
+          "career_highlights": [
+            {"title": "Led a cross-functional redesign that cut onboarding time by 40%.",
+             "company": null, "description": null, "occurred_on": null}
+          ]
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        assert resume.extracted_data["career_highlights"] == []
+
+    async def test_career_highlight_duplicating_an_experience_bullet_is_dropped(self) -> None:
+        """Live-observed: a real bullet correctly extracted into
+        "experience" also got duplicated into "career_highlights" as a
+        separate entry, despite the prompt explicitly saying not to."""
+        resume_text = (
+            "JANE DOE\nSUMMARY\ntext\nEXPERIENCE\n"
+            "Acme Corp | Engineer\n"
+            "Led enterprise transformation across 11 portfolios and 55 teams, "
+            "improving delivery maturity."
+        )
+        reply = """{
+          "headline": null, "summary": null, "skills": [],
+          "experience": [
+            {"title": "Engineer", "company": "Acme Corp", "location": null,
+             "start_date": "2020-01-01", "end_date": null,
+             "description": "Led enterprise transformation across 11 portfolios and 55 teams, improving delivery maturity."}
+          ],
+          "education": [], "certifications": [],
+          "career_highlights": [
+            {"title": "Led enterprise transformation across 11 portfolios and 55 teams, improving delivery maturity.",
+             "company": null, "description": null, "occurred_on": null}
+          ]
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        assert len(resume.extracted_data["experience"]) == 1
+        assert resume.extracted_data["career_highlights"] == []
+
+    async def test_award_line_misplaced_in_career_highlights_is_reclassified(self) -> None:
+        """Live-observed on qwen2.5:3b: three genuine "Company - Award
+        Name: Description" recognition lines all landed in
+        career_highlights as single unsplit strings (company and
+        description both null), leaving key_achievements empty even
+        though the resume had real award content — despite the prompt's
+        own explicit worked example for this exact shape. Reclassified
+        deterministically: an unsplit career_highlights entry matching
+        that shape is moved to key_achievements with its fields split,
+        exactly as Step 2 specifies.
+        """
+        resume_text = (
+            "JANE DOE\nSUMMARY\ntext\nEXPERIENCE\nfoo\n"
+            "RECOGNITIONS\n"
+            "Bank of America - Honorary Mention: Recognized for training 2,000+ "
+            "employees on Agile delivery\n"
+        )
+        reply = """{
+          "headline": null, "summary": null, "skills": [],
+          "experience": [], "education": [], "certifications": [],
+          "career_highlights": [
+            {"title": "Bank of America - Honorary Mention: Recognized for training 2,000+ \
+employees on Agile delivery",
+             "company": null, "description": null, "occurred_on": null}
+          ],
+          "key_achievements": []
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        assert resume.extracted_data["career_highlights"] == []
+        key_achievements = resume.extracted_data["key_achievements"]
+        assert len(key_achievements) == 1
+        assert key_achievements[0]["company"] == "Bank of America"
+        assert key_achievements[0]["title"] == "Honorary Mention"
+        assert (
+            key_achievements[0]["description"]
+            == "Recognized for training 2,000+ employees on Agile delivery"
+        )
+
+    async def test_genuine_plain_highlight_with_a_dash_is_not_reclassified(self) -> None:
+        """A genuine plain career_highlights line that happens to
+        contain a dash and colon for unrelated reasons — but with an
+        overly long "award title" portion — must not be reclassified;
+        that length is exactly the signal that it's ordinary sentence
+        punctuation, not the company/award/detail structure."""
+        resume_text = (
+            "JANE DOE\nSUMMARY\ntext\nEXPERIENCE\nfoo\n"
+            "HIGHLIGHTS\n"
+            "Led a cross-functional redesign - reducing onboarding friction across "
+            "every team in the organization: cut setup time from 10 minutes to 2 "
+            "minutes company-wide\n"
+        )
+        reply = """{
+          "headline": null, "summary": null, "skills": [],
+          "experience": [], "education": [], "certifications": [],
+          "career_highlights": [
+            {"title": "Led a cross-functional redesign - reducing onboarding friction \
+across every team in the organization: cut setup time from 10 minutes to 2 minutes \
+company-wide",
+             "company": null, "description": null, "occurred_on": null}
+          ],
+          "key_achievements": []
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        assert resume.extracted_data["key_achievements"] == []
+        assert len(resume.extracted_data["career_highlights"]) == 1
+
+    async def test_short_career_highlight_is_not_dropped_by_source_verification(self) -> None:
+        """A short candidate is left unverified rather than risking a
+        false-positive drop of something real but brief."""
+        resume_text = "JANE DOE\nSUMMARY\ntext\nEXPERIENCE\nfoo"
+        reply = """{
+          "headline": null, "summary": null, "skills": [],
+          "experience": [], "education": [], "certifications": [],
+          "career_highlights": [
+            {"title": "Top performer.", "company": null, "description": null, "occurred_on": null}
+          ]
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        assert len(resume.extracted_data["career_highlights"]) == 1
+
+    async def test_null_headline_is_backfilled_from_the_raw_text(self) -> None:
+        """The deterministic backstop for the live-observed case: a
+        small local model returns headline=null even though the
+        resume's own text clearly has one on the line right after the
+        name."""
+        resume_text = (
+            "JANE DOE\n"
+            "Senior Data Platform Engineer | Cloud Infrastructure Lead\n"
+            "jane@example.com - 555-123-4567\n"
+            "SUMMARY\n"
+            "Experienced engineer...\n"
+        )
+        reply = """{
+          "headline": null, "summary": "Experienced engineer...", "skills": [],
+          "experience": [], "education": [], "certifications": [],
+          "career_highlights": []
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        assert (
+            resume.extracted_data["headline"]
+            == "Senior Data Platform Engineer | Cloud Infrastructure Lead"
+        )
+
+    async def test_headline_fallback_is_not_used_when_the_model_already_found_one(self) -> None:
+        """The fallback must never override a headline the model DID
+        extract, even if it differs (e.g. the model's own phrasing)."""
+        resume_text = "JANE DOE\nA Line That Would Also Look Like A Headline\nSUMMARY\ntext\n"
+        reply = """{
+          "headline": "Model's Own Headline", "summary": null, "skills": [],
+          "experience": [], "education": [], "certifications": [],
+          "career_highlights": []
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        assert resume.extracted_data["headline"] == "Model's Own Headline"
+
+    async def test_headline_stays_null_when_no_fallback_candidate_exists(self) -> None:
+        """A resume that genuinely has no headline line (e.g. straight
+        from name into a section heading) must not have one invented."""
+        resume_text = "JANE DOE\nSUMMARY\nExperienced engineer...\n"
+        reply = """{
+          "headline": null, "summary": "Experienced engineer...", "skills": [],
+          "experience": [], "education": [], "certifications": [],
+          "career_highlights": []
+        }"""
+        resumes = FakeResumeRepository()
+        storage = FakeStorage()
+        extractor = FakeExtractor(text=resume_text)
+        llm = FakeLLMService(reply=reply)
+        svc = ResumeExtractionService(resumes, storage, extractor, llm)
+
+        resume = await svc.upload_and_extract(
+            tenant_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            filename="resume.pdf",
+            content=b"garbage",
+            content_type=PDF_CONTENT_TYPE,
+        )
+
+        assert resume.extracted_data is not None
+        assert resume.extracted_data["headline"] is None
 
 
 @pytest.mark.unit

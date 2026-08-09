@@ -23,14 +23,16 @@ into items. It's used two ways by resume_extraction_service.py — as a
 ground truth to decide whether the LLM's own certifications array looks
 short (more reliable than trusting the model's self-report, which was
 tried and observed live to just echo back whatever the model had
-already written), and as a source of names to union in afterward via a
-small, separate issuer-inference call.
+already written), and as a source of names to union in afterward, each
+paired with the honest "not specified" issuer.
 
-Deliberately NOT trying to also resolve issuing_organization here —
-that requires real-world knowledge ("PMP" -> "PMI") this module has no
-business hand-coding a lookup table for; see
-_CERTIFICATION_ISSUER_BACKFILL_PROMPT_TEMPLATE in
-scripts/seed_platform_defaults.py for that half.
+Deliberately NOT trying to also resolve issuing_organization here.
+This module used to hand off to a separate LLM call for that (using
+real-world knowledge, e.g. "PMP" -> "PMI") — removed after a real,
+explicitly requested product change: issuing_organization is now only
+ever taken from what the resume text itself states (see
+resume_extraction_service.py's `_verified_issuer`), never inferred, so
+there's nothing for a lookup call to legitimately backfill here either.
 """
 
 from __future__ import annotations

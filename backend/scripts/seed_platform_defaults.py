@@ -190,6 +190,18 @@ NEVER put a subheading label itself into a "name" field, and NEVER combine multi
 skills into one "name" (e.g. "Python, Java, C++" is three separate skill objects, not \
 one). If a skill is listed on its own with no subheading grouping at all, set its \
 "category" to null.
+  "skills" is populated ONLY from a resume section that is actually about skills or \
+competencies — headings like "Skills", "Core Competencies", "Technical Skills", or \
+"Areas of Expertise". If the resume has no such section at all, "skills" MUST be an \
+empty array — this is the correct, expected output for a resume that simply doesn't \
+list skills separately, NOT a gap to fill from somewhere else. In particular, NEVER \
+copy or reuse entries from "certifications" into "skills" (a certification name like \
+"PMP" or "CSM" is not a skill, even though it names a competency area) and NEVER pull \
+individual words or phrases out of "experience" bullet points to manufacture skill \
+entries — both of these have been observed live on resumes with no dedicated skills \
+section, where the model produced a "skills" list that was really just a duplicate of \
+"certifications". An empty "skills" array is always preferable to inventing entries \
+this way.
   Worked example — for the input line "Agile & Scaling: SAFe 6, Lean Portfolio \
 Management, Scrum", the ONLY correct output is THREE separate objects, one per skill, \
 each with the subheading as "category":
@@ -238,23 +250,23 @@ source text."
   STEP 2 — "certifications": using "certification_names_found" as your worklist, write \
 exactly one object into "certifications" for EVERY entry in that array, in the same \
 order — "certifications".length MUST equal "certification_names_found".length, always. \
-For each name, "issuing_organization" is required and must NEVER be left null, empty, \
-or used as a reason to drop that entry — when the source text doesn't name an issuer, \
-use your general knowledge of well-known, publicly documented credentialing bodies to \
-fill it in (recognizing established public facts about a real credential, not inventing \
-information): e.g. "PMP" → "PMI (Project Management Institute)", "PMI-ACP" → "PMI \
-(Project Management Institute)", "CSM" → "Scrum Alliance", "ICP-ENT"/"ICP-CAT"/"ICP-ACC"/ \
-"ICP-ATF" (or any "ICP-*") → "ICAgile", "SSGB" → "Six Sigma"/"ASQ", any "SAFe"-named \
-credential (e.g. "SAFe Program Consultant", "Leading SAFe", "SAFe POPM") → \
-"Scaled Agile, Inc.", "LeSS" → "LeSS", "AWS Certified ..." → "Amazon Web Services", any \
-vendor/cloud-platform certification → that vendor, a university-branded program name → \
-that university, a vendor-branded program name → that vendor. Only for a genuinely \
-obscure or company-internal credential with no plausible public issuer at all should you \
-fall back to the nearest employer/context named in the surrounding text as \
-issuing_organization. Every name that made it into "certification_names_found" in Step 1 \
-gets an entry here — Step 2 is never a reason to drop something Step 1 already found; if \
-you are genuinely unsure of the right issuing_organization for a name, make your best \
-inference rather than omitting the entry.
+For each name, "issuing_organization" is required and must NEVER be left null or empty \
+— but it must ALSO never be a specific organization name unless the resume text ITSELF \
+states it, even for a certification whose real-world issuer is famous or obvious to you \
+(fictional example: even though you may know "PMP" is issued by PMI in the real world, \
+if the resume text merely lists "PMP" with no issuer mentioned anywhere near it, the \
+correct output is still "Not specified in resume" — never fill in outside/general \
+knowledge the source text doesn't actually contain). Only write a specific organization \
+name when the resume text visibly pairs the certification with one nearby — e.g. a line \
+reading "PMP (PMI)", "PMP - Project Management Institute", or "PMP, issued by PMI" all \
+count as the text stating it; a bare list like "PMP | CSM | SSGB" with no issuer text \
+anywhere does not, for any of those three, no matter how well-known each credential's \
+real issuer actually is. When the text doesn't state one, write the literal string \
+"Not specified in resume" as "issuing_organization" for that entry — this is a \
+completely valid, expected value, and will be the correct answer far more often than \
+not, since most resumes list certification names without also naming each issuer. Every \
+name that made it into "certification_names_found" in Step 1 gets an entry here — Step \
+2 is never a reason to drop something Step 1 already found.
   Before finalizing your answer, re-count both arrays and confirm \
 "certifications".length equals "certification_names_found".length. If they don't match, \
 you skipped a name while writing Step 2 — go back and add the missing object(s) rather \
@@ -316,45 +328,6 @@ no code fences. Do not write a resume summary, rewrite, or improved version of t
 resume text above — your only task is to extract it into the exact JSON shape \
 specified earlier. Your entire response must be a single valid JSON object: the \
 very first character must be "{{" and the very last character must be "}}".
-"""
-
-# A small, separate follow-up call — never the main extraction prompt —
-# used only when app/application/resume_intelligence/certification_line_parser.py's
-# deterministic, delimiter-based parse of the resume's own Certifications
-# section finds a name that never made it into the main extraction's
-# "certifications" array at all, even after a retry. Deliberately a
-# narrow, bounded task (map N already-known names to their issuer) rather
-# than re-running the full extraction again — a model that drops a name
-# during open-ended, multi-section extraction is still perfectly capable
-# of looking up an issuer for a name it's simply handed, since there's no
-# competing judgment call left for it to get wrong ("is this really a
-# certification" isn't a question this prompt ever asks).
-CERTIFICATION_ISSUER_BACKFILL_USE_CASE = "resume_certification_issuer_backfill"
-CERTIFICATION_ISSUER_BACKFILL_PROMPT_TEMPLATE = """You are given a list of certification \
-or credential names, taken verbatim from a resume's Certifications section. For EVERY \
-name listed, provide its most likely issuing organization, using your general knowledge \
-of real, publicly documented credentialing bodies — this is recognizing established \
-public facts about a real credential, not inventing information. Well-known examples: \
-"PMP" -> "PMI (Project Management Institute)", "CSM" -> "Scrum Alliance", any "ICP-*" -> \
-"ICAgile", any "SAFe"-named credential -> "Scaled Agile, Inc.", "AWS Certified ..." -> \
-"Amazon Web Services", any vendor/cloud-platform certification -> that vendor. For a \
-genuinely unfamiliar, program/course-style name with no widely-known issuer (this is \
-common and expected — these names are usually on this list precisely because they're \
-unfamiliar), infer the most plausible real-world issuer from the name's own subject \
-matter (e.g. a name naming a specific technology or platform -> that vendor; a name \
-describing a general professional discipline with no vendor/technology named in it -> \
-a plausible, real professional or educational body in that discipline). Every name in \
-the input list must appear as a key in your output — never omit one, and never respond \
-with a placeholder like "Unknown" or "N/A" when a plausible real-world guess is possible.
-
-Respond with ONLY a raw JSON object mapping each name (exactly as given, verbatim) to \
-its issuing_organization string — no prose, no markdown code fences, no explanation.
-
-Names:
-{cert_names}
-
-Example response shape (illustrative names only, not the actual input):
-{{"PMP": "PMI (Project Management Institute)", "Growth Marketing Leadership": "Reforge"}}
 """
 
 # Catalog of selectable models (Settings > AI Model lets a user pick
@@ -523,11 +496,6 @@ async def _seed_ai_platform_defaults(session: AsyncSession) -> None:
     )
     await _seed_prompt_version(
         session, use_case=RESUME_EXTRACTION_USE_CASE, template=RESUME_EXTRACTION_PROMPT_TEMPLATE
-    )
-    await _seed_prompt_version(
-        session,
-        use_case=CERTIFICATION_ISSUER_BACKFILL_USE_CASE,
-        template=CERTIFICATION_ISSUER_BACKFILL_PROMPT_TEMPLATE,
     )
 
     result = await session.execute(select(ModelVersionModel))

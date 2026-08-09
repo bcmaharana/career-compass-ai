@@ -36,23 +36,48 @@ export function useUploadResume() {
     mutationFn: ({
       file,
       targetRoleId,
+      uploadToken,
       signal,
     }: {
       file: File;
       targetRoleId: string | null;
+      // Correlates this upload with a later cancelUpload() call — see
+      // useCancelUpload below for why this is what makes Cancel a real,
+      // reliable server-side stop rather than just abandoning the fetch.
+      uploadToken: string;
       signal?: AbortSignal;
     }) =>
       apiClient.uploadFile<ResumeResponse>(
         "/api/v1/resume-intelligence/upload",
         file,
         "file",
-        targetRoleId ? { target_role_id: targetRoleId } : undefined,
+        {
+          ...(targetRoleId ? { target_role_id: targetRoleId } : {}),
+          upload_token: uploadToken,
+        },
         signal,
       ),
     onSuccess: (data) => {
       queryClient.setQueryData(KEYS.detail(data.id), data);
       queryClient.invalidateQueries({ queryKey: KEYS.list });
     },
+  });
+}
+
+/**
+ * Tells the backend to actually cancel a still-running extraction,
+ * looked up by the same upload_token the upload request was sent with —
+ * separate from (and more reliable than) aborting the browser's own
+ * fetch, which by itself does nothing to stop the server-side coroutine.
+ * See the backend's `/resume-intelligence/upload/{upload_token}/cancel`
+ * docstring for why this exists instead of relying on the server
+ * detecting the client's disconnect (verified live not to work in this
+ * dev environment's Docker Desktop networking).
+ */
+export function useCancelUpload() {
+  return useMutation({
+    mutationFn: (uploadToken: string) =>
+      apiClient.post<void>(`/api/v1/resume-intelligence/upload/${uploadToken}/cancel`),
   });
 }
 
