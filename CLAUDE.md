@@ -159,18 +159,33 @@ token minted after the halfway-life refresh).
 ## Environment — Docker is the source of truth now
 
 The user runs the **backend via Docker Compose**, not native `uvicorn`,
-after working through several rounds of environment issues. Two
-PowerShell scripts at the repo root handle the common flows:
+after working through several rounds of environment issues. PowerShell
+scripts at the repo root handle the common flows:
 
 - **`start-dev.ps1`** — run after every machine/Docker restart. Brings
   up Postgres/Redis/MinIO/backend, applies migrations, seeds platform
   defaults, launches the frontend dev server in a new window.
+- **`stop-dev.ps1`** — the reverse: `docker compose down` on the dev
+  stack (named volumes, so data survives), kills the frontend dev
+  server on port 5173, and stops the host Ollama process — but only if
+  `compass-backend-prod` isn't currently running, since prod's backend
+  also reaches Ollama via this same host
+  (`OLLAMA_BASE_URL=http://host.docker.internal:11434`) and killing it
+  out from under a live prod would break local-model AI chat there.
+- **`start-prod.ps1`** / **`stop-prod.ps1`** — the same start/stop
+  pair for the production stack (`docker-compose.prod.yml`:
+  `compass-*-prod`, reachable via the Cloudflare Tunnel). `stop-prod.ps1`
+  requires typed `yes` confirmation (or `-Force` to skip it) since it
+  takes the live app offline for real users — `down` still preserves
+  the named prod volumes, so real data survives the cycle. Both
+  verified live end-to-end, including a real round trip against the
+  public `scaledbrain.com` URL (2026-08-11).
 - **`sync-dependencies.ps1`** — run whenever `pyproject.toml` or
   `package.json` gains a new dependency. Rebuilds the backend Docker
   image, syncs the native venv (for editor/ruff/mypy support), runs
   `npm install`.
 
-**If you edit either `.ps1` script: ASCII only, no em-dashes or smart
+**If you edit any `.ps1` script: ASCII only, no em-dashes or smart
 quotes.** Windows PowerShell 5.1 misreads non-ASCII characters without a
 BOM and throws confusing parse errors ("missing closing paren") that
 have nothing to do with the actual code. This has happened once already.
