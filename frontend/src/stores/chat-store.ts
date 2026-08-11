@@ -10,6 +10,19 @@ import { create } from "zustand";
  * makes the thread disappear from the center panel on nav while the
  * underlying conversation stays retrievable in the database.
  *
+ * `conversationId` deliberately does NOT reset on `clear()` — a real bug,
+ * not just a docstring mismatch: `clear()` used to wipe it too, so the
+ * very next message after any navigation created a brand-new, empty
+ * conversation server-side instead of continuing the existing one,
+ * because ChatService only loads history for a conversation_id it's
+ * actually given (see chat_service.py's `_resolve_conversation_id` —
+ * `None` always creates fresh). The visible thread still starts empty on
+ * a new page (matching the stated intent above), but the next message
+ * sent from anywhere correctly continues the same conversation and
+ * reaches the LLM with its full prior history, even though the bubbles
+ * that produced that history aren't re-rendered on screen.
+ *
+
  * The user's own message is added optimistically (client-generated id,
  * before the request resolves) so it appears the instant they hit send —
  * `isSending` then drives ChatThread's typing indicator until the
@@ -44,5 +57,5 @@ export const useChatStore = create<ChatState>((set) => ({
   addAssistantMessage: (conversationId, message) =>
     set((state) => ({ conversationId, messages: [...state.messages, message] })),
   setSending: (isSending) => set({ isSending }),
-  clear: () => set({ conversationId: null, messages: [], isSending: false }),
+  clear: () => set({ messages: [], isSending: false }),
 }));
