@@ -260,7 +260,7 @@ export function ExperienceSection({
               />
             )}
             <div className="flex-1">
-              <p className="font-medium">{experience.title}</p>
+              <p className="text-sm font-medium md:text-base">{experience.title}</p>
               <p className="text-sm text-muted-foreground">
                 <span className="font-bold">{experience.company}</span>
                 {experience.location ? ` · ${experience.location}` : ""}

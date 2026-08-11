@@ -133,15 +133,15 @@ export function ProfileHeader() {
     // to show through — it's one continuous painted box the whole way
     // down, not two independently-positioned pieces that could ever
     // drift apart mid-scroll.
-    <div className="sticky top-0 z-10 bg-[hsl(var(--center-bg))] pt-3">
+    <div className="sticky top-0 z-10 min-w-0 bg-[hsl(var(--center-bg))] pt-3">
       <Card>
         <CardContent className="flex flex-col gap-4 pt-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-1 items-center gap-4">
+        <div className="flex min-w-0 items-start justify-between gap-4">
+          <div className="flex min-w-0 flex-1 items-center gap-4">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="group relative h-28 w-28 shrink-0 overflow-hidden rounded-full border border-border bg-muted"
+              className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-border bg-muted md:h-28 md:w-28"
               aria-label="Change profile photo"
             >
               {masterProfile?.photo_url && !photoLoadFailed ? (
@@ -178,7 +178,7 @@ export function ProfileHeader() {
                   />
                 </div>
               ) : (
-                <p className="font-medium">
+                <p className="text-sm font-medium md:text-base">
                   {profile?.headline || (
                     <span className="text-muted-foreground">No headline yet</span>
                   )}

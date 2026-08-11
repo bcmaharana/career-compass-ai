@@ -110,9 +110,9 @@ export function CareerProfilePage() {
   return (
     <ProfileScopeProvider targetRoleId={targetRoleId}>
       <div className="-mt-6 grid gap-3">
-        <div className="-mb-3 flex items-center justify-between">
+        <div className="-mb-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-lg font-semibold text-foreground">
+            <span className="text-base font-semibold text-foreground md:text-lg">
               Career Profile:{" "}
               <span className="bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] bg-clip-text text-transparent">
                 {activeRole ? activeRole.role_name : "Master"}

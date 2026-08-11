@@ -98,6 +98,18 @@
     --shell-header-h: 4.5rem;
     --shell-footer-h: 4.5rem;
     /*
+     * Mobile shell only (below `md` — AppHeader.tsx applies this via
+     * h-[var(--shell-mobile-header-h)] md:h-[var(--shell-header-h)],
+     * MobileShell.tsx/MobileNavMenu.tsx/MobileAccountMenu.tsx read it
+     * directly since they only ever render below `md` anyway). Shorter
+     * than desktop's --shell-header-h: mobile's header content is a
+     * pair of stacked h-7 icon buttons (the tallest thing in the header,
+     * ~58px including their own tightened gap) plus smaller title/
+     * purpose text, not the taller quote-of-the-day layout desktop's
+     * height was originally sized for.
+     */
+    --shell-mobile-header-h: 3.75rem;
+    /*
      * Originally shared by all four rail end boxes (brand/identity box
      * up top, last-login / Settings+Sign-out box at the bottom, on both
      * rails) — deliberately a separate variable from --shell-header-h
@@ -276,6 +288,27 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
+  }
+  /*
+   * Mobile shell only (below `md`). Tailwind's text, spacing, and sizing
+   * utilities are all rem-based, so scaling the root font-size here
+   * shrinks everything under it proportionally in one place — headings,
+   * body copy, button text and padding (buttonVariants' text-sm and
+   * h-8 through h-12 are rem too), Card/CardTitle/CardDescription,
+   * dropdown widths — the same page content that on desktop already
+   * reads at a comfortable size but felt oversized on a phone, without
+   * hand-tuning text utility classes across every feature page and
+   * shared component individually. AppHeader/AppFooter's own already-
+   * mobile-specific sizing (--shell-mobile-header-h, the h-7/h-4 icon
+   * boxes) is rem-based too, so it scales down together with this
+   * rather than on top of it — verified live that the icon-stack-to-
+   * header-height fit ratio those were tuned against stays intact, no
+   * clipping introduced.
+   */
+  @media (max-width: 767px) {
+    html {
+      font-size: 87.5%;
+    }
   }
   h1, h2, h3, h4 {
     @apply font-display;

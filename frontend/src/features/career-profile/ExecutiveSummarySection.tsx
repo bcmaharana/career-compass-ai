@@ -9,7 +9,7 @@ import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { Eraser } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * Split out of ProfileHeader.tsx so it can scroll normally beneath the
@@ -33,6 +33,20 @@ export function ExecutiveSummarySection() {
   const [isOpen, setIsOpen] = useState(true);
   const [summary, setSummary] = useState("");
   const [clearOpen, setClearOpen] = useState(false);
+
+  // This component doesn't remount when the Master/Target-Role-Profile
+  // switcher (TargetRolesWidget.tsx) changes `scope` — same instance,
+  // just refetching via a different query key — so without this, a
+  // section collapsed while looking at one role's summary silently
+  // stayed collapsed after switching to a different role's, hiding that
+  // role's summary by default instead of showing it. Also drops out of
+  // edit mode: staying in it across a scope change would otherwise leave
+  // the edit form showing the *previous* role's summary text next to the
+  // newly-loaded role's data underneath.
+  useEffect(() => {
+    setIsOpen(true);
+    setIsEditing(false);
+  }, [scope]);
 
   function openEdit() {
     setSummary(profile?.summary ?? "");

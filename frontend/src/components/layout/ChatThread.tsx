@@ -1,13 +1,23 @@
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
 
+interface ChatThreadProps {
+  /** "page" (default): below whatever page content is already in the
+   * center panel, with its own top margin/divider/heading (brief Part
+   * 1.2). "embedded": just the message list, no heading/margin/divider —
+   * for MobileChatSheet.tsx, whose Sheet already has its own "AI Chat"
+   * header bar; rendering "page"'s heading there would stack two
+   * identical "AI Chat" labels with a stray divider between them. */
+  variant?: "page" | "embedded";
+}
+
 /**
  * Renders the current AI Chat thread below whatever page content is
  * already in the center panel (brief Part 1.2) — never in place of it.
  * Renders nothing until the first message is sent, and disappears again
  * when AppShell clears the store on Left Nav navigation.
  */
-export function ChatThread() {
+export function ChatThread({ variant = "page" }: ChatThreadProps) {
   const messages = useChatStore((state) => state.messages);
   const isSending = useChatStore((state) => state.isSending);
 
@@ -16,8 +26,10 @@ export function ChatThread() {
   }
 
   return (
-    <div className="mt-10 border-t border-border pt-6">
-      <h2 className="mb-4 font-display text-sm font-semibold text-muted-foreground">AI Chat</h2>
+    <div className={variant === "page" ? "mt-10 border-t border-border pt-6" : undefined}>
+      {variant === "page" && (
+        <h2 className="mb-4 font-display text-sm font-semibold text-muted-foreground">AI Chat</h2>
+      )}
       <div className="flex flex-col gap-3">
         {messages.map((message) => (
           <div

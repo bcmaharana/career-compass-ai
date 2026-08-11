@@ -182,7 +182,7 @@ export function CertificationSection({
               />
             )}
             <div className="flex-1">
-              <p className="font-medium">{certification.name}</p>
+              <p className="text-sm font-medium md:text-base">{certification.name}</p>
               <p className="text-sm text-muted-foreground">
                 {certification.issuing_organization}
               </p>

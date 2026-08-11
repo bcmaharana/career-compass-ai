@@ -6,7 +6,17 @@ export const Card = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn("rounded-lg border border-border bg-card text-card-foreground", className)}
+      className={cn(
+        // min-w-0: every career-profile section card is a direct CSS
+        // Grid item (CareerProfilePage.tsx's `grid gap-3`), and grid
+        // items default to min-width: auto — letting a wide row of
+        // content (e.g. a crowded Add/Edit/Clear/Collapse/Move button
+        // row) force the card itself wider than its grid track instead
+        // of shrinking to fit, rather than truncating/wrapping within
+        // it. Harmless where a card already fits its track on its own.
+        "min-w-0 rounded-lg border border-border bg-card text-card-foreground",
+        className,
+      )}
       {...props}
     />
   ),
@@ -24,7 +34,17 @@ export const CardTitle = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLHea
   ({ className, ...props }, ref) => (
     <h3
       ref={ref}
-      className={cn("font-display text-lg font-semibold leading-tight", className)}
+      className={cn(
+        // Smaller on mobile than the plain text-lg this used everywhere
+        // — card headers there are often crowded with several action
+        // buttons (Add/Edit/Clear/Collapse/Move, see the career-profile
+        // section cards), squeezing the title into a narrow column where
+        // text-lg wraps to two lines and reads as oversized relative to
+        // everything around it. md: restores the original text-lg once
+        // there's room for it.
+        "font-display text-base font-semibold leading-tight md:text-lg",
+        className,
+      )}
       {...props}
     />
   ),

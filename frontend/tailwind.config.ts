@@ -13,7 +13,10 @@ export default {
   theme: {
     container: {
       center: true,
-      padding: "1.5rem",
+      // Tighter side padding on phone widths (1rem = 16px) than desktop
+      // (1.5rem) — a global win for content width on small screens without
+      // touching every page individually.
+      padding: { DEFAULT: "1rem", md: "1.5rem" },
       screens: { "2xl": "1400px" },
     },
     extend: {

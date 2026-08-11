@@ -177,7 +177,7 @@ export function EducationSection({
               />
             )}
             <div className="flex-1">
-              <p className="font-medium">{education.institution}</p>
+              <p className="text-sm font-medium md:text-base">{education.institution}</p>
               <p className="text-sm text-muted-foreground">
                 {[education.degree, education.field_of_study].filter(Boolean).join(", ")}
               </p>

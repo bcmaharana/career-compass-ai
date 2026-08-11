@@ -169,7 +169,7 @@ export function CareerHighlightsSection({
               />
             )}
             <div className="flex-1">
-              <p className="font-medium">{highlight.title}</p>
+              <p className="text-sm font-medium md:text-base">{highlight.title}</p>
               {highlight.company && (
                 <p className="text-sm text-muted-foreground">{highlight.company}</p>
               )}

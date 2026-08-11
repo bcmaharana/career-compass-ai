@@ -21,6 +21,7 @@ import { OverrideMergeDialog } from "@/components/ui/override-merge-dialog";
 import { Select } from "@/components/ui/select";
 import { formatDisplayDate, formatDisplayDateTime } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
+import { cn } from "@/lib/utils";
 import { useUploadProgressStore } from "@/stores/upload-progress-store";
 import { Trash2, X } from "lucide-react";
 import { type ChangeEvent, useRef, useState } from "react";
@@ -109,7 +110,7 @@ export function ResumeIntelligencePage() {
   return (
     <div className="grid gap-4">
       <div>
-        <h2 className="font-display text-xl font-semibold">Resume Intelligence</h2>
+        <h2 className="font-display text-lg font-semibold md:text-xl">Resume Intelligence</h2>
         <p className="text-sm text-muted-foreground">
           Upload resumes, review what we extract, and keep multiple versions tailored to
           different target roles.
@@ -134,8 +135,10 @@ export function ResumeIntelligencePage() {
               key={resume.id}
               className="flex items-center justify-between gap-4 rounded-md border border-border p-3"
             >
-              <div>
-                <p className="font-medium">{resume.original_filename}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium md:text-base">
+                  {resume.original_filename}
+                </p>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   <Badge variant={resume.status === "parsed" ? "accent" : "destructive"}>
                     {resume.status === "parsed" ? "Parsed" : "Failed"}
@@ -287,15 +290,27 @@ function UploadCard({ onUploaded }: { onUploaded: (resumeId: string) => void }) 
         <CardTitle>Upload New Resume</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col items-center gap-4 text-center">
-        <div className="flex w-full flex-wrap items-start justify-start gap-4">
+        {/* Desktop (md:flex): one row — label, dropdown, button, all
+            inline. Mobile (the default, plain grid): label+dropdown share
+            row 1; the button needs to sit directly below the *dropdown*
+            specifically, not below the label at the row's own left edge —
+            a plain flex-col stack can't express that (it only has one
+            shared left edge), but a 2-column grid does: the button block
+            is pinned to `col-start-2`, the same column the dropdown
+            occupies, so its left edge lines up with the dropdown's
+            regardless of the label's width to its left. `items-center`
+            works for both layouts (`align-items` isn't flex-specific), so
+            one class pair covers the row-1 label/dropdown centering in
+            both modes without needing separate grid/flex variants. */}
+        <div className="grid w-full grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 md:flex md:flex-row md:items-start md:justify-start">
           {targetRoles && targetRoles.length > 0 && (
-            <div className="flex items-center gap-2">
+            <>
               <label htmlFor="resume-target-role" className="whitespace-nowrap text-sm font-medium">
                 Target Role (optional):
               </label>
               <Select
                 id="resume-target-role"
-                className="w-56"
+                className="w-56 justify-self-start"
                 value={targetRoleId}
                 onChange={(e) => setTargetRoleId(e.target.value)}
               >
@@ -306,21 +321,14 @@ function UploadCard({ onUploaded }: { onUploaded: (resumeId: string) => void }) 
                   </option>
                 ))}
               </Select>
-            </div>
+            </>
           )}
-          {/* min-w-0 overrides flex items' default min-width:auto, which
-              otherwise refuses to shrink a box below its text's
-              preferred (unwrapped) width — without it, the processing
-              message below (bounded by max-w-sm, but still "wanting"
-              that full width) pushed this whole group's hypothetical
-              size past the row's remaining space, forcing the entire
-              row to wrap onto a new line instead of just letting the
-              message's own text wrap tighter. With it, the dropdown and
-              this button group stay side by side whenever there's room
-              (matching the original layout), and only the message
-              text's own line-wrapping adapts to however much space is
-              actually left. */}
-          <div className="flex min-w-0 items-start gap-2">
+          <div
+            className={cn(
+              "flex min-w-0 items-start gap-2",
+              targetRoles && targetRoles.length > 0 && "col-start-2",
+            )}
+          >
             <div className="flex min-w-0 flex-col items-center gap-1">
               <Button
                 type="button"
@@ -331,12 +339,6 @@ function UploadCard({ onUploaded }: { onUploaded: (resumeId: string) => void }) 
                 {isUploading ? "Analyzing your resume..." : "Choose a resume file"}
               </Button>
               <p className="text-center text-xs text-muted-foreground">PDF or DOCX, up to 10MB</p>
-              {isUploading && (
-                <p className="mt-4 max-w-sm text-center text-sm text-muted-foreground">
-                  Your resume upload is currently processing in the background. You may cancel it
-                  to stop the extraction and may "Choose a resume file" right away.
-                </p>
-              )}
             </div>
             {isUploading && (
               <Button
@@ -352,6 +354,12 @@ function UploadCard({ onUploaded }: { onUploaded: (resumeId: string) => void }) 
             )}
           </div>
         </div>
+        {isUploading && (
+          <p className="max-w-sm text-center text-sm text-muted-foreground">
+            Your resume upload is currently processing in the background. You may cancel it to
+            stop the extraction and may "Choose a resume file" right away.
+          </p>
+        )}
         <input
           ref={fileInputRef}
           type="file"
@@ -678,7 +686,7 @@ function ResumeReviewCard({
             onToggle={(i) => setSelectedExperience((prev) => toggleInSet(prev, i))}
             renderItem={(item) => (
               <>
-                <p className="font-medium">{item.title}</p>
+                <p className="text-sm font-medium md:text-base">{item.title}</p>
                 <p className="text-sm text-muted-foreground">{item.company}</p>
                 <p className="text-xs font-bold italic text-accent">
                   {formatDisplayDate(item.start_date)} –{" "}
@@ -697,7 +705,7 @@ function ResumeReviewCard({
             onToggle={(i) => setSelectedEducation((prev) => toggleInSet(prev, i))}
             renderItem={(item) => (
               <>
-                <p className="font-medium">{item.institution}</p>
+                <p className="text-sm font-medium md:text-base">{item.institution}</p>
                 {item.degree && <p className="text-sm text-muted-foreground">{item.degree}</p>}
               </>
             )}
@@ -712,7 +720,7 @@ function ResumeReviewCard({
             onToggle={(i) => setSelectedCertifications((prev) => toggleInSet(prev, i))}
             renderItem={(item) => (
               <>
-                <p className="font-medium">{item.name}</p>
+                <p className="text-sm font-medium md:text-base">{item.name}</p>
                 <p className="text-sm text-muted-foreground">{item.issuing_organization}</p>
               </>
             )}
@@ -727,7 +735,7 @@ function ResumeReviewCard({
             onToggle={(i) => setSelectedCareerHighlights((prev) => toggleInSet(prev, i))}
             renderItem={(item) => (
               <>
-                <p className="font-medium">{item.title}</p>
+                <p className="text-sm font-medium md:text-base">{item.title}</p>
                 {item.company && (
                   <p className="text-sm text-muted-foreground">{item.company}</p>
                 )}
@@ -744,7 +752,7 @@ function ResumeReviewCard({
             onToggle={(i) => setSelectedKeyAchievements((prev) => toggleInSet(prev, i))}
             renderItem={(item) => (
               <>
-                <p className="font-medium">{item.title}</p>
+                <p className="text-sm font-medium md:text-base">{item.title}</p>
                 {item.company && (
                   <p className="text-sm text-muted-foreground">{item.company}</p>
                 )}
@@ -816,7 +824,7 @@ function ReviewList<T>({
               checked={selected.has(index)}
               onChange={() => onToggle(index)}
             />
-            <div>{renderItem(item)}</div>
+            <div className="min-w-0 flex-1">{renderItem(item)}</div>
           </label>
         ))}
       </div>

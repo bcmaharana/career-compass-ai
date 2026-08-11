@@ -49,7 +49,7 @@ export function GapAnalysisSection({ cardBackground }: GapAnalysisSectionProps) 
             >
               <div className="flex items-center gap-2">
                 <Badge variant="accent">{gap.tag}</Badge>
-                <p className="font-medium">
+                <p className="text-sm font-medium md:text-base">
                   {gap.role_name}{" "}
                   <span className="text-sm font-normal italic text-muted-foreground">
                     ({gap.missing_skills.length})

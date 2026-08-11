@@ -102,17 +102,17 @@ function TargetRoleRequirementsRow({
 
   return (
     <div className={cn("flex flex-col gap-3 rounded-md border border-border p-4", rowClassName)}>
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Badge variant="accent">{targetRole.tag}</Badge>
-          <p className="font-medium">
+          <p className="text-sm font-medium md:text-base">
             {targetRole.role_name}{" "}
             <span className="text-sm font-normal italic text-muted-foreground">
               ({targetRole.required_skills.length})
             </span>
           </p>
         </div>
-        <div className={cn("flex items-center", ACTION_BUTTON_ROW_GAP)}>
+        <div className={cn("flex flex-wrap items-center", ACTION_BUTTON_ROW_GAP)}>
           <form onSubmit={handleAdd} className="flex items-center gap-1.5">
             <Input
               value={draft}

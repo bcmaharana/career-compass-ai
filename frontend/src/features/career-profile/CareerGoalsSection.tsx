@@ -193,7 +193,7 @@ export function CareerGoalsSection({
             )}
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <p className="font-medium">{goal.target_role}</p>
+                <p className="text-sm font-medium md:text-base">{goal.target_role}</p>
                 <Badge variant={STATUS_VARIANT[goal.status as GoalStatus]}>{goal.status}</Badge>
               </div>
               {goal.target_date && (

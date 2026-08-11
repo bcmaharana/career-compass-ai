@@ -23,6 +23,19 @@ type TargetRole = components["schemas"]["TargetRoleResponse"];
 const MAX_TARGET_ROLES = 10;
 const TAG_MAX_LENGTH = 3;
 
+interface TargetRolesWidgetProps {
+  /** Mobile only: fired alongside `navigate()` whenever the Master row or
+   * a specific target-role row is clicked, so MobileAccountMenu.tsx's
+   * dropdown closes itself the same way every other navigational element
+   * in AccountPanelContent already does (its own `onNavigate` prop) —
+   * this widget renders inside that dropdown's contextual middle section
+   * but, unlike AccountPanelContent's own Links, switches role via a
+   * plain `navigate()` call rather than a `<Link>`, so it never reached
+   * that close behavior on its own. The desktop rail (RightNav.tsx) has
+   * no such state to close, so it renders this widget without the prop. */
+  onNavigate?: () => void;
+}
+
 /**
  * Right Nav lower section for the Career Profile page specifically (UI
  * enhancement brief Part 2.5) — up to 10 current/future target roles,
@@ -36,7 +49,7 @@ const TAG_MAX_LENGTH = 3;
  * derived from the URL, not local component state, so it survives a
  * refresh and stays in sync if the URL changes some other way.
  */
-export function TargetRolesWidget() {
+export function TargetRolesWidget({ onNavigate }: TargetRolesWidgetProps) {
   const { data: targetRoles } = useTargetRoles();
   const addTargetRole = useAddTargetRole();
   const updateTargetRole = useUpdateTargetRole();
@@ -103,7 +116,10 @@ export function TargetRolesWidget() {
     <div className="flex flex-col gap-3 p-4">
       <button
         type="button"
-        onClick={() => navigate("/profile")}
+        onClick={() => {
+          navigate("/profile");
+          onNavigate?.();
+        }}
         className={cn(
           "flex items-center justify-between rounded-md px-2 py-1 text-left text-[11px] font-semibold",
           activeRoleId === null
@@ -136,7 +152,10 @@ export function TargetRolesWidget() {
             >
               <button
                 type="button"
-                onClick={() => navigate(`/profile?role=${role.id}`)}
+                onClick={() => {
+                  navigate(`/profile?role=${role.id}`);
+                  onNavigate?.();
+                }}
                 className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
               >
                 <Tooltip content={role.role_name} className="flex min-w-0 items-center gap-1.5">

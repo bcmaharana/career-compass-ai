@@ -1,75 +1,98 @@
-import { useChatComposer } from "@/hooks/useChatComposer";
-import { getErrorMessage } from "@/lib/errors";
-import { Send } from "lucide-react";
-import { useState } from "react";
-import type { FormEvent, KeyboardEvent } from "react";
+import { ChatComposerForm } from "@/components/layout/ChatComposerForm";
+import { Tooltip } from "@/components/ui/tooltip";
+import { formatLastLogin } from "@/lib/format-last-login";
+import { Clock, LogOut, Settings } from "lucide-react";
+import { Link } from "react-router-dom";
+
+interface AppFooterProps {
+  /** Logs the user out — threaded to the mobile-only right column's Sign
+   * out icon. MobileShell.tsx passes this — which is also what this
+   * component uses to decide it's in the mobile shell at all, rendering
+   * the left (clock)/right (Settings, Sign out) icon columns only when
+   * set. DesktopShell.tsx doesn't pass it, so those columns never render
+   * there and this is just the plain chat bar it always was. */
+  onLogout?: () => void;
+  /** Feeds the mobile-only left column's "last logged in" tooltip —
+   * mirrors DesktopShell.tsx's Left Nav bottom box, which has no mobile
+   * equivalent otherwise since that rail doesn't exist below `md`. */
+  lastLoginAt?: string;
+}
 
 /**
  * Fixed bottom region of the app shell (brief Part 1.2): a persistent AI
  * Chat input, present on every page. A sent message is appended to the
  * center panel by ChatThread.tsx (via the shared chat-store), never
- * rendered here — this footer only ever owns the input itself. The
- * AI Career Coach page (CoachPage.tsx) is a second entry point into the
- * exact same send flow — see useChatComposer.ts.
+ * rendered here. The AI Career Coach page (CoachPage.tsx) is a second
+ * entry point into the exact same send flow — see useChatComposer.ts.
  *
- * The user's own message is added to the store immediately (optimistic,
- * client-generated id) rather than waiting for the server round-trip —
- * see chat-store.ts's docstring for why that matters now that the
- * assistant reply is a real (and sometimes slow) LLM call.
+ * Shared by both DesktopShell and MobileShell rather than forked, mirroring
+ * AppHeader.tsx's own pattern exactly: on desktop this is just the chat
+ * composer at --shell-footer-h; on mobile it becomes a three-column bar at
+ * the shorter --shell-mobile-header-h (matching the header's height, same
+ * token reused for visual symmetry) — a left column with a Clock icon
+ * (tooltip shows the formatted last-login string, replacing what Left
+ * Nav's rail shows on desktop and has no other mobile home), the chat
+ * composer in the middle (flex-1), and a right column with Settings above
+ * Sign out, stacked vertically. Settings/Sign out used to also live in the
+ * mobile account dropdown's (MobileAccountMenu.tsx) own bottom box
+ * (AccountPanelContent's showSettingsAndSignOut) — moved here instead so
+ * there's one place for each action rather than two, now that the footer
+ * covers it; the dropdown still shows the target-roles-widget-or-settings-
+ * sub-nav content above where that box used to be.
+ *
+ * Both mobile-only columns share the exact same `h-7 w-7` box / `h-4 w-4`
+ * glyph sizing as AppHeader's own icon columns, for the same top/bottom
+ * visual symmetry — a `pb-[env(safe-area-inset-bottom)]` on the bar itself
+ * (not extra height) reserves room for the iOS home-indicator area inside
+ * the existing --shell-mobile-header-h box rather than growing past it,
+ * so the footer's total height still matches the header's exactly.
  */
-export function AppFooter() {
-  const [draft, setDraft] = useState("");
-  const { sendTurn, isPending, isError, error } = useChatComposer();
-
-  function submit() {
-    if (!draft.trim() || isPending) return;
-    sendTurn(draft);
-    setDraft("");
-  }
-
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    submit();
-  }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      submit();
-    }
-  }
+export function AppFooter({ onLogout, lastLoginAt }: AppFooterProps) {
+  const isMobile = Boolean(onLogout);
 
   return (
     <footer
-      className="fixed bottom-0 left-[var(--current-left-nav-w)] right-[var(--current-right-nav-w)] z-10 flex h-[var(--shell-footer-h)] items-center rainbow-border-t bg-[linear-gradient(to_bottom,#2A4382,#18284E)] px-6 transition-[left,right] duration-200 ease-out"
+      className="fixed bottom-0 left-[var(--current-left-nav-w)] right-[var(--current-right-nav-w)] z-10 flex h-[var(--shell-mobile-header-h)] items-stretch gap-3 rainbow-border-t bg-[linear-gradient(to_bottom,#2A4382,#18284E)] px-3 pb-[env(safe-area-inset-bottom)] transition-[left,right] duration-200 ease-out md:h-[var(--shell-footer-h)] md:items-center md:px-6 md:pb-0"
       aria-label="AI chat"
     >
-      <form onSubmit={handleSubmit} className="relative flex w-full items-center gap-3">
-        {isError && (
-          <p
-            role="alert"
-            className="absolute bottom-full left-0 mb-1.5 text-xs text-destructive"
+      {isMobile && (
+        <div className="flex shrink-0 flex-col justify-center border-r border-white/15 pr-3 md:hidden">
+          <Tooltip
+            content={lastLoginAt ? formatLastLogin(lastLoginAt) : "Welcome — this is your first login."}
+            placement="right"
           >
-            {getErrorMessage(error)}
-          </p>
-        )}
-        <textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={handleKeyDown}
-          rows={1}
-          placeholder="Ask Career Compass AI..."
-          className="h-11 flex-1 resize-none rounded-md border-none bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] px-3 py-2.5 text-sm font-medium text-primary outline-none placeholder:font-bold placeholder:text-primary/70 focus:ring-2 focus:ring-ring"
-        />
-        <button
-          type="submit"
-          disabled={!draft.trim() || isPending}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] text-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-          aria-label="Send message"
-        >
-          <Send className="h-4 w-4" />
-        </button>
-      </form>
+            <button
+              type="button"
+              aria-label="Last login time"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground"
+            >
+              <Clock className="h-4 w-4" />
+            </button>
+          </Tooltip>
+        </div>
+      )}
+
+      <ChatComposerForm className="min-w-0 flex-1" />
+
+      {onLogout && (
+        <div className="flex shrink-0 flex-col items-center justify-center gap-px border-l border-white/15 pl-3 md:hidden">
+          <Link
+            to="/settings"
+            aria-label="Settings"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground"
+          >
+            <Settings className="h-4 w-4" />
+          </Link>
+          <button
+            type="button"
+            onClick={onLogout}
+            aria-label="Sign out"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </footer>
   );
 }

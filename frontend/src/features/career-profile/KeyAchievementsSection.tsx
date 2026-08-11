@@ -168,7 +168,7 @@ export function KeyAchievementsSection({
               />
             )}
             <div className="flex-1">
-              <p className="font-medium">{achievement.title}</p>
+              <p className="text-sm font-medium md:text-base">{achievement.title}</p>
               {achievement.company && (
                 <p className="text-sm text-muted-foreground">{achievement.company}</p>
               )}
