@@ -56,8 +56,8 @@ Full rationale in `docs/adr/` and `docs/architecture/`.
 Requires Docker Desktop. On Windows, the fastest path:
 
 ```powershell
-git clone https://github.com/bcmaharana/carreer-compass-ai.git
-cd carreer-compass-ai
+git clone https://github.com/bcmaharana/career-compass-ai.git
+cd career-compass-ai
 .\start-dev.ps1
 ```
 

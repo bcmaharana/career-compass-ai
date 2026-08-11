@@ -15,7 +15,7 @@ At this point, you may see no Career Compass containers yet.
 # Step 2 — Start Career Compass infrastructure
 
 Open PowerShell: 
-# cd C:\Users\bcmah\workspace\carreer-compass-ai\infra
+# cd C:\Users\bcmah\workspace\career-compass-ai\infra
 
 Start containers:
 ## docker compose up -d
@@ -41,7 +41,7 @@ accepting connections
 
 Open another PowerShell window:
 
-## cd C:\Users\bcmah\workspace\carreer-compass-ai\backend
+## cd C:\Users\bcmah\workspace\career-compass-ai\backend
 
 Activate virtual environment:
 
@@ -67,7 +67,7 @@ Uvicorn running on http://127.0.0.1:8000
 
 Open another PowerShell window:
 
-## cd C:\Users\bcmah\workspace\carreer-compass-ai\frontend
+## cd C:\Users\bcmah\workspace\career-compass-ai\frontend
 
 Start:
 

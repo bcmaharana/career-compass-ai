@@ -9,7 +9,7 @@
 # no-ops on already-installed packages.
 #
 # Usage:
-#   cd C:\Users\bcmah\workspace\carreer-compass-ai
+#   cd C:\Users\bcmah\workspace\career-compass-ai
 #   .\sync-dependencies.ps1
 
 $ErrorActionPreference = "Stop"
