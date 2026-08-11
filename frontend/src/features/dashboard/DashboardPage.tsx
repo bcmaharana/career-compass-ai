@@ -1,17 +1,8 @@
 import { useCurrentUser } from "@/api/queries/auth";
 import { useHealthCheck } from "@/api/queries/health";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SystemStatusCard } from "@/features/dashboard/SystemStatusCard";
-import { cn } from "@/lib/utils";
-import { ClipboardList } from "lucide-react";
-
-// Temporary, not a real feature — a private Artifact page for tracking
-// backlog/up-next dev work between sessions, linked here for convenience.
-// Remove this card (and the constant) once that tracking moves somewhere
-// permanent, or is no longer needed.
-const BUILD_QUEUE_URL = "https://claude.ai/code/artifact/4fce51ad-9e84-411b-8cf2-12d382e7a391";
 
 /**
  * Placeholder dashboard. Its job so far is to prove the whole chain
@@ -80,24 +71,6 @@ export function DashboardPage() {
       </Card>
 
       <SystemStatusCard />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Build Queue</CardTitle>
-          <CardDescription>Backlog and up-next tracker for this project</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <a
-            href={BUILD_QUEUE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-          >
-            <ClipboardList className="h-4 w-4" />
-            Open Build Queue
-          </a>
-        </CardContent>
-      </Card>
     </div>
   );
 }

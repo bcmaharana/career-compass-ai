@@ -1,4 +1,4 @@
-import { LegalPageLayout, LegalSection } from "@/features/legal/LegalPageLayout";
+import { CONTACT_EMAIL, LegalPageLayout, LegalSection } from "@/features/legal/LegalPageLayout";
 
 export function PrivacyPolicyPage() {
   return (
@@ -126,8 +126,8 @@ export function PrivacyPolicyPage() {
           </li>
           <li>
             <strong>Ask questions or raise concerns</strong> about your information by emailing{" "}
-            <a href="mailto:bcmaharana@hotmail.com" className="underline">
-              bcmaharana@hotmail.com
+            <a href={`mailto:${CONTACT_EMAIL}`} className="underline">
+              {CONTACT_EMAIL}
             </a>
             .
           </li>
@@ -167,8 +167,8 @@ export function PrivacyPolicyPage() {
       <LegalSection title="10. Contact">
         <p>
           Questions about this Privacy Policy or your information can be sent to{" "}
-          <a href="mailto:bcmaharana@hotmail.com" className="underline">
-            bcmaharana@hotmail.com
+          <a href={`mailto:${CONTACT_EMAIL}`} className="underline">
+            {CONTACT_EMAIL}
           </a>
           .
         </p>

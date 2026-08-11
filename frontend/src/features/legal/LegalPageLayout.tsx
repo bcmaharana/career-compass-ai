@@ -2,6 +2,12 @@ import { Compass } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
+/** Single source of truth for the contact address shown across the
+ * Terms of Service and Privacy Policy — a dedicated support address,
+ * not a personal one, and defined once here rather than duplicated at
+ * every mailto: link so it only needs updating in one place. */
+export const CONTACT_EMAIL = "support@scaledbrain.com";
+
 interface LegalPageLayoutProps {
   title: string;
   effectiveDate: string;
@@ -49,8 +55,8 @@ export function LegalPageLayout({ title, effectiveDate, summary, children }: Leg
         <footer className="mt-12 border-t border-border pt-6 text-sm text-muted-foreground">
           <p>
             Questions about this document? Contact us at{" "}
-            <a href="mailto:bcmaharana@hotmail.com" className="text-foreground underline">
-              bcmaharana@hotmail.com
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-foreground underline">
+              {CONTACT_EMAIL}
             </a>
             .
           </p>

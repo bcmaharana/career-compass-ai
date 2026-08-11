@@ -1,4 +1,4 @@
-import { LegalPageLayout, LegalSection } from "@/features/legal/LegalPageLayout";
+import { CONTACT_EMAIL, LegalPageLayout, LegalSection } from "@/features/legal/LegalPageLayout";
 
 export function TermsOfServicePage() {
   return (
@@ -45,8 +45,8 @@ export function TermsOfServicePage() {
         <p>
           You are responsible for maintaining the confidentiality of your login credentials and
           for all activity that occurs under your account. Notify us promptly at{" "}
-          <a href="mailto:bcmaharana@hotmail.com" className="underline">
-            bcmaharana@hotmail.com
+          <a href={`mailto:${CONTACT_EMAIL}`} className="underline">
+            {CONTACT_EMAIL}
           </a>{" "}
           if you believe your account has been compromised. You agree to provide accurate
           information when creating and maintaining your account.
@@ -167,8 +167,8 @@ export function TermsOfServicePage() {
       <LegalSection title="13. Contact">
         <p>
           Questions about these Terms can be sent to{" "}
-          <a href="mailto:bcmaharana@hotmail.com" className="underline">
-            bcmaharana@hotmail.com
+          <a href={`mailto:${CONTACT_EMAIL}`} className="underline">
+            {CONTACT_EMAIL}
           </a>
           .
         </p>
