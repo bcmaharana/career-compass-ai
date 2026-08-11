@@ -309,6 +309,26 @@
     html {
       font-size: 87.5%;
     }
+    /*
+     * iOS Safari auto-zooms the entire page when a focused form control's
+     * *rendered* font-size is under 16px — a real, well-documented mobile
+     * Safari behavior, not a bug in this app's markup. The root scaling
+     * right above this is exactly what tripped it: every input styled
+     * with text-sm/text-xs (already under 16px on desktop, per Tailwind's
+     * own scale) dropped further below that threshold once scaled by
+     * 87.5%, so focusing basically any text field triggered an unwanted
+     * zoom. `!important` is deliberate here, not a shortcut — this needs
+     * to win over whatever text-* utility class an individual input
+     * already carries, wherever it's used, and overriding the effective
+     * font-size specifically to defeat this iOS behavior is one of the
+     * few conventionally-accepted uses of !important for exactly this
+     * problem. Sized in px, not rem, so it's a real 16px regardless of
+     * the root scaling above — a rem value here would just inherit the
+     * same shrink it's meant to counteract.
+     */
+    input, textarea, select {
+      font-size: 16px !important;
+    }
   }
   h1, h2, h3, h4 {
     @apply font-display;

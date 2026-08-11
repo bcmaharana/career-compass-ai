@@ -43,11 +43,11 @@ function UsageBar({
   const fraction = limit > 0 ? Math.min(1, Math.max(0, remaining / limit)) : 0;
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span>
+      <div className="flex min-w-0 items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span className="min-w-0 flex-1 truncate">
           {label}: {remaining.toLocaleString()} / {limit.toLocaleString()}
         </span>
-        {resetsIn && <span>resets in {resetsIn}</span>}
+        {resetsIn && <span className="shrink-0">resets in {resetsIn}</span>}
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
@@ -107,8 +107,13 @@ function ServiceRow({ service }: { service: ServiceStatus }) {
         <Badge variant={statusBadgeVariant(service.status)}>{statusLabel(service.status)}</Badge>
       </div>
       {service.status !== "up" && (
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-muted-foreground">{service.detail}</span>
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <span
+            className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+            title={service.detail ?? undefined}
+          >
+            {service.detail}
+          </span>
           {service.fix_command && (
             <CopyButton text={service.fix_command} label="Copy fix" className="h-7 shrink-0" />
           )}
@@ -145,9 +150,11 @@ function ActiveModelRow() {
       {isLoading && <p className="text-xs text-muted-foreground">Loading...</p>}
       {isError && <p className="text-xs text-destructive">Could not load model selection.</p>}
       {active && (
-        <div className="flex items-center gap-1.5">
-          <Badge variant="accent">{active.display_name}</Badge>
-          <span className="text-xs text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Badge variant="accent" className="shrink-0">
+            {active.display_name}
+          </Badge>
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
             {active.provider} · {active.is_default ? "platform default" : "your choice"}
           </span>
         </div>
