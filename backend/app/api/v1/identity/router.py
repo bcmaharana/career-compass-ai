@@ -9,16 +9,22 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 
 from app.api.dependencies import (
     get_authenticate_user_service,
     get_current_identity,
     get_current_user_service,
+    get_delete_account_service,
     get_list_audit_events_service,
     get_list_feature_flags_service,
     get_register_tenant_service,
+    get_request_organization_signup_service,
+    get_request_password_reset_service,
+    get_request_personal_signup_service,
+    get_reset_password_service,
     get_update_user_profile_service,
+    get_verify_signup_service,
     require_permission,
 )
 from app.api.v1.identity.schemas import (
@@ -27,18 +33,34 @@ from app.api.v1.identity.schemas import (
     FeatureFlagResponse,
     LoginRequest,
     LoginResponse,
+    OrganizationSignupRequest,
+    PersonalSignupRequest,
     PhoneLoginRequest,
     RegisterTenantRequest,
     RegisterTenantResponse,
+    RequestPasswordResetRequest,
+    RequestPasswordResetResponse,
+    ResetPasswordRequest,
+    ResetPasswordResponse,
+    SignupRequestResponse,
     UpdateCurrentUserRequest,
+    VerifySignupRequest,
 )
 from app.application.identity.authenticate_user import AuthenticateUserService
+from app.application.identity.delete_account import DeleteAccountService
 from app.application.identity.dto import LoginResult
 from app.application.identity.get_current_user import GetCurrentUserService
 from app.application.identity.list_audit_events import ListAuditEventsService
 from app.application.identity.list_feature_flags import ListFeatureFlagsService
 from app.application.identity.register_tenant import RegisterTenantService
+from app.application.identity.request_organization_signup import (
+    RequestOrganizationSignupService,
+)
+from app.application.identity.request_password_reset import RequestPasswordResetService
+from app.application.identity.request_personal_signup import RequestPersonalSignupService
+from app.application.identity.reset_password import ResetPasswordService
 from app.application.identity.update_user_profile import UpdateUserProfileService
+from app.application.identity.verify_signup import VerifySignupService
 from app.core.identity_provider_interface import IdentityClaims
 
 router = APIRouter(prefix="/identity", tags=["identity"])
@@ -65,6 +87,37 @@ async def register_tenant(
         admin_user_id=result.admin_user_id,
         admin_email=result.admin_email,
     )
+
+
+@router.post("/signup/personal", response_model=SignupRequestResponse, status_code=202)
+async def signup_personal(
+    request: PersonalSignupRequest,
+    service: RequestPersonalSignupService = Depends(get_request_personal_signup_service),
+) -> SignupRequestResponse:
+    await service.execute(
+        email=request.email,
+        password=request.password,
+        first_name=request.first_name,
+        last_name=request.last_name,
+    )
+    return SignupRequestResponse()
+
+
+@router.post("/signup/organization", response_model=SignupRequestResponse, status_code=202)
+async def signup_organization(
+    request: OrganizationSignupRequest,
+    service: RequestOrganizationSignupService = Depends(get_request_organization_signup_service),
+) -> SignupRequestResponse:
+    await service.execute(
+        tenant_name=request.tenant_name,
+        subdomain=request.subdomain,
+        organization_name=request.organization_name,
+        admin_email=request.admin_email,
+        admin_password=request.admin_password,
+        admin_first_name=request.admin_first_name,
+        admin_last_name=request.admin_last_name,
+    )
+    return SignupRequestResponse()
 
 
 def _login_response(result: LoginResult) -> LoginResponse:
@@ -103,6 +156,33 @@ async def login_phone(
         subdomain=request.subdomain, firebase_id_token=request.firebase_id_token
     )
     return _login_response(result)
+
+
+@router.post("/signup/verify", response_model=LoginResponse)
+async def signup_verify(
+    request: VerifySignupRequest,
+    service: VerifySignupService = Depends(get_verify_signup_service),
+) -> LoginResponse:
+    result = await service.execute(token=request.token)
+    return _login_response(result)
+
+
+@router.post("/password-reset/request", response_model=RequestPasswordResetResponse)
+async def request_password_reset(
+    request: RequestPasswordResetRequest,
+    service: RequestPasswordResetService = Depends(get_request_password_reset_service),
+) -> RequestPasswordResetResponse:
+    await service.execute(subdomain=request.subdomain, email=request.email)
+    return RequestPasswordResetResponse()
+
+
+@router.post("/password-reset/confirm", response_model=ResetPasswordResponse)
+async def confirm_password_reset(
+    request: ResetPasswordRequest,
+    service: ResetPasswordService = Depends(get_reset_password_service),
+) -> ResetPasswordResponse:
+    await service.execute(token=request.token, new_password=request.new_password)
+    return ResetPasswordResponse()
 
 
 @router.get("/me", response_model=CurrentUserResponse)
@@ -174,6 +254,14 @@ async def update_me(
         postal_code=result.postal_code,
         roles=list(result.roles),
     )
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_me(
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: DeleteAccountService = Depends(get_delete_account_service),
+) -> None:
+    await service.execute(tenant_id=UUID(identity.tenant_id))
 
 
 @router.get("/audit-events", response_model=list[AuditEventResponse])

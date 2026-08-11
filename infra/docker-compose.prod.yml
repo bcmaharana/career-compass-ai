@@ -1,0 +1,134 @@
+# Production compose file — standalone, not an override merged with
+# docker-compose.yml (dev's bind-mounts and host-exposed DB/cache/
+# storage ports have no place here). Run with:
+#   docker compose -f infra/docker-compose.prod.yml up -d --build
+#
+# No secrets are hardcoded here — every credential below is a
+# ${VAR:?...} reference, resolved from infra/.env (gitignored, real
+# values, never committed — see infra/.env.example for the template and
+# generation instructions) rather than baked into this file. Compose
+# auto-loads a .env file from the *project directory*, which for every
+# invocation in this repo (always run as `docker compose -f
+# infra/docker-compose.prod.yml ...` from the repo root) defaults to
+# the directory containing this file — i.e. infra/.env is picked up
+# automatically, no --env-file flag needed. The `:?` form fails fast
+# with a clear error if a variable is missing, rather than silently
+# starting a container with an empty password.
+#
+# Postgres/MinIO credentials below must match backend/.env.production's
+# DATABASE_URL/MIGRATIONS_DATABASE_URL/OBJECT_STORAGE_SECRET_KEY exactly
+# — same duplication dev's docker-compose.yml already has between its
+# own hardcoded (dev-only, low-stakes) postgres/minio creds and
+# backend/.env's DATABASE_URL; dev's file is deliberately left as-is,
+# since those are throwaway local values, not real secrets. POSTGRES_PASSWORD
+# is the `compass` superuser (migrations only, MIGRATIONS_DATABASE_URL);
+# COMPASS_APP_PASSWORD is the restricted `compass_app` role the app
+# actually connects as at runtime (DATABASE_URL) — see
+# infra/init-db/create-app-role.sql for why the split exists (Postgres
+# superusers always bypass Row-Level Security).
+#
+# Only the frontend container's port reaches the host, and only on
+# 127.0.0.1 — Postgres/Redis/MinIO/backend are reachable exclusively
+# over the internal Docker network. The Cloudflare Tunnel (running as
+# a Windows service on this same machine) is the only thing that talks
+# to 127.0.0.1:8080; nothing here is exposed directly to the LAN or the
+# internet via port-forwarding.
+#
+# Explicit `name:` below is required — without it, Compose defaults the
+# project name to the containing directory's basename ("infra"), which
+# docker-compose.yml (dev) also defaults to since it lives in the same
+# directory and also has no explicit name. Two compose files sharing a
+# project name means Compose treats containers from one as orphaned/
+# mismatched members of the other and recreates (i.e. destroys) them on
+# every `up` — confirmed to actually happen live 2026-08-10: bringing
+# prod up recreated dev's compass-postgres/redis/minio/backend
+# containers under prod's names, then bringing dev back up recreated
+# prod's containers right back. Dev's named volumes survived both times
+# (only containers get recreated, not volumes), but do not remove this
+# line without understanding why.
+name: career-compass-prod
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: compass-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: compass
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in infra/.env}
+      POSTGRES_DB: career_compass
+      # Only consumed by init-db/01-create-app-role.sh, and only on a
+      # genuinely fresh data volume (see that script's own comment) —
+      # must match backend/.env.production's DATABASE_URL creds for
+      # compass_app, same duplication pattern as POSTGRES_PASSWORD/
+      # OBJECT_STORAGE_SECRET_KEY above.
+      COMPASS_APP_PASSWORD: ${COMPASS_APP_PASSWORD:?Set COMPASS_APP_PASSWORD in infra/.env}
+    volumes:
+      - compass_postgres_prod_data:/var/lib/postgresql/data
+      - ../infra/init-db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U compass -d career_compass"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: compass-redis-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: compass-minio-prod
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in infra/.env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in infra/.env}
+    volumes:
+      - compass_minio_prod_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: compass-backend-prod
+    restart: unless-stopped
+    env_file:
+      - ../backend/.env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      # Firebase service-account key only — no source bind-mounts here
+      # (unlike dev's docker-compose.yml), the image's own COPY'd code
+      # is what runs in production.
+      - ../backend/secrets:/app/secrets:ro
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: compass-frontend-prod
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  compass_postgres_prod_data:
+  compass_minio_prod_data:

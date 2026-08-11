@@ -9,6 +9,14 @@ type PhoneLoginRequest = components["schemas"]["PhoneLoginRequest"];
 type LoginResponse = components["schemas"]["LoginResponse"];
 type CurrentUserResponse = components["schemas"]["CurrentUserResponse"];
 type UpdateCurrentUserRequest = components["schemas"]["UpdateCurrentUserRequest"];
+type RequestPasswordResetRequest = components["schemas"]["RequestPasswordResetRequest"];
+type RequestPasswordResetResponse = components["schemas"]["RequestPasswordResetResponse"];
+type ResetPasswordRequest = components["schemas"]["ResetPasswordRequest"];
+type ResetPasswordResponse = components["schemas"]["ResetPasswordResponse"];
+type PersonalSignupRequest = components["schemas"]["PersonalSignupRequest"];
+type OrganizationSignupRequest = components["schemas"]["OrganizationSignupRequest"];
+type SignupRequestResponse = components["schemas"]["SignupRequestResponse"];
+type VerifySignupRequest = components["schemas"]["VerifySignupRequest"];
 
 function toAuthenticatedUser(data: LoginResponse): AuthenticatedUser {
   return {
@@ -58,6 +66,79 @@ export function usePhoneLogin() {
 }
 
 /**
+ * "Forgot password" request — always resolves successfully regardless
+ * of whether the subdomain/email combination is real (see
+ * RequestPasswordResetService's docstring on the backend); the page
+ * component must not infer anything from the response beyond
+ * "the request completed," never from its content.
+ */
+export function useRequestPasswordReset() {
+  return useMutation({
+    mutationFn: (body: RequestPasswordResetRequest) =>
+      apiClient.post<RequestPasswordResetResponse>(
+        "/api/v1/identity/password-reset/request",
+        body,
+      ),
+  });
+}
+
+/**
+ * Confirms a password reset using the token from the emailed link.
+ * Unlike the request step above, this can genuinely fail (invalid,
+ * expired, or already-used token) — the page component surfaces
+ * `.error` the same way LoginPage does.
+ */
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: (body: ResetPasswordRequest) =>
+      apiClient.post<ResetPasswordResponse>("/api/v1/identity/password-reset/confirm", body),
+  });
+}
+
+/**
+ * Personal (individual, no-organization) signup — request step only.
+ * Nothing is created yet: this just triggers a verification email.
+ * The account only actually exists once useVerifySignup() confirms the
+ * emailed link, which is also what logs the person in — there's no
+ * separate login step after signup completes.
+ */
+export function useRequestPersonalSignup() {
+  return useMutation({
+    mutationFn: (body: PersonalSignupRequest) =>
+      apiClient.post<SignupRequestResponse>("/api/v1/identity/signup/personal", body),
+  });
+}
+
+/**
+ * Enterprise (organization) signup — request step, same two-phase
+ * shape as useRequestPersonalSignup, just with the user-chosen
+ * tenant_name/subdomain/organization_name carried through.
+ */
+export function useRequestOrganizationSignup() {
+  return useMutation({
+    mutationFn: (body: OrganizationSignupRequest) =>
+      apiClient.post<SignupRequestResponse>("/api/v1/identity/signup/organization", body),
+  });
+}
+
+/**
+ * Confirms a signup using the token from the emailed verification
+ * link — this is what actually creates the Tenant/Organization/User
+ * for the first time, and immediately logs the person in (the response
+ * is a real LoginResponse), so VerifyEmailPage never needs a separate
+ * useLogin() call after this succeeds.
+ */
+export function useVerifySignup() {
+  const setSession = useAuthStore((state) => state.setSession);
+
+  return useMutation({
+    mutationFn: (body: VerifySignupRequest) =>
+      apiClient.post<LoginResponse>("/api/v1/identity/signup/verify", body),
+    onSuccess: (data) => setSession(data.access_token, toAuthenticatedUser(data)),
+  });
+}
+
+/**
  * Fetches the authenticated user's profile from the backend. Useful for
  * validating a stored token is still good (e.g. on app load) and for
  * displaying the current user's info in the app shell.
@@ -97,5 +178,22 @@ export function useUpdateCurrentUser() {
         salutation: data.salutation,
       });
     },
+  });
+}
+
+/**
+ * Real, permanent "delete my account" — the whole tenant is gone after
+ * this succeeds, not just this user's own data (see
+ * DeleteAccountService's docstring on the backend for why "delete my
+ * account" and "delete my tenant" are the same operation in this app
+ * today). Deliberately does not clear the session itself — the caller
+ * (SettingsAccountPage) does that explicitly after a successful delete,
+ * same as AppShell's own sign-out handler, so both flows clear session
+ * state the same way rather than this hook reaching into the store on
+ * every caller's behalf.
+ */
+export function useDeleteAccount() {
+  return useMutation({
+    mutationFn: () => apiClient.delete<void>("/api/v1/identity/me"),
   });
 }

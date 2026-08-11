@@ -60,6 +60,47 @@ class RegisterTenantService:
         admin_last_name: str,
         admin_password: str,
     ) -> NewTenantResult:
+        return await self.execute_with_hashed_password(
+            tenant_name=tenant_name,
+            subdomain=subdomain,
+            organization_name=organization_name,
+            admin_email=admin_email,
+            admin_salutation=admin_salutation,
+            admin_first_name=admin_first_name,
+            admin_last_name=admin_last_name,
+            admin_password_hash=hash_password(admin_password),
+        )
+
+    async def execute_with_hashed_password(
+        self,
+        *,
+        tenant_name: str,
+        subdomain: str,
+        organization_name: str,
+        admin_email: str,
+        admin_salutation: str | None,
+        admin_first_name: str,
+        admin_last_name: str,
+        admin_password_hash: str,
+        agreed_to_terms_at: datetime | None = None,
+        terms_version: str | None = None,
+    ) -> NewTenantResult:
+        """Identical to execute(), but takes an already-hashed password.
+
+        Exists for the email-verification signup flow
+        (app/application/identity/verify_signup.py) — the password is
+        hashed once at request time (so it's never retained in
+        plaintext, even temporarily, in the pending_signups table) and
+        must not be hashed a second time here.
+
+        agreed_to_terms_at/terms_version are optional and default to
+        None so the /tenants endpoint (a low-level immediate-creation
+        primitive ~30 existing integration tests use for setup, not a
+        real signup path — see that endpoint's own docstring) is
+        unaffected. The real two-phase signup flow always provides real
+        values, carried through from the PendingSignup a person actually
+        agreed to at request time (see verify_signup.py).
+        """
         if await self._tenants.get_by_subdomain(subdomain) is not None:
             raise ConflictError(
                 f"Subdomain '{subdomain}' is already in use.", code="SUBDOMAIN_TAKEN"
@@ -99,11 +140,13 @@ class RegisterTenantService:
             salutation=admin_salutation,
             first_name=admin_first_name,
             last_name=admin_last_name,
-            hashed_password=hash_password(admin_password),
+            hashed_password=admin_password_hash,
             status="active",
             mfa_enabled=False,
             created_at=now,
             updated_at=now,
+            agreed_to_terms_at=agreed_to_terms_at,
+            terms_version=terms_version,
         )
         admin_user = await self._users.create(admin_user)
 

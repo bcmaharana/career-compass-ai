@@ -23,6 +23,7 @@ from app.adapters.ai_providers.anthropic_provider import AnthropicProvider
 from app.adapters.ai_providers.groq_provider import GroqProvider
 from app.adapters.ai_providers.ollama_embedding_provider import OllamaEmbeddingProvider
 from app.adapters.ai_providers.ollama_provider import OllamaProvider
+from app.adapters.db.account_deletion import SqlAlchemyAccountDeletionRepository
 from app.adapters.db.base import async_session_factory, set_tenant_context
 from app.adapters.db.repositories import (
     SqlAlchemyAuditEventRepository,
@@ -35,7 +36,10 @@ from app.adapters.db.repositories import (
     SqlAlchemyFeatureFlagRepository,
     SqlAlchemyKeyAchievementRepository,
     SqlAlchemyOrganizationRepository,
+    SqlAlchemyPasswordResetTokenRepository,
     SqlAlchemyPeerEndorsementRepository,
+    SqlAlchemyPendingSignupRepository,
+    SqlAlchemyPersonalPhoneLoginRepository,
     SqlAlchemyRoleRepository,
     SqlAlchemyTargetRoleRepository,
     SqlAlchemyTenantContextBinder,
@@ -72,6 +76,7 @@ from app.adapters.db.repositories.governance import (
     SqlAlchemyContentRevisionRepository,
 )
 from app.adapters.db.repositories.resume_intelligence import SqlAlchemyResumeRepository
+from app.adapters.email.resend_provider import ResendEmailProvider
 from app.adapters.db.repositories.search import (
     SqlAlchemyContentEmbeddingRepository,
     SqlAlchemyEmbeddingModelRepository,
@@ -109,11 +114,19 @@ from app.application.career_profile.target_role_service import TargetRoleService
 from app.application.chat.chat_service import ChatService
 from app.application.identity.audit_service import AuditService
 from app.application.identity.authenticate_user import AuthenticateUserService
+from app.application.identity.delete_account import DeleteAccountService
 from app.application.identity.get_current_user import GetCurrentUserService
 from app.application.identity.list_audit_events import ListAuditEventsService
 from app.application.identity.list_feature_flags import ListFeatureFlagsService
 from app.application.identity.register_tenant import RegisterTenantService
+from app.application.identity.request_organization_signup import (
+    RequestOrganizationSignupService,
+)
+from app.application.identity.request_password_reset import RequestPasswordResetService
+from app.application.identity.request_personal_signup import RequestPersonalSignupService
+from app.application.identity.reset_password import ResetPasswordService
 from app.application.identity.update_user_profile import UpdateUserProfileService
+from app.application.identity.verify_signup import VerifySignupService
 from app.application.quotes.quote_of_the_day_service import QuoteOfTheDayService
 from app.application.resume_intelligence.resume_extraction_service import ResumeExtractionService
 from app.application.resume_intelligence.resume_merge_service import ResumeMergeService
@@ -302,6 +315,23 @@ def get_role_repository_plain(
     return SqlAlchemyRoleRepository(session)
 
 
+def get_personal_phone_login_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyPersonalPhoneLoginRepository:
+    """Plain (unscoped) session — used for phone login's pre-auth,
+    cross-tenant lookup, before any tenant context exists. See
+    get_personal_phone_login_repository_scoped for the tenant-scoped
+    variant Settings > Profile writes through instead. Defined here
+    (ahead of get_authenticate_user_service) rather than alongside its
+    sibling get_pending_signup_repository further down — Depends()
+    default args are evaluated at function-definition time, top to
+    bottom, so a forward reference to a not-yet-defined function raises
+    NameError at import time (hit this exact class of bug once already
+    in this file, see get_email_provider/get_object_storage's own
+    placement history)."""
+    return SqlAlchemyPersonalPhoneLoginRepository(session)
+
+
 def get_tenant_context_binder(
     session: AsyncSession = Depends(get_db_session),
 ) -> SqlAlchemyTenantContextBinder:
@@ -370,6 +400,9 @@ def get_authenticate_user_service(
     identity_provider: InternalJWTProvider = Depends(get_internal_jwt_provider),
     audit: AuditService = Depends(get_plain_audit_service),
     phone_verifier: FirebasePhoneVerifier | None = Depends(get_firebase_phone_verifier),
+    personal_phone_logins: SqlAlchemyPersonalPhoneLoginRepository = Depends(
+        get_personal_phone_login_repository
+    ),
 ) -> AuthenticateUserService:
     return AuthenticateUserService(
         tenants=tenants,
@@ -377,6 +410,104 @@ def get_authenticate_user_service(
         identity_provider=identity_provider,
         audit=audit,
         phone_verifier=phone_verifier,
+        personal_phone_logins=personal_phone_logins,
+    )
+
+
+def get_password_reset_token_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyPasswordResetTokenRepository:
+    return SqlAlchemyPasswordResetTokenRepository(session)
+
+
+# Process-wide (lru_cache), not per-request — same rationale as
+# get_anthropic_provider/get_quote_provider (a plain httpx-based
+# adapter, no reason to reconstruct it every request).
+@lru_cache
+def get_email_provider() -> ResendEmailProvider:
+    return ResendEmailProvider(get_settings())
+
+
+def get_request_password_reset_service(
+    tenants: SqlAlchemyTenantRepository = Depends(get_tenant_repository),
+    users: SqlAlchemyUserRepository = Depends(get_user_repository),
+    reset_tokens: SqlAlchemyPasswordResetTokenRepository = Depends(
+        get_password_reset_token_repository
+    ),
+    tenant_context: SqlAlchemyTenantContextBinder = Depends(get_tenant_context_binder),
+    email_provider: ResendEmailProvider = Depends(get_email_provider),
+    audit: AuditService = Depends(get_plain_audit_service),
+) -> RequestPasswordResetService:
+    return RequestPasswordResetService(
+        tenants=tenants,
+        users=users,
+        reset_tokens=reset_tokens,
+        tenant_context=tenant_context,
+        email_provider=email_provider,
+        audit=audit,
+        frontend_base_url=get_settings().frontend_base_url,
+    )
+
+
+def get_reset_password_service(
+    reset_tokens: SqlAlchemyPasswordResetTokenRepository = Depends(
+        get_password_reset_token_repository
+    ),
+    users: SqlAlchemyUserRepository = Depends(get_user_repository),
+    tenant_context: SqlAlchemyTenantContextBinder = Depends(get_tenant_context_binder),
+    audit: AuditService = Depends(get_plain_audit_service),
+) -> ResetPasswordService:
+    return ResetPasswordService(
+        reset_tokens=reset_tokens,
+        users=users,
+        tenant_context=tenant_context,
+        audit=audit,
+    )
+
+
+def get_pending_signup_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyPendingSignupRepository:
+    return SqlAlchemyPendingSignupRepository(session)
+
+
+def get_request_personal_signup_service(
+    tenants: SqlAlchemyTenantRepository = Depends(get_tenant_repository),
+    pending_signups: SqlAlchemyPendingSignupRepository = Depends(get_pending_signup_repository),
+    email_provider: ResendEmailProvider = Depends(get_email_provider),
+) -> RequestPersonalSignupService:
+    return RequestPersonalSignupService(
+        tenants=tenants,
+        pending_signups=pending_signups,
+        email_provider=email_provider,
+        frontend_base_url=get_settings().frontend_base_url,
+    )
+
+
+def get_request_organization_signup_service(
+    tenants: SqlAlchemyTenantRepository = Depends(get_tenant_repository),
+    pending_signups: SqlAlchemyPendingSignupRepository = Depends(get_pending_signup_repository),
+    email_provider: ResendEmailProvider = Depends(get_email_provider),
+) -> RequestOrganizationSignupService:
+    return RequestOrganizationSignupService(
+        tenants=tenants,
+        pending_signups=pending_signups,
+        email_provider=email_provider,
+        frontend_base_url=get_settings().frontend_base_url,
+    )
+
+
+def get_verify_signup_service(
+    pending_signups: SqlAlchemyPendingSignupRepository = Depends(get_pending_signup_repository),
+    register_tenant: RegisterTenantService = Depends(get_register_tenant_service),
+    users: SqlAlchemyUserRepository = Depends(get_user_repository),
+    identity_provider: InternalJWTProvider = Depends(get_internal_jwt_provider),
+) -> VerifySignupService:
+    return VerifySignupService(
+        pending_signups=pending_signups,
+        register_tenant=register_tenant,
+        users=users,
+        identity_provider=identity_provider,
     )
 
 
@@ -389,6 +520,17 @@ def get_user_repository_scoped(
     session: AsyncSession = Depends(get_tenant_scoped_session),
 ) -> SqlAlchemyUserRepository:
     return SqlAlchemyUserRepository(session)
+
+
+def get_personal_phone_login_repository_scoped(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyPersonalPhoneLoginRepository:
+    """Same underlying session as get_user_repository_scoped/
+    get_role_repository within a request (FastAPI caches Depends() per
+    callable per request) — required so UpdateUserProfileService's
+    profile-field save and this table's upsert/delete commit or roll
+    back together as one transaction, not two independent ones."""
+    return SqlAlchemyPersonalPhoneLoginRepository(session)
 
 
 def get_feature_flag_repository(
@@ -407,8 +549,20 @@ def get_current_user_service(
 def get_update_user_profile_service(
     users: SqlAlchemyUserRepository = Depends(get_user_repository_scoped),
     roles: SqlAlchemyRoleRepository = Depends(get_role_repository),
+    tenants: SqlAlchemyTenantRepository = Depends(get_tenant_repository),
+    personal_phone_logins: SqlAlchemyPersonalPhoneLoginRepository = Depends(
+        get_personal_phone_login_repository_scoped
+    ),
 ) -> UpdateUserProfileService:
-    return UpdateUserProfileService(users=users, roles=roles)
+    return UpdateUserProfileService(
+        users=users, roles=roles, tenants=tenants, personal_phone_logins=personal_phone_logins
+    )
+
+
+def get_account_deletion_repository(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyAccountDeletionRepository:
+    return SqlAlchemyAccountDeletionRepository(session)
 
 
 def get_audit_event_repository(
@@ -480,6 +634,17 @@ def get_target_role_repository(
 
 def get_object_storage() -> S3ObjectStorageRepository:
     return S3ObjectStorageRepository(get_settings())
+
+
+def get_delete_account_service(
+    account_deletion: SqlAlchemyAccountDeletionRepository = Depends(
+        get_account_deletion_repository
+    ),
+    storage: S3ObjectStorageRepository = Depends(get_object_storage),
+) -> DeleteAccountService:
+    return DeleteAccountService(
+        account_deletion=account_deletion, photo_storage=storage, resume_storage=storage
+    )
 
 
 def get_career_profile_service(

@@ -6,10 +6,15 @@ services:
       POSTGRES_USER: compass
       POSTGRES_PASSWORD: compass
       POSTGRES_DB: career_compass
+      # Only consumed by init-db/01-create-app-role.sh, and only on a
+      # genuinely fresh data volume (see that script's own comment) —
+      # matches backend/.env's DATABASE_URL creds for compass_app.
+      COMPASS_APP_PASSWORD: compass_app
     ports:
       - "5432:5432"
     volumes:
       - compass_postgres_data:/var/lib/postgresql/data
+      - ../infra/init-db:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U compass -d career_compass"]
       interval: 5s

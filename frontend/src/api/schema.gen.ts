@@ -41,6 +41,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity/signup/personal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Signup Personal */
+        post: operations["signup_personal_api_v1_identity_signup_personal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/signup/organization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Signup Organization */
+        post: operations["signup_organization_api_v1_identity_signup_organization_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identity/login": {
         parameters: {
             query?: never;
@@ -75,6 +109,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity/signup/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Signup Verify */
+        post: operations["signup_verify_api_v1_identity_signup_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/password-reset/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Password Reset */
+        post: operations["request_password_reset_api_v1_identity_password_reset_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/password-reset/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Password Reset */
+        post: operations["confirm_password_reset_api_v1_identity_password_reset_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identity/me": {
         parameters: {
             query?: never;
@@ -86,7 +171,8 @@ export interface paths {
         get: operations["get_me_api_v1_identity_me_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Me */
+        delete: operations["delete_me_api_v1_identity_me_delete"];
         options?: never;
         head?: never;
         /** Update Me */
@@ -1040,6 +1126,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/resume-intelligence/upload/{upload_token}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Upload
+         * @description Cancels every extraction currently in flight for this user, not
+         *     just the one matching `upload_token` (accepted in the URL for a
+         *     RESTful shape, but deliberately not the only thing checked here).
+         *
+         *     A real bug found live: the frontend only ever remembers the ONE
+         *     most recent upload_token (see upload-progress-store.ts) — but
+         *     nothing prevents more than one extraction from being in flight for
+         *     the same user at once (e.g. a retry fired before an earlier
+         *     attempt's Cancel had actually been confirmed, or the earlier
+         *     attempt was simply never cancelled and is still silently running).
+         *     Cancelling only the latest, remembered token left any earlier,
+         *     now-forgotten task completely unreachable — it kept running to
+         *     completion in the background regardless of what Cancel did, which
+         *     is exactly the "cancel just releases the button, the process is
+         *     still running" behavior reported live. Sweeping every entry owned
+         *     by this user closes that gap: however many overlapping attempts
+         *     accumulated, one Cancel click stops all of them. Idempotent and
+         *     silent when there's nothing to cancel (already finished) — same
+         *     "no error over a no-op" convention as discard_resume above.
+         */
+        post: operations["cancel_upload_api_v1_resume_intelligence_upload__upload_token__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/resume-intelligence/merge": {
         parameters: {
             query?: never;
@@ -1129,6 +1253,8 @@ export interface components {
             file: string;
             /** Target Role Id */
             target_role_id?: string | null;
+            /** Upload Token */
+            upload_token?: string | null;
         };
         /** CareerGoalRequest */
         CareerGoalRequest: {
@@ -1690,7 +1816,7 @@ export interface components {
         /** LoginRequest */
         LoginRequest: {
             /** Subdomain */
-            subdomain: string;
+            subdomain?: string | null;
             /**
              * Email
              * Format: email
@@ -1764,6 +1890,28 @@ export interface components {
             /** Direction */
             direction: string;
         };
+        /** OrganizationSignupRequest */
+        OrganizationSignupRequest: {
+            /** Tenant Name */
+            tenant_name: string;
+            /** Subdomain */
+            subdomain: string;
+            /** Organization Name */
+            organization_name: string;
+            /**
+             * Admin Email
+             * Format: email
+             */
+            admin_email: string;
+            /** Admin First Name */
+            admin_first_name: string;
+            /** Admin Last Name */
+            admin_last_name: string;
+            /** Admin Password */
+            admin_password: string;
+            /** Agreed To Terms */
+            agreed_to_terms: boolean;
+        };
         /** PeerEndorsementRequest */
         PeerEndorsementRequest: {
             /** Recommender Name */
@@ -1793,10 +1941,26 @@ export interface components {
             /** Display Order */
             display_order: number;
         };
+        /** PersonalSignupRequest */
+        PersonalSignupRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Password */
+            password: string;
+            /** First Name */
+            first_name: string;
+            /** Last Name */
+            last_name: string;
+            /** Agreed To Terms */
+            agreed_to_terms: boolean;
+        };
         /** PhoneLoginRequest */
         PhoneLoginRequest: {
             /** Subdomain */
-            subdomain: string;
+            subdomain?: string | null;
             /** Firebase Id Token */
             firebase_id_token: string;
         };
@@ -1905,6 +2069,24 @@ export interface components {
             /** Review Notes */
             review_notes: string;
         };
+        /** RequestPasswordResetRequest */
+        RequestPasswordResetRequest: {
+            /** Subdomain */
+            subdomain?: string | null;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+        };
+        /** RequestPasswordResetResponse */
+        RequestPasswordResetResponse: {
+            /**
+             * Message
+             * @default If an account exists for that email, a reset link has been sent.
+             */
+            message: string;
+        };
         /** RequiredSkillResponse */
         RequiredSkillResponse: {
             /**
@@ -1914,6 +2096,21 @@ export interface components {
             skill_id: string;
             /** Requirement Level */
             requirement_level: string;
+        };
+        /** ResetPasswordRequest */
+        ResetPasswordRequest: {
+            /** Token */
+            token: string;
+            /** New Password */
+            new_password: string;
+        };
+        /** ResetPasswordResponse */
+        ResetPasswordResponse: {
+            /**
+             * Message
+             * @default Your password has been reset. You can now sign in.
+             */
+            message: string;
         };
         /**
          * ResolveAliasResponse
@@ -2075,6 +2272,14 @@ export interface components {
         SetModelPreferenceRequest: {
             /** Model Version Id */
             model_version_id?: string | null;
+        };
+        /** SignupRequestResponse */
+        SignupRequestResponse: {
+            /**
+             * Message
+             * @default Check your email for a verification link to finish creating your account.
+             */
+            message: string;
         };
         /** SkillAliasResponse */
         SkillAliasResponse: {
@@ -2251,6 +2456,11 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** VerifySignupRequest */
+        VerifySignupRequest: {
+            /** Token */
+            token: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -2300,6 +2510,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RegisterTenantResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    signup_personal_api_v1_identity_signup_personal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonalSignupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignupRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    signup_organization_api_v1_identity_signup_organization_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrganizationSignupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignupRequestResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2379,6 +2655,105 @@ export interface operations {
             };
         };
     };
+    signup_verify_api_v1_identity_signup_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifySignupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_password_reset_api_v1_identity_password_reset_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestPasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestPasswordResetResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_password_reset_api_v1_identity_password_reset_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResetPasswordResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_me_api_v1_identity_me_get: {
         parameters: {
             query?: never;
@@ -2396,6 +2771,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CurrentUserResponse"];
                 };
+            };
+        };
+    };
+    delete_me_api_v1_identity_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4918,6 +5311,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ResumeResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_upload_api_v1_resume_intelligence_upload__upload_token__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

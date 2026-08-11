@@ -9,8 +9,8 @@ from datetime import UTC, datetime
 import pytest
 
 from app.application.identity.update_user_profile import UpdateUserProfileService
-from app.core.exceptions import NotFoundError, ValidationError
-from app.domain.identity.entities import Role, User
+from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.domain.identity.entities import Role, Tenant, User
 
 
 class FakeUserRepository:
@@ -53,6 +53,72 @@ class FakeRoleRepository:
         return assignment
 
 
+class FakeTenantRepository:
+    """Empty by default — get_by_id returns None for any unregistered
+    tenant_id, which UpdateUserProfileService treats the same as "not a
+    Personal tenant" (skips personal_phone_logins entirely). Existing
+    tests never register a tenant here, so they're unaffected; only the
+    phone-login-specific tests below register one.
+    """
+
+    def __init__(self) -> None:
+        self.tenants: dict[uuid.UUID, Tenant] = {}
+
+    async def create(self, tenant: Tenant) -> Tenant:
+        self.tenants[tenant.id] = replace(tenant)
+        return replace(tenant)
+
+    async def get_by_id(self, tenant_id: uuid.UUID) -> Tenant | None:
+        tenant = self.tenants.get(tenant_id)
+        return replace(tenant) if tenant else None
+
+    async def get_by_subdomain(self, subdomain: str) -> Tenant | None:
+        for tenant in self.tenants.values():
+            if tenant.subdomain == subdomain:
+                return replace(tenant)
+        return None
+
+
+class FakePersonalPhoneLoginRepository:
+    def __init__(self) -> None:
+        # phone_e164 -> (tenant_id, user_id)
+        self.rows: dict[str, tuple[uuid.UUID, uuid.UUID]] = {}
+
+    async def upsert(self, *, phone_e164: str, tenant_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        existing = self.rows.get(phone_e164)
+        if existing is not None and existing[1] != user_id:
+            raise ConflictError(
+                "This phone number is already registered to a different account.",
+                code="PHONE_NUMBER_ALREADY_REGISTERED",
+            )
+        for number, (_, existing_user_id) in list(self.rows.items()):
+            if existing_user_id == user_id:
+                del self.rows[number]
+        self.rows[phone_e164] = (tenant_id, user_id)
+
+    async def get_tenant_id(self, phone_e164: str) -> uuid.UUID | None:
+        row = self.rows.get(phone_e164)
+        return row[0] if row else None
+
+    async def delete_for_user(self, user_id: uuid.UUID) -> None:
+        for number, (_, existing_user_id) in list(self.rows.items()):
+            if existing_user_id == user_id:
+                del self.rows[number]
+
+
+def _make_tenant(*, tenant_id: uuid.UUID, subdomain: str) -> Tenant:
+    now = datetime.now(UTC)
+    return Tenant(
+        id=tenant_id,
+        name="Test Tenant",
+        subdomain=subdomain,
+        plan_tier="free",
+        status="active",
+        created_at=now,
+        updated_at=now,
+    )
+
+
 def _make_user(*, tenant_id: uuid.UUID, user_id: uuid.UUID) -> User:
     now = datetime.now(UTC)
     return User(
@@ -74,7 +140,10 @@ def _make_user(*, tenant_id: uuid.UUID, user_id: uuid.UUID) -> User:
 @pytest.fixture
 def service() -> tuple[UpdateUserProfileService, FakeUserRepository]:
     users = FakeUserRepository()
-    return UpdateUserProfileService(users, FakeRoleRepository()), users
+    svc = UpdateUserProfileService(
+        users, FakeRoleRepository(), FakeTenantRepository(), FakePersonalPhoneLoginRepository()
+    )
+    return svc, users
 
 
 @pytest.mark.unit
@@ -591,3 +660,153 @@ class TestStructuredAddress:
 
         assert result.address_line1 == "123 Main St"
         assert result.address_line2 is None
+
+
+@pytest.mark.unit
+class TestPersonalPhoneLoginLookup:
+    """personal_phone_logins is only maintained for Personal (p-prefixed
+    subdomain) tenants — see is_personal_subdomain. Enterprise tenants
+    must be completely unaffected."""
+
+    def _service(
+        self, *, tenant: Tenant | None
+    ) -> tuple[
+        UpdateUserProfileService, FakeUserRepository, FakePersonalPhoneLoginRepository
+    ]:
+        users = FakeUserRepository()
+        tenants = FakeTenantRepository()
+        phone_logins = FakePersonalPhoneLoginRepository()
+        if tenant is not None:
+            tenants.tenants[tenant.id] = tenant
+        svc = UpdateUserProfileService(users, FakeRoleRepository(), tenants, phone_logins)
+        return svc, users, phone_logins
+
+    async def test_personal_tenant_phone_save_registers_lookup(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        tenant = _make_tenant(tenant_id=tenant_id, subdomain="p-abc123")
+        svc, users, phone_logins = self._service(tenant=tenant)
+        await users.create(_make_user(tenant_id=tenant_id, user_id=user_id))
+
+        await svc.execute(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            salutation=None,
+            first_name="Jordan",
+            last_name="Rivera",
+            phone_number="+1 415 555 2671",
+            country="US",
+            language=None,
+            address_line1=None,
+            address_line2=None,
+            city=None,
+            state=None,
+            postal_code=None,
+        )
+
+        assert await phone_logins.get_tenant_id("+14155552671") == tenant_id
+
+    async def test_changing_phone_replaces_old_lookup_entry(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        tenant = _make_tenant(tenant_id=tenant_id, subdomain="p-abc123")
+        svc, users, phone_logins = self._service(tenant=tenant)
+        await users.create(_make_user(tenant_id=tenant_id, user_id=user_id))
+
+        common = dict(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            salutation=None,
+            first_name="Jordan",
+            last_name="Rivera",
+            country="US",
+            language=None,
+            address_line1=None,
+            address_line2=None,
+            city=None,
+            state=None,
+            postal_code=None,
+        )
+        await svc.execute(phone_number="+1 415 555 2671", **common)
+        await svc.execute(phone_number="+1 415 555 0100", **common)
+
+        assert await phone_logins.get_tenant_id("+14155552671") is None
+        assert await phone_logins.get_tenant_id("+14155550100") == tenant_id
+
+    async def test_clearing_phone_deletes_lookup_entry(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        tenant = _make_tenant(tenant_id=tenant_id, subdomain="p-abc123")
+        svc, users, phone_logins = self._service(tenant=tenant)
+        await users.create(_make_user(tenant_id=tenant_id, user_id=user_id))
+
+        common = dict(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            salutation=None,
+            first_name="Jordan",
+            last_name="Rivera",
+            country="US",
+            language=None,
+            address_line1=None,
+            address_line2=None,
+            city=None,
+            state=None,
+            postal_code=None,
+        )
+        await svc.execute(phone_number="+1 415 555 2671", **common)
+        await svc.execute(phone_number=None, **common)
+
+        assert await phone_logins.get_tenant_id("+14155552671") is None
+
+    async def test_enterprise_tenant_phone_save_does_not_register_lookup(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        tenant = _make_tenant(tenant_id=tenant_id, subdomain="acme")
+        svc, users, phone_logins = self._service(tenant=tenant)
+        await users.create(_make_user(tenant_id=tenant_id, user_id=user_id))
+
+        await svc.execute(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            salutation=None,
+            first_name="Jordan",
+            last_name="Rivera",
+            phone_number="+1 415 555 2671",
+            country="US",
+            language=None,
+            address_line1=None,
+            address_line2=None,
+            city=None,
+            state=None,
+            postal_code=None,
+        )
+
+        assert await phone_logins.get_tenant_id("+14155552671") is None
+
+    async def test_phone_already_claimed_by_a_different_user_raises_conflict(self) -> None:
+        tenant_id = uuid.uuid4()
+        user_a, user_b = uuid.uuid4(), uuid.uuid4()
+        tenant = _make_tenant(tenant_id=tenant_id, subdomain="p-abc123")
+        svc, users, phone_logins = self._service(tenant=tenant)
+        await users.create(_make_user(tenant_id=tenant_id, user_id=user_a))
+        await users.create(_make_user(tenant_id=tenant_id, user_id=user_b))
+
+        common = dict(
+            tenant_id=tenant_id,
+            salutation=None,
+            first_name="Jordan",
+            last_name="Rivera",
+            phone_number="+1 415 555 2671",
+            country="US",
+            language=None,
+            address_line1=None,
+            address_line2=None,
+            city=None,
+            state=None,
+            postal_code=None,
+        )
+        await svc.execute(user_id=user_a, **common)
+
+        with pytest.raises(ConflictError) as exc_info:
+            await svc.execute(user_id=user_b, **common)
+
+        assert exc_info.value.code == "PHONE_NUMBER_ALREADY_REGISTERED"
+        # First user's registration is untouched by the failed attempt.
+        assert await phone_logins.get_tenant_id("+14155552671") == tenant_id

@@ -51,6 +51,16 @@ function firebaseErrorMessage(error: unknown): string {
 interface PhoneLoginFormProps {
   subdomain: string;
   onSubdomainChange: (value: string) => void;
+  /**
+   * Enterprise-only: Personal accounts never have (or need to know) a
+   * subdomain — the backend resolves which tenant a phone number
+   * belongs to via personal_phone_logins instead (see
+   * AuthenticateUserService.execute_phone on the backend). When false,
+   * the Organization field is hidden and omitted from validation/the
+   * submitted payload entirely, the same way LoginPage's email tab
+   * already treats Personal mode.
+   */
+  showOrganizationField: boolean;
 }
 
 /**
@@ -77,7 +87,11 @@ interface PhoneLoginFormProps {
  * multiple signInWithPhoneNumber calls, so there's no need to recreate
  * it after a failed attempt anyway.
  */
-export function PhoneLoginForm({ subdomain, onSubdomainChange }: PhoneLoginFormProps) {
+export function PhoneLoginForm({
+  subdomain,
+  onSubdomainChange,
+  showOrganizationField,
+}: PhoneLoginFormProps) {
   const navigate = useNavigate();
   const phoneLogin = usePhoneLogin();
 
@@ -119,7 +133,7 @@ export function PhoneLoginForm({ subdomain, onSubdomainChange }: PhoneLoginFormP
     event.preventDefault();
     setError(null);
 
-    if (!subdomain.trim()) {
+    if (showOrganizationField && !subdomain.trim()) {
       setError("Enter your organization first.");
       return;
     }
@@ -156,7 +170,10 @@ export function PhoneLoginForm({ subdomain, onSubdomainChange }: PhoneLoginFormP
       const credential = await confirmationResult.confirm(code);
       const idToken = await credential.user.getIdToken();
       phoneLogin.mutate(
-        { subdomain, firebase_id_token: idToken },
+        {
+          subdomain: showOrganizationField && subdomain.trim() ? subdomain : undefined,
+          firebase_id_token: idToken,
+        },
         { onSuccess: () => navigate("/", { replace: true }) },
       );
     } catch (err) {
@@ -189,18 +206,20 @@ export function PhoneLoginForm({ subdomain, onSubdomainChange }: PhoneLoginFormP
 
       {step === "phone" && (
         <form className="flex flex-col gap-4" onSubmit={handleSendCode}>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="phone-subdomain">Organization</Label>
-            <RainbowBorderInput
-              id="phone-subdomain"
-              type="text"
-              placeholder="acme"
-              autoComplete="organization"
-              required
-              value={subdomain}
-              onChange={(e) => onSubdomainChange(e.target.value)}
-            />
-          </div>
+          {showOrganizationField && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="phone-subdomain">Organization</Label>
+              <RainbowBorderInput
+                id="phone-subdomain"
+                type="text"
+                placeholder="acme"
+                autoComplete="organization"
+                required
+                value={subdomain}
+                onChange={(e) => onSubdomainChange(e.target.value)}
+              />
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="phone-country">Country</Label>
             <Select

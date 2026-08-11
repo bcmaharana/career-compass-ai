@@ -15,7 +15,13 @@ import phonenumbers
 
 from app.application.identity.dto import CurrentUserResult
 from app.core.exceptions import NotFoundError, ValidationError
-from app.domain.identity.repositories import RoleRepository, UserRepository
+from app.domain.identity.personal_accounts import is_personal_subdomain
+from app.domain.identity.repositories import (
+    PersonalPhoneLoginRepository,
+    RoleRepository,
+    TenantRepository,
+    UserRepository,
+)
 
 
 def _to_e164(phone_number: str | None, country: str | None) -> str | None:
@@ -38,9 +44,17 @@ def _to_e164(phone_number: str | None, country: str | None) -> str | None:
 
 
 class UpdateUserProfileService:
-    def __init__(self, users: UserRepository, roles: RoleRepository) -> None:
+    def __init__(
+        self,
+        users: UserRepository,
+        roles: RoleRepository,
+        tenants: TenantRepository,
+        personal_phone_logins: PersonalPhoneLoginRepository,
+    ) -> None:
         self._users = users
         self._roles = roles
+        self._tenants = tenants
+        self._personal_phone_logins = personal_phone_logins
 
     async def execute(
         self,
@@ -101,6 +115,25 @@ class UpdateUserProfileService:
         user.state = state.strip() if state and state.strip() else None
         user.postal_code = postal_code.strip() if postal_code and postal_code.strip() else None
         updated = await self._users.update(user)
+
+        # Phone login for Personal accounts needs a cross-tenant lookup
+        # (personal_phone_logins) to resolve which tenant a phone number
+        # belongs to before any tenant context exists — see
+        # AuthenticateUserService.execute_phone. Enterprise numbers stay
+        # purely tenant-scoped, untouched here, since the same E.164
+        # number can legitimately exist under two different Enterprise
+        # tenants (users.phone_number_e164 is unique per tenant, not
+        # globally).
+        tenant = await self._tenants.get_by_id(tenant_id)
+        if tenant is not None and is_personal_subdomain(tenant.subdomain):
+            if updated.phone_number_e164:
+                await self._personal_phone_logins.upsert(
+                    phone_e164=updated.phone_number_e164,
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                )
+            else:
+                await self._personal_phone_logins.delete_for_user(user_id)
 
         roles = await self._roles.list_for_user(tenant_id, user_id)
 

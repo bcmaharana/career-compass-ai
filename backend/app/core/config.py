@@ -34,10 +34,26 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO")
 
     # --- Database ---
+    # database_url is the restricted, non-superuser `compass_app` role
+    # (infra/init-db/create-app-role.sql) — the app's actual runtime
+    # connection, genuinely subject to Row-Level Security. Never point
+    # this at `compass` (the migrations-only superuser role); Postgres
+    # superusers always bypass RLS regardless of FORCE ROW LEVEL
+    # SECURITY — confirmed live via pg_roles in both dev and prod that
+    # this was a real, unenforced gap until this setting split existed.
     database_url: str = Field(
-        default="postgresql+psycopg://compass:compass@localhost:5432/career_compass"
+        default="postgresql+psycopg://compass_app:compass_app@localhost:5432/career_compass"
     )
     database_pool_size: int = Field(default=5)
+    # migrations_database_url is `compass` (the superuser/table-owner
+    # role) — used only by alembic/env.py, since DDL (CREATE TABLE,
+    # ALTER TABLE ... CREATE POLICY) needs rights compass_app
+    # deliberately doesn't have. Empty means "not configured" and makes
+    # migrations fail loudly with a Postgres permission error rather
+    # than silently running under compass_app (which would just fail on
+    # the first CREATE TABLE anyway — a safe failure direction either
+    # way, never a silent one).
+    migrations_database_url: str = Field(default="")
 
     # --- Redis ---
     redis_url: str = Field(default="redis://localhost:6379/0")
@@ -131,6 +147,19 @@ class Settings(BaseSettings):
     # rather than hardcoded in the adapter so even the *current* provider
     # can be repointed (e.g. a self-hosted mirror) without a code change.
     quote_provider_base_url: str = Field(default="https://zenquotes.io")
+
+    # --- Email (password reset) ---
+    # Resend's default onboarding@resend.dev sender works for any
+    # recipient with zero domain-verification setup — switching to a
+    # verified custom domain (e.g. noreply@scaledbrain.com) later is a
+    # config change only, not a code change.
+    resend_api_key: str = Field(default="")
+    resend_from_email: str = Field(default="onboarding@resend.dev")
+    # Used to build links embedded in emails (e.g. the password-reset
+    # link) — the default matches Vite's dev server port so this works
+    # out of the box locally; production sets this to the real public
+    # domain in .env.production.
+    frontend_base_url: str = Field(default="http://localhost:5173")
 
     @property
     def is_local(self) -> bool:

@@ -3,6 +3,14 @@
 The database URL always comes from app.core.config.get_settings(), never
 hard-coded here or in alembic.ini, so migrations run against whatever
 environment's DATABASE_URL is set — local, CI, staging, or production.
+
+Uses migrations_database_url (the `compass` superuser role), not
+database_url (the restricted `compass_app` role the running app
+connects as) — migrations need DDL rights (CREATE TABLE, ALTER TABLE,
+CREATE POLICY) compass_app deliberately doesn't have. Falls back to
+database_url only if migrations_database_url isn't set, which just
+means migrations fail loudly with a Postgres permission error instead
+of silently running unprivileged — never a silent bypass either way.
 """
 
 from __future__ import annotations
@@ -23,7 +31,10 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+_settings = get_settings()
+config.set_main_option(
+    "sqlalchemy.url", _settings.migrations_database_url or _settings.database_url
+)
 
 
 def run_migrations_offline() -> None:

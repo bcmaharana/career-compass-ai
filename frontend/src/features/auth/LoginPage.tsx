@@ -2,30 +2,13 @@ import { ApiError } from "@/api/client";
 import { useLogin } from "@/api/queries/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RainbowBorderInput } from "@/components/ui/rainbow-border-input";
 import { PhoneLoginForm } from "@/features/auth/PhoneLoginForm";
 import { cn } from "@/lib/utils";
 import { Compass } from "lucide-react";
-import { type ComponentProps, type FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
-
-/**
- * A normal-width (1px) rainbow border — the gradient-padding trick from
- * the card border below, just with 1px of padding instead of 6px, so it
- * reads as "recolored border" rather than "thick frame." border-image
- * would be the more obvious CSS tool for a gradient border, but it
- * doesn't respect border-radius, so it'd square off Input's rounded
- * corners — this nested-box approach doesn't have that problem at any
- * thickness.
- */
-function RainbowBorderInput({ className, ...props }: ComponentProps<typeof Input>) {
-  return (
-    <div className="rounded-md bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] p-px">
-      <Input {...props} className={cn("border-0", className)} />
-    </div>
-  );
-}
+import { type FormEvent, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 /**
  * Sign-in screen, wired to the real Phase 1 identity service
@@ -38,6 +21,14 @@ export function LoginPage() {
   const navigate = useNavigate();
   const login = useLogin();
 
+  // Personal accounts never have (or need to know) a subdomain — for
+  // email login the backend derives one deterministically from the
+  // email (see derive_personal_subdomain on the backend); for phone
+  // login it resolves the tenant via personal_phone_logins instead
+  // (see AuthenticateUserService.execute_phone) — either way, the
+  // Organization field itself is Enterprise-only, not the Phone tab
+  // (PhoneLoginForm's showOrganizationField prop below).
+  const [accountType, setAccountType] = useState<"personal" | "enterprise">("personal");
   const [method, setMethod] = useState<"email" | "phone">("email");
   // Shared across both tabs (rather than each owning its own copy) so
   // switching tabs mid-entry doesn't make the user retype which
@@ -49,7 +40,7 @@ export function LoginPage() {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     login.mutate(
-      { subdomain, email, password },
+      accountType === "personal" ? { email, password } : { subdomain, email, password },
       { onSuccess: () => navigate("/dashboard", { replace: true }) },
     );
   }
@@ -96,6 +87,24 @@ export function LoginPage() {
           </CardHeader>
           <CardContent>
             <div className="mb-4 grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
+              {(["personal", "enterprise"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setAccountType(option)}
+                  className={cn(
+                    "rounded-sm py-1.5 text-sm font-medium transition-colors",
+                    accountType === option
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {option === "personal" ? "Personal" : "Enterprise"}
+                </button>
+              ))}
+            </div>
+
+            <div className="mb-4 grid grid-cols-2 gap-1 rounded-md bg-muted p-1">
               {(["email", "phone"] as const).map((option) => (
                 <button
                   key={option}
@@ -115,20 +124,22 @@ export function LoginPage() {
 
             {method === "email" ? (
               <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+                {accountType === "enterprise" && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="subdomain">Organization</Label>
+                    <RainbowBorderInput
+                      id="subdomain"
+                      type="text"
+                      placeholder="acme"
+                      autoComplete="organization"
+                      required
+                      value={subdomain}
+                      onChange={(e) => setSubdomain(e.target.value)}
+                    />
+                  </div>
+                )}
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="subdomain">Organization</Label>
-                  <RainbowBorderInput
-                    id="subdomain"
-                    type="text"
-                    placeholder="acme"
-                    autoComplete="organization"
-                    required
-                    value={subdomain}
-                    onChange={(e) => setSubdomain(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="email">Work email</Label>
+                  <Label htmlFor="email">{accountType === "personal" ? "Email" : "Work email"}</Label>
                   <RainbowBorderInput
                     id="email"
                     type="email"
@@ -139,7 +150,15 @@ export function LoginPage() {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="password">Password</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                    <Link
+                      to="/forgot-password"
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
                   <RainbowBorderInput
                     id="password"
                     type="password"
@@ -161,8 +180,19 @@ export function LoginPage() {
                 </Button>
               </form>
             ) : (
-              <PhoneLoginForm subdomain={subdomain} onSubdomainChange={setSubdomain} />
+              <PhoneLoginForm
+                subdomain={subdomain}
+                onSubdomainChange={setSubdomain}
+                showOrganizationField={accountType === "enterprise"}
+              />
             )}
+
+            <p className="mt-4 text-center text-sm text-muted-foreground">
+              Don't have an account?{" "}
+              <Link to="/signup" className="font-medium text-foreground underline">
+                Sign up
+              </Link>
+            </p>
           </CardContent>
         </Card>
       </div>

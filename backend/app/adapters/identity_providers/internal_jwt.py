@@ -17,6 +17,7 @@ import jwt
 from app.core.exceptions import UnauthorizedError
 from app.core.identity_provider_interface import IdentityClaims
 from app.core.security import create_access_token, decode_access_token, verify_password
+from app.domain.identity.entities import User
 from app.domain.identity.repositories import RoleRepository, UserRepository
 
 
@@ -69,26 +70,7 @@ class InternalJWTProvider:
         if not verify_password(password, user.hashed_password):
             raise UnauthorizedError("Invalid email or password.", code="INVALID_CREDENTIALS")
 
-        roles = await self._roles.list_for_user(user.tenant_id, user.id)
-        role_names = tuple(role.name for role in roles)
-
-        # Capture the *previous* login time before overwriting it — "Last
-        # logged in" only means something as "before this session."
-        previous_login_at = user.last_login_at.isoformat() if user.last_login_at else None
-        user.last_login_at = datetime.now(UTC)
-        await self._users.update(user)
-
-        return IdentityClaims(
-            user_id=str(user.id),
-            tenant_id=str(user.tenant_id),
-            email=user.email,
-            full_name=user.display_name,
-            first_name=user.first_name,
-            last_name=user.last_name,
-            salutation=user.salutation,
-            last_login_at=previous_login_at,
-            roles=role_names,
-        )
+        return await self.claims_for_user(user)
 
     async def authenticate_with_phone(self, *, phone_e164: str, tenant_id: str) -> IdentityClaims:
         """Phone login's counterpart to authenticate_with_credentials — no
@@ -105,9 +87,22 @@ class InternalJWTProvider:
                 "Invalid phone number or code.", code="INVALID_CREDENTIALS"
             )
 
+        return await self.claims_for_user(user)
+
+    async def claims_for_user(self, user: User) -> IdentityClaims:
+        """Builds IdentityClaims for a user whose identity has already
+        been established some other way (password check, phone
+        verification, or — for the email-verification signup flow — the
+        user was just created and there's nothing left to verify).
+        Updates last_login_at the same way every other login path does,
+        so a freshly-verified signup counts as that account's first
+        login exactly like a normal login would.
+        """
         roles = await self._roles.list_for_user(user.tenant_id, user.id)
         role_names = tuple(role.name for role in roles)
 
+        # Capture the *previous* login time before overwriting it — "Last
+        # logged in" only means something as "before this session."
         previous_login_at = user.last_login_at.isoformat() if user.last_login_at else None
         user.last_login_at = datetime.now(UTC)
         await self._users.update(user)

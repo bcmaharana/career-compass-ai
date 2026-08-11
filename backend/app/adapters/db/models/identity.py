@@ -11,6 +11,13 @@ Table-by-table tenant ownership follows docs/architecture/multi-tenancy-design.m
 - roles, feature_flags: tenant_id NULLABLE (NULL = global/system-defined),
   RLS allows NULL rows through
 - permissions: global reference table, no tenant_id, no RLS
+- password_reset_tokens: has tenant_id/user_id, but deliberately NOT
+  RLS-enforced — same reason as tenants: the confirm-reset step must
+  resolve which tenant a token belongs to before any tenant context can
+  be bound, a chicken-and-egg problem RLS can't help with here
+- pending_signups: no tenant_id/user_id at all — no tenant exists yet
+  for an unconfirmed signup. Rows are created and deleted entirely
+  outside any tenant context.
 """
 
 from __future__ import annotations
@@ -97,6 +104,10 @@ class UserModel(Base):
     preferred_model_version_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("model_versions.id"), nullable=True
     )
+    agreed_to_terms_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    terms_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
 
 class PermissionModel(Base):
@@ -179,6 +190,69 @@ class AuditEventModel(Base):
     )
     event_metadata: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+
+
+class PasswordResetTokenModel(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PendingSignupModel(Base):
+    __tablename__ = "pending_signups"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    first_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    tenant_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    subdomain: Mapped[str | None] = mapped_column(String(63), nullable=True)
+    organization_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    agreed_to_terms_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    terms_version: Mapped[str] = mapped_column(String(20), nullable=False)
+
+
+class PersonalPhoneLoginModel(Base):
+    """RLS-exempt cross-tenant lookup for Personal-account phone login —
+    see PersonalPhoneLoginRepository's docstring
+    (app/domain/identity/repositories.py). phone_number_e164 is the
+    primary key rather than a surrogate id: it IS the natural key this
+    table exists to enforce uniqueness on (at most one Personal account
+    may claim a given number for login at a time)."""
+
+    __tablename__ = "personal_phone_logins"
+
+    phone_number_e164: Mapped[str] = mapped_column(String(20), primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, unique=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class FeatureFlagModel(Base):

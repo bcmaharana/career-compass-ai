@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class RegisterTenantRequest(BaseModel):
@@ -30,14 +30,63 @@ class RegisterTenantResponse(BaseModel):
     admin_email: str
 
 
+def _require_agreed_to_terms(value: bool) -> bool:
+    if not value:
+        raise ValueError(
+            "You must agree to the Terms of Service and Privacy Policy to create an account."
+        )
+    return value
+
+
+class PersonalSignupRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    first_name: str = Field(min_length=1, max_length=150)
+    last_name: str = Field(min_length=1, max_length=150)
+    agreed_to_terms: bool
+
+    _validate_agreed_to_terms = field_validator("agreed_to_terms")(_require_agreed_to_terms)
+
+
+class OrganizationSignupRequest(BaseModel):
+    tenant_name: str = Field(min_length=1, max_length=255)
+    subdomain: str = Field(min_length=1, max_length=63, pattern=r"^[a-z0-9-]+$")
+    organization_name: str = Field(min_length=1, max_length=255)
+    admin_email: EmailStr
+    admin_first_name: str = Field(min_length=1, max_length=150)
+    admin_last_name: str = Field(min_length=1, max_length=150)
+    admin_password: str = Field(min_length=8, max_length=128)
+    agreed_to_terms: bool
+
+    _validate_agreed_to_terms = field_validator("agreed_to_terms")(_require_agreed_to_terms)
+
+
+class SignupRequestResponse(BaseModel):
+    #: Not deliberately-generic the way password-reset's response is
+    #: (there's no enumeration concern to protect here — duplicate
+    #: email/subdomain is already reported specifically, immediately,
+    #: as a 409 before this response would ever be returned) — this is
+    #: just the plain "we sent it" acknowledgment.
+    message: str = "Check your email for a verification link to finish creating your account."
+
+
+class VerifySignupRequest(BaseModel):
+    token: str = Field(min_length=1)
+
+
 class LoginRequest(BaseModel):
-    subdomain: str = Field(min_length=1, max_length=63)
+    #: None/omitted means "Personal account" — the frontend never asks
+    #: a Personal user for a subdomain, at signup or at login (see
+    #: AuthenticateUserService.execute / derive_personal_subdomain).
+    subdomain: str | None = Field(default=None, max_length=63)
     email: EmailStr
     password: str = Field(min_length=1)
 
 
 class PhoneLoginRequest(BaseModel):
-    subdomain: str = Field(min_length=1, max_length=63)
+    #: None/omitted means "Personal account" — same convention as
+    #: LoginRequest.subdomain (see AuthenticateUserService.execute_phone).
+    subdomain: str | None = Field(default=None, max_length=63)
     #: The ID token returned by the Firebase JS SDK's
     #: confirmationResult.confirm(code) after the user enters the SMS
     #: code — never the raw code itself, which never reaches this
@@ -57,6 +106,25 @@ class LoginResponse(BaseModel):
     salutation: str | None
     last_login_at: str | None
     roles: list[str]
+
+
+class RequestPasswordResetRequest(BaseModel):
+    #: Same "None means Personal account" convention as LoginRequest.
+    subdomain: str | None = Field(default=None, max_length=63)
+    email: EmailStr
+
+
+class RequestPasswordResetResponse(BaseModel):
+    message: str = "If an account exists for that email, a reset link has been sent."
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class ResetPasswordResponse(BaseModel):
+    message: str = "Your password has been reset. You can now sign in."
 
 
 class UpdateCurrentUserRequest(BaseModel):

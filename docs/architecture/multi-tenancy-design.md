@@ -27,6 +27,8 @@ Global reference/catalog data is intentionally **not** tenant-owned:
 
 - `PromptVersion`, `ModelVersion` — platform-managed AI governance registries
 - Platform-wide `JobOpportunity`/`LearningPath` catalog entries (tenant-specific ones still carry `tenant_id`)
+- `Tenant`, `Permission` — exempt because they must be queryable before any tenant context exists at all (subdomain lookup at login/registration; permissions are a fixed global catalog with no per-tenant variant)
+- `PasswordResetToken` — has `tenant_id`/`user_id` FKs but is exempt for the same "must be resolvable before tenant context exists" reason as `Tenant`: confirming a reset token has to determine which tenant it belongs to before RLS context can be bound
 
 These tables are explicitly marked as exceptions in the schema and migration comments so a future contributor doesn't assume every table needs RLS.
 

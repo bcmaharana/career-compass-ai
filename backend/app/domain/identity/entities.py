@@ -80,6 +80,15 @@ class User:
     #: chats (app/ai_platform/models/registry.py). None means "use the
     #: platform default" — see ModelRegistry.get_active_model.
     preferred_model_version_id: UUID | None = None
+    #: When/which version of the Terms of Service + Privacy Policy this
+    #: user agreed to at signup (see app/domain/identity/legal_terms.py).
+    #: Both None for any account created before this was tracked —
+    #: deliberately not backfilled, since fabricating retroactive
+    #: consent would be dishonest. Real consent is captured once, at
+    #: signup request time, and carried through to here by
+    #: VerifySignupService — see RegisterTenantService.execute_with_hashed_password.
+    agreed_to_terms_at: datetime | None = None
+    terms_version: str | None = None
 
     @property
     def is_active(self) -> bool:
@@ -135,3 +144,59 @@ class FeatureFlag:
     key: str
     enabled: bool
     config: dict[str, object]
+
+
+@dataclass(slots=True)
+class PasswordResetToken:
+    """A one-time, short-lived token for the "forgot password" flow.
+
+    Deliberately RLS-exempt (see adapters/db/models/identity.py) — the
+    confirm-reset step must resolve which tenant a token belongs to
+    before any tenant context can be bound, the same chicken-and-egg
+    problem Tenant itself has for pre-login subdomain lookup.
+    """
+
+    id: UUID
+    tenant_id: UUID
+    user_id: UUID
+    token_hash: str
+    expires_at: datetime
+    used_at: datetime | None
+    created_at: datetime
+
+
+@dataclass(slots=True)
+class PendingSignup:
+    """An unconfirmed signup — holds everything needed to create a real
+    Tenant/Organization/User, but nothing is written to those tables
+    until the emailed verification link is clicked.
+
+    Deliberately RLS-exempt, same reasoning as PasswordResetToken: no
+    tenant exists yet at all for a pending signup, so there is nothing
+    to bind tenant context to before this must be resolvable.
+
+    tenant_name/subdomain/organization_name are None for a "personal"
+    signup — those are computed at confirm time (subdomain via
+    derive_personal_subdomain, tenant_name from the person's own name,
+    organization_name defaults to "Personal"), not stored, since
+    they're always the same deterministic values for a given email.
+    """
+
+    id: UUID
+    kind: str  # "personal" | "enterprise"
+    email: str
+    hashed_password: str
+    first_name: str
+    last_name: str
+    tenant_name: str | None
+    subdomain: str | None
+    organization_name: str | None
+    token_hash: str
+    expires_at: datetime
+    created_at: datetime
+    #: Required — a signup request can't be created without agreeing
+    #: (see PersonalSignupRequest/OrganizationSignupRequest's
+    #: agreed_to_terms field). Carried through to the real User row by
+    #: VerifySignupService once the link is clicked.
+    agreed_to_terms_at: datetime
+    terms_version: str

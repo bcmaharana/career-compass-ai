@@ -2,10 +2,16 @@ import { AppShell } from "@/components/layout/AppShell";
 import { CareerProfilePage } from "@/features/career-profile/CareerProfilePage";
 import { CoachPage } from "@/features/coach/CoachPage";
 import { DashboardPage } from "@/features/dashboard/DashboardPage";
+import { ForgotPasswordPage } from "@/features/auth/ForgotPasswordPage";
 import { LoginPage } from "@/features/auth/LoginPage";
+import { ResetPasswordPage } from "@/features/auth/ResetPasswordPage";
+import { VerifyEmailPage } from "@/features/auth/VerifyEmailPage";
 import { LandingPage } from "@/features/landing/LandingPage";
 import { SignupPage } from "@/features/landing/SignupPage";
+import { PrivacyPolicyPage } from "@/features/legal/PrivacyPolicyPage";
+import { TermsOfServicePage } from "@/features/legal/TermsOfServicePage";
 import { SettingsAIModelPage } from "@/features/settings/SettingsAIModelPage";
+import { SettingsAccountPage } from "@/features/settings/SettingsAccountPage";
 import { SettingsLandingPage } from "@/features/settings/SettingsLandingPage";
 import { SettingsProfilePage } from "@/features/settings/SettingsProfilePage";
 import { ResumeIntelligencePage } from "@/features/resume-intelligence/ResumeIntelligencePage";
@@ -37,8 +43,28 @@ export const router = createBrowserRouter([
     element: <LoginPage />,
   },
   {
+    path: "/forgot-password",
+    element: <ForgotPasswordPage />,
+  },
+  {
+    path: "/reset-password",
+    element: <ResetPasswordPage />,
+  },
+  {
     path: "/signup",
     element: <SignupPage />,
+  },
+  {
+    path: "/verify-email",
+    element: <VerifyEmailPage />,
+  },
+  {
+    path: "/terms",
+    element: <TermsOfServicePage />,
+  },
+  {
+    path: "/privacy",
+    element: <PrivacyPolicyPage />,
   },
   {
     element: <ProtectedRoute />,
@@ -54,6 +80,7 @@ export const router = createBrowserRouter([
           { path: "settings", element: <SettingsLandingPage /> },
           { path: "settings/profile", element: <SettingsProfilePage /> },
           { path: "settings/ai-model", element: <SettingsAIModelPage /> },
+          { path: "settings/account", element: <SettingsAccountPage /> },
         ],
       },
     ],

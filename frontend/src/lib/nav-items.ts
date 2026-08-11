@@ -1,4 +1,14 @@
-import { Bot, FileText, Gauge, LineChart, Settings, Sparkles, User, UserCircle } from "lucide-react";
+import {
+  Bot,
+  FileText,
+  Gauge,
+  LineChart,
+  Settings,
+  Sparkles,
+  User,
+  UserCircle,
+  UserX,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -70,6 +80,13 @@ export const SETTINGS_NAV_ITEMS: NavItem[] = [
     icon: Bot,
     end: true,
     purpose: "Choose which AI model powers your Career Coach chat.",
+  },
+  {
+    to: "/settings/account",
+    label: "Account",
+    icon: UserX,
+    end: true,
+    purpose: "Permanently delete your account and all your data.",
   },
 ];
 

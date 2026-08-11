@@ -98,6 +98,21 @@ class FakeAuditEventRepository:
         return [e for e in self.events if e.tenant_id == tenant_id][:limit]
 
 
+class FakePersonalPhoneLoginRepository:
+    def __init__(self) -> None:
+        # phone_e164 -> tenant_id
+        self.rows: dict[str, uuid.UUID] = {}
+
+    async def upsert(self, *, phone_e164: str, tenant_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        self.rows[phone_e164] = tenant_id
+
+    async def get_tenant_id(self, phone_e164: str) -> uuid.UUID | None:
+        return self.rows.get(phone_e164)
+
+    async def delete_for_user(self, user_id: uuid.UUID) -> None:
+        return None
+
+
 class FakePhoneVerifier:
     """Stands in for FirebasePhoneVerifier — returns a fixed E.164 number
     instead of ever calling the real Firebase SDK/network."""
@@ -248,3 +263,95 @@ class TestPhoneLogin:
             await service.execute_phone(subdomain=tenant.subdomain, firebase_id_token="good-token")
 
         assert exc_info.value.code == "PHONE_LOGIN_NOT_CONFIGURED"
+
+
+@pytest.mark.unit
+class TestPersonalPhoneLogin:
+    """Blank/omitted subdomain means Personal account — resolved via
+    personal_phone_logins instead of get_by_subdomain. See
+    AuthenticateUserService.execute_phone's docstring."""
+
+    def _service(
+        self,
+    ) -> tuple[
+        AuthenticateUserService,
+        FakeTenantRepository,
+        FakeUserRepository,
+        FakePersonalPhoneLoginRepository,
+        FakePhoneVerifier,
+    ]:
+        tenants = FakeTenantRepository()
+        users = FakeUserRepository()
+        roles = FakeRoleRepository()
+        audit_events = FakeAuditEventRepository()
+        identity_provider = InternalJWTProvider(users, roles)
+        phone_verifier = FakePhoneVerifier()
+        personal_phone_logins = FakePersonalPhoneLoginRepository()
+
+        service = AuthenticateUserService(
+            tenants=tenants,
+            tenant_context=FakeTenantContextBinder(),
+            identity_provider=identity_provider,
+            audit=AuditService(audit_events),
+            phone_verifier=phone_verifier,
+            personal_phone_logins=personal_phone_logins,
+        )
+        return service, tenants, users, personal_phone_logins, phone_verifier
+
+    async def test_registered_personal_number_succeeds_with_no_subdomain(self) -> None:
+        service, tenants, users, personal_phone_logins, verifier = self._service()
+        tenant = _make_tenant(subdomain="p-abc123")
+        await tenants.create(tenant)
+        user = _make_user(tenant_id=tenant.id, phone_number_e164=verifier.phone_number)
+        await users.create(user)
+        personal_phone_logins.rows[verifier.phone_number] = tenant.id
+
+        result = await service.execute_phone(subdomain=None, firebase_id_token="good-token")
+
+        assert result.user_id == user.id
+        assert result.tenant_id == tenant.id
+
+    async def test_unregistered_personal_number_is_rejected(self) -> None:
+        service, _, _, _, _ = self._service()
+
+        with pytest.raises(UnauthorizedError) as exc_info:
+            await service.execute_phone(subdomain=None, firebase_id_token="good-token")
+
+        assert exc_info.value.code == "INVALID_CREDENTIALS"
+
+    async def test_blank_string_subdomain_is_treated_the_same_as_none(self) -> None:
+        # "" is falsy, same as None — the frontend never sends an empty
+        # string on purpose, but a defensive check either way shouldn't
+        # accidentally fall through to get_by_subdomain("").
+        service, tenants, users, personal_phone_logins, verifier = self._service()
+        tenant = _make_tenant(subdomain="p-abc123")
+        await tenants.create(tenant)
+        user = _make_user(tenant_id=tenant.id, phone_number_e164=verifier.phone_number)
+        await users.create(user)
+        personal_phone_logins.rows[verifier.phone_number] = tenant.id
+
+        result = await service.execute_phone(subdomain="", firebase_id_token="good-token")
+
+        assert result.tenant_id == tenant.id
+
+    async def test_no_personal_phone_login_repository_configured_is_rejected(self) -> None:
+        tenants = FakeTenantRepository()
+        users = FakeUserRepository()
+        tenant = _make_tenant(subdomain="p-abc123")
+        await tenants.create(tenant)
+        verifier = FakePhoneVerifier()
+        user = _make_user(tenant_id=tenant.id, phone_number_e164=verifier.phone_number)
+        await users.create(user)
+        service = AuthenticateUserService(
+            tenants=tenants,
+            tenant_context=FakeTenantContextBinder(),
+            identity_provider=InternalJWTProvider(users, FakeRoleRepository()),
+            audit=AuditService(FakeAuditEventRepository()),
+            phone_verifier=verifier,
+            personal_phone_logins=None,
+        )
+
+        with pytest.raises(UnauthorizedError) as exc_info:
+            await service.execute_phone(subdomain=None, firebase_id_token="good-token")
+
+        assert exc_info.value.code == "INVALID_CREDENTIALS"

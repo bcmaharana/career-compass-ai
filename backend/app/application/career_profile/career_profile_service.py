@@ -29,7 +29,7 @@ MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_PHOTO_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 
 
-def _photo_key_from_url(*, tenant_id: UUID, profile_id: UUID, photo_url: str) -> str | None:
+def photo_key_from_url(*, tenant_id: UUID, profile_id: UUID, photo_url: str) -> str | None:
     """Reconstructs the storage key from a stored photo_url.
 
     The key itself (`profile-photos/{tenant_id}/{profile_id}.{ext}`) is
@@ -37,6 +37,10 @@ def _photo_key_from_url(*, tenant_id: UUID, profile_id: UUID, photo_url: str) ->
     cache-busting `?v=` query param, see upload_photo) is. The extension
     is the only part of the key not otherwise derivable, so it's parsed
     back out of the URL path here.
+
+    Intentionally public (not `_`-prefixed) — also reused by
+    app/application/identity/delete_account.py for account-deletion S3
+    cleanup, not just this module's own delete_photo().
     """
     path = urlsplit(photo_url).path
     if "." not in path:
@@ -199,7 +203,7 @@ class CareerProfileService:
     async def delete_photo(self, *, tenant_id: UUID, user_id: UUID) -> CareerProfile:
         profile = await self.get_or_create(tenant_id=tenant_id, user_id=user_id)
         if profile.photo_url is not None and self._storage is not None:
-            key = _photo_key_from_url(
+            key = photo_key_from_url(
                 tenant_id=tenant_id, profile_id=profile.id, photo_url=profile.photo_url
             )
             if key is not None:

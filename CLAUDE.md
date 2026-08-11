@@ -307,6 +307,32 @@ Known environment gotchas already solved, don't reintroduce:
   formatting. Country and language display names come from the
   built-in `Intl.DisplayNames` API (`frontend/src/lib/locale-options.ts`)
   rather than a bundled name list.
+- **Never call `.mutate()` synchronously inside a bare mount `useEffect`
+  for a "fire once automatically" page** (e.g. an emailed-link landing
+  page like `VerifyEmailPage.tsx`). Verified live (2026-08-10): React
+  18 StrictMode's dev-only double effect invocation (mount → cleanup →
+  remount, all synchronous within the same commit) tears down and
+  rebuilds `useMutation`'s internal subscription *while* that first
+  `mutate()` call's async request is still in flight. The request
+  genuinely completes — confirmed via a real network response arriving
+  with the correct body — but its `onSuccess`/`onError`/`onSettled`
+  never fire and the component never re-renders, so the UI hangs on its
+  loading state forever. This is dev-only (StrictMode's double-invoke
+  is stripped in production builds) but this app's frontend is always
+  run via `npm run dev`, so it's a real, reproducible bug in the
+  environment that matters here, not a false alarm. Fix: defer the
+  `mutate()` call a tick past the synchronous double-invoke window
+  (`setTimeout(fn, 0)` inside the effect, cleared on cleanup) so it only
+  ever fires once StrictMode's synthetic first pass has already been
+  torn down and the second, stable pass's subscription is the one still
+  standing — see `VerifyEmailPage.tsx`'s `useEffect` for the exact
+  pattern (the `hasSubmitted` single-use-token guard now lives inside
+  the deferred callback, not the effect body, so StrictMode's cancelled
+  first pass never marks it submitted). Root-caused by instrumenting the
+  mutation's raw promise directly (bypassing react-query) to prove the
+  network layer wasn't at fault, then bisecting by toggling
+  `<React.StrictMode>` off in `main.tsx` to confirm it was the actual
+  variable — not by reasoning about React Query internals from source.
 
 ## Current status (as of this handoff)
 
@@ -530,10 +556,21 @@ Known environment gotchas already solved, don't reintroduce:
   numbers for testing** feature (Authentication → Sign-in method →
   Phone → "Phone numbers for testing") is genuinely useful for local dev
   going forward — a fixed number+code pair (e.g. `+16505553434` /
-  `123456`) skips real SMS, billing, and reCAPTCHA entirely, so it's
-  usable in a browser without any of the gotchas below. `phase4@test.com`
-  already has `+1 650-555-3434` saved as its phone number for exactly
-  this.
+  `123456`) skips real SMS and billing, so it's usable in a browser
+  without most of the gotchas below. `phase4@test.com` already has
+  `+1 650-555-3434` saved as its phone number for exactly this.
+  **Correction, 2026-08-11: it does not skip reCAPTCHA** — confirmed
+  live that a fresh test number still hit a genuine visible reCAPTCHA
+  challenge when driven by an automated Playwright session (see the
+  "Phone login for Personal accounts" status entry further down).
+  reCAPTCHA verification is a client-side precondition that runs before
+  Firebase's backend ever checks whether the number is a registered
+  test number — the test-number feature only short-circuits the real
+  SMS send/billing *after* a valid reCAPTCHA response already exists.
+  An origin with a degraded reCAPTCHA risk score (heavy same-day
+  automated testing, in particular) gets challenged regardless of which
+  number is used; a real human on an ordinary browsing pattern
+  generally isn't affected.
 
   **Five real gotchas hit getting this working live, all fixed** (none
   of these show up in code review — only actually running the flow
@@ -1021,6 +1058,211 @@ Known environment gotchas already solved, don't reintroduce:
   (Playwright for the auto-expand fix — confirmed a collapsed section
   reliably opens and shows the new item after Add; direct HTTP/curl and
   PowerShell `HttpClient` for the disconnect-race investigation itself).
+- **Email verification + real "delete my account"** (2026-08-10) — done,
+  verified live in dev; prod rebuild/redeploy not yet done. Signup is
+  now two-phase for both Personal and Enterprise: nothing is written to
+  `tenants`/`organizations`/`users` until an emailed link is clicked.
+  New RLS-exempt `pending_signups` table (same reasoning as
+  `password_reset_tokens` — must be resolvable before any tenant
+  exists) holds a hashed password + opaque hashed token (reusing the
+  password-reset feature's "raw token emailed, only its sha256 hash
+  stored" pattern). `RequestPersonalSignupService`/
+  `RequestOrganizationSignupService` (`app/application/identity/`)
+  validate and email the link; `VerifySignupService` looks it up,
+  creates the real account via a new `RegisterTenantService.execute_with_hashed_password()`
+  (the existing `execute()` is now a thin wrapper around it, so the
+  already-hashed pending-signup password isn't hashed twice), and
+  auto-logs the person in via a newly-extracted
+  `InternalJWTProvider.claims_for_user()` (previously duplicated inline
+  in both the credentials and phone login paths). `/tenants` itself is
+  deliberately untouched — it stays the low-level immediate-creation
+  primitive ~30 existing integration tests already use for setup.
+  Account deletion (`DELETE /api/v1/identity/me`) is immediate and
+  real — no LinkedIn-style grace period, an explicit choice made
+  because this codebase has no background job scheduler to support a
+  delayed purge. Deletes the whole tenant (every tenant today has
+  exactly one user, no invite feature yet) via explicit ORM-level
+  deletes in dependency order in `SqlAlchemyAccountDeletionRepository`
+  (`app/adapters/db/account_deletion.py`), not `ON DELETE CASCADE` —
+  confirmed live via `information_schema` that no FK in this schema has
+  cascade behavior, and adding it broadly was judged riskier than one
+  explicit, order-verified deletion service for this codebase's
+  maturity; a forgotten future tenant-owned table fails loudly (FK
+  violation) rather than silently orphaning data. This also required
+  narrowing the `audit_events_immutable` trigger from
+  `BEFORE UPDATE OR DELETE` to `BEFORE UPDATE` only — every tenant has
+  audit rows from its own creation, so deletion was flatly impossible
+  under the original trigger; history still can't be *rewritten*, only
+  a deleted tenant's own trail can now be removed along with the rest
+  of its data. **One real bug found and fixed live, not by review**:
+  `VerifyEmailPage.tsx` initially hung forever on "Verifying..." for a
+  genuinely-failing verification (confirmed the backend correctly
+  returned 401 in ~25ms) — see the new Frontend-conventions entry above
+  ("Never call `.mutate()` synchronously inside a bare mount
+  `useEffect`...") for the full root-cause and fix; StrictMode's
+  dev-only double effect invocation was silently orphaning the
+  mutation's subscription before its async response arrived. A second,
+  minor issue from the same verification pass: `ResendEmailProvider`
+  was relaying Resend's raw HTTP error text (e.g. sandbox-domain
+  rejection wording) straight into the signup form's UI — fixed by
+  logging the raw detail server-side only (`logger.warning`) and
+  raising a generic user-facing message instead. Both fixes verified
+  live: a headed-Playwright repro of the stuck-spinner bug (single
+  network call, StrictMode on) now correctly shows the error state and
+  redirect-on-success both work; a real Resend sandbox rejection
+  (`@example.com` recipient) now surfaces "Failed to send the email.
+  Please try again shortly." instead of the raw client-error string,
+  while the full detail still lands in the container's structured logs.
+  The full delete-account flow was verified end-to-end through the
+  actual UI (Playwright: verify a seeded pending signup → land on
+  `/dashboard` → click through to Settings > Account → type `DELETE` →
+  confirm) — real `204`, redirected to `/`, and a direct Postgres check
+  confirmed both the `users` and `tenants` rows were genuinely gone
+  afterward, not soft-deleted. 361 backend tests passing throughout.
+- **Phone login for Personal accounts** (2026-08-11) — done, deployed
+  and verified live in both dev and prod. Firebase phone login
+  previously only worked for Enterprise, since it resolved the tenant
+  via a caller-supplied Organization subdomain before looking up the
+  phone number within that tenant. Personal accounts have no subdomain
+  field, and — unlike email, which Personal login handles via
+  `derive_personal_subdomain(email)` recomputing the same deterministic
+  hash at both signup and login with no DB lookup — a phone number
+  can't use that trick: it isn't known at signup time at all (only
+  added later via Settings > Profile), so there's no fixed value to
+  hash into a subdomain up front. Solved with a small, deliberately
+  narrow cross-tenant lookup: new `personal_phone_logins` table
+  (`phone_number_e164` as primary key, `tenant_id`/`user_id` FKs, no
+  RLS — same "must be resolvable before any tenant context exists"
+  reasoning as `password_reset_tokens`), populated only for
+  Personal-tenant users (`is_personal_subdomain()`, new helper next to
+  `derive_personal_subdomain`) — Enterprise phone numbers are
+  deliberately never written here, since the same E.164 number can
+  legitimately exist under two different Enterprise tenants today
+  (`users.phone_number_e164` is unique per `(tenant_id,
+  phone_number_e164)`, not globally). `UpdateUserProfileService` writes
+  through it (upsert on save, delete on clear/change, `ConflictError`
+  if another Personal account already claims the number — a real
+  identity conflict, not the same "just don't enable phone login yet"
+  leniency `_to_e164`'s own unparseable-number case gets);
+  `AuthenticateUserService.execute_phone`'s `subdomain` became optional
+  and reads through it when blank, verifying the Firebase ID token
+  *before* resolving the tenant now (Personal needs the phone number in
+  hand before it can look anything up, unlike Enterprise which already
+  has the subdomain). Account deletion
+  (`SqlAlchemyAccountDeletionRepository`) got `PersonalPhoneLoginModel`
+  added to its existing tenant-scoped delete loop, verified live (both
+  dev and prod) that deleting a Personal account with a registered
+  phone number leaves no orphaned row and no FK violation. Frontend:
+  `PhoneLoginForm`'s Organization field is now conditional
+  (`showOrganizationField` prop) rather than always-required, and
+  `LoginPage`'s Email/Phone method toggle — previously gated to
+  Enterprise only — now renders for both account types. 13 new backend
+  tests (units for both services' new branches, integration tests for
+  the real end-to-end phone-login-with-no-subdomain flow and the
+  delete-cleanup case) — 374 backend tests passing, mypy clean
+  (including a pre-existing, unrelated mypy false-positive in
+  `account_deletion.py` fixed in passing — two separate `for model in
+  (...)` loops reusing the same loop-variable name confused mypy's type
+  narrowing across iterations; renamed one to `direct_model`).
+  **A real, unrelated Resend config gap surfaced during this work**:
+  dev's `backend/.env` still had `RESEND_FROM_EMAIL=onboarding@resend.dev`
+  (Resend's shared sandbox sender, which only allows sending to the
+  Resend account owner's own address) even after prod's copy had
+  already been fixed to a verified `noreply@scaledbrain.com` sender
+  during the previous feature's live verification — dev just hadn't
+  needed a real signup email sent to a non-owner address since. Fixed
+  in dev too, and confirmed via a real `200 OK` from Resend's API
+  (previously a `403`). **Also surfaced: `docker compose up -d
+  --force-recreate` resets a container to whatever was baked into the
+  image at its last real `build`, silently discarding every file ever
+  added via a one-off `docker cp` since then** — not just the most
+  recent one. Dev's backend container had accumulated two migrations
+  this way without ever being rebuilt; recreating it for the `.env`
+  change above lost both at once (`alembic current` failed outright,
+  `KeyError` on a revision the loaded history no longer referenced)
+  until `docker compose build backend` (a real rebuild) was run.
+  **A multi-round live debugging session chasing an apparent
+  Personal-vs-Enterprise phone-login discrepancy in dev turned out to
+  be a false lead, not a code bug**: the user got `auth/invalid-app-credential`
+  from Firebase specifically on the Personal + Phone path while
+  Enterprise + Phone succeeded, against the same real phone number.
+  Ruled out, in order, with direct evidence at each step: a tainted
+  reCAPTCHA risk score from an earlier automated Playwright verification
+  attempt (a fresh incognito window reproduced the identical failure,
+  ruling this out); an interaction-count-based reCAPTCHA risk theory
+  (clicking around the page before retrying didn't change the outcome);
+  a stale-widget-carryover theory from removing `LoginPage`'s old
+  `if (option === "personal") setMethod("email")` reset (ruled out once
+  the user confirmed every Personal attempt was a genuinely fresh page
+  reload, which already guarantees a brand-new widget regardless). A
+  full re-read of the current `PhoneLoginForm.tsx`/`lib/firebase.ts`
+  end to end confirmed neither file's Firebase/reCAPTCHA call chain
+  differs at all based on account type. The real explanation surfaced
+  on its own moments later: Firebase returned the explicit
+  `auth/too-many-requests` on a subsequent attempt against the same
+  real number — its own abuse-rate-limiter, tripped by the sheer volume
+  of automated-plus-manual attempts against one real number in a single
+  session (the same class of finding as
+  `feedback_subagent_browser_verification.md`'s existing "don't keep
+  hammering the same test number" guidance, now confirmed to
+  eventually surface as an explicit, unambiguous error rather than
+  staying silently mysterious). No code change resulted from this
+  investigation — the Firebase/reCAPTCHA client code was correct
+  throughout, exactly as the unit/integration/DB-level live tests
+  already indicated.
+- **Terms of Service + Privacy Policy, required at signup** (2026-08-11)
+  — done, deployed and verified live in both dev and prod. The app had
+  no legal documents and nothing gated account creation on agreeing to
+  any — a required consent checkbox now blocks both Personal and
+  Enterprise signup until checked. **Explicitly communicated to the
+  user and worth restating here**: this is solid, standard-form legal
+  content accurately describing what the app actually does, not a
+  substitute for real legal review — drafted by Claude, not a lawyer.
+  Real consent is recorded, not just a client-side checkbox that proves
+  nothing later: `PendingSignup` (`app/domain/identity/entities.py`)
+  gained required `agreed_to_terms_at`/`terms_version`, stamped by
+  `RequestPersonalSignupService`/`RequestOrganizationSignupService` at
+  the moment the signup form is actually submitted (not passed in from
+  the router — computed the same place `created_at`/`expires_at`
+  already are). `VerifySignupService` carries both through to
+  `RegisterTenantService.execute_with_hashed_password` (gained two new
+  optional params, defaulting to `None` so the existing `/tenants`
+  low-level test-setup primitive is untouched), which sets them on the
+  created `User` (nullable there — existing accounts from before this
+  shipped are honestly left unset, not backfilled with fabricated
+  consent). `CURRENT_TERMS_VERSION` is a plain version-string constant
+  in a new `app/domain/identity/legal_terms.py`, not a full
+  versioning/re-consent system — enough for this scope, easy to bump
+  later. `PersonalSignupRequest`/`OrganizationSignupRequest` gained a
+  required `agreed_to_terms: bool` field with a validator rejecting
+  `False` with a clear message rather than FastAPI's generic 422
+  wording. New public routes `/terms` and `/privacy`
+  (`frontend/src/features/legal/`, plain hand-styled content pages —
+  no typography plugin installed — sharing a small `LegalPageLayout`),
+  linked from a checkbox on `SignupPage.tsx` that disables the submit
+  button until checked, for both forms. One real bug caught building
+  the live-verification script itself, not by review: querying the
+  RLS-protected `users` table via a raw, unscoped test session failed
+  with `invalid input syntax for type uuid: ""` — `current_setting(
+  'app.tenant_id', true)` returns an empty string rather than NULL in
+  that context, and casting `''::uuid` errors; fixed by binding
+  `set_tenant_context()` first, the same pattern every other
+  tenant-scoped raw query in the test suite already uses. A second,
+  unrelated flaky-test finding surfaced during this same live-test run
+  (not fixed, out of scope for this feature): `_unique_test_phone_number()`
+  in `test_identity_flow.py` only has 100 possible values (555-0100
+  through 555-0199), which is a real, if rare, collision risk as the
+  phone-login test suite grows — worth widening if it recurs. 375
+  backend tests passing (2 new: reject-without-agreeing at both the
+  schema-validator and full-request-integration level), mypy clean.
+  Verified live via headed Playwright in dev (submit button genuinely
+  disabled until checked, real signup request reaches the backend and
+  creates a `pending_signups` row with a real `agreed_to_terms_at`
+  timestamp once checked, the Terms link opens a real rendered page in
+  a new tab) and via direct HTTP + Postgres checks against
+  `scaledbrain.com` in prod (schema present, `agreed_to_terms: false`
+  rejected with the custom message, `agreed_to_terms: true` creates a
+  real `pending_signups` row with consent recorded).
 - **Not yet started**: Phase 6 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in
