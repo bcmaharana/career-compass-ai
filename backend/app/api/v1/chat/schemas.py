@@ -24,3 +24,7 @@ class SendChatMessageResponse(BaseModel):
     conversation_id: UUID
     user_message: ChatMessageResponse
     assistant_message: ChatMessageResponse
+
+
+class LatestConversationResponse(BaseModel):
+    conversation_id: UUID | None

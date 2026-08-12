@@ -107,6 +107,20 @@ class ChatService:
             assistant_message=assistant_message,
         )
 
+    async def get_latest_conversation_id(
+        self, *, tenant_id: UUID, user_id: UUID
+    ) -> UUID | None:
+        """Lets the frontend resume the same conversation after a full
+        page reload or a logout/login cycle — chat-store.ts holds
+        conversation_id only in memory (deliberately, so a stray tab
+        doesn't leak one user's conversation into a different session on
+        the same browser), so without this, every reload started a
+        brand-new, historyless conversation even though the old one and
+        its messages were still sitting in the database the whole time.
+        """
+        conversation = await self._conversations.get_latest_for_user(tenant_id, user_id)
+        return conversation.id if conversation else None
+
     async def _generate_reply(
         self, *, tenant_id: UUID, user_id: UUID, history: list[ChatMessage], content: str
     ) -> str:

@@ -1,3 +1,4 @@
+import { useLatestConversation } from "@/api/queries/chat";
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { MobileShell } from "@/components/layout/MobileShell";
 import { matchNavItem } from "@/lib/nav-items";
@@ -43,12 +44,12 @@ function useIsMobileShell(): boolean {
  * Application shell root. Owns the state/effects that don't depend on
  * which layout renders — the scrollable center panel's ref (shared since
  * only one of DesktopShell/MobileShell's own `<main>` is ever mounted at
- * a time), clearing the chat thread on a genuine nav-section change,
- * resetting scroll on route change, auto-scrolling to a new message, and
- * logout — then branches to DesktopShell (rails + docked footer chat,
- * `md` and up) or MobileShell (bottom tab bar + slide-in sheets, below
- * `md`) based on viewport width. See those two files for the actual fixed
- * regions each renders.
+ * a time), resuming the AI chat conversation on mount, clearing the chat
+ * thread on a genuine nav-section change, resetting scroll on route
+ * change, auto-scrolling to a new message, and logout — then branches to
+ * DesktopShell (rails + docked footer chat, `md` and up) or MobileShell
+ * (bottom tab bar + slide-in sheets, below `md`) based on viewport width.
+ * See those two files for the actual fixed regions each renders.
  */
 export function AppShell() {
   const navigate = useNavigate();
@@ -59,9 +60,29 @@ export function AppShell() {
 
   const chatMessages = useChatStore((state) => state.messages);
   const clearChat = useChatStore((state) => state.clear);
+  const chatConversationId = useChatStore((state) => state.conversationId);
+  const setChatConversationId = useChatStore((state) => state.setConversationId);
   const mainRef = useRef<HTMLElement>(null);
   const activeNavItem = matchNavItem(location.pathname);
   const previousNavItemRef = useRef(activeNavItem);
+
+  // Resumes the same AI chat conversation after a full page reload or a
+  // fresh login — chat-store.ts's conversationId lives in memory only
+  // (deliberately: it must not survive a *different* user logging in on
+  // the same browser tab), which otherwise meant every reload/relogin
+  // started a brand-new, historyless conversation even though the old
+  // one and its messages were still sitting in the database. The `only
+  // if nothing's set yet` guard matters here: this effect can re-run
+  // (react-query refetch, StrictMode) after the user has already sent a
+  // message in this tab, and must never clobber that in-progress
+  // conversation with an older one from the server.
+  const { data: latestConversation } = useLatestConversation();
+  useEffect(() => {
+    if (chatConversationId) return;
+    if (latestConversation?.conversation_id) {
+      setChatConversationId(latestConversation.conversation_id);
+    }
+  }, [latestConversation, chatConversationId, setChatConversationId]);
 
   // Clears the visible chat thread on a genuine Left Nav / tab bar
   // section change (brief Part 1.2) — the conversation itself stays

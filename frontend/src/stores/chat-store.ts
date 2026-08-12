@@ -22,7 +22,6 @@ import { create } from "zustand";
  * reaches the LLM with its full prior history, even though the bubbles
  * that produced that history aren't re-rendered on screen.
  *
-
  * The user's own message is added optimistically (client-generated id,
  * before the request resolves) so it appears the instant they hit send —
  * `isSending` then drives ChatThread's typing indicator until the
@@ -46,6 +45,14 @@ interface ChatState {
   addAssistantMessage: (conversationId: string, message: ChatThreadMessage) => void;
   setSending: (isSending: boolean) => void;
   clear: () => void;
+  /** AppShell.tsx calls this once, on mount, with whatever
+   * useLatestConversation() finds — resuming the same conversation after
+   * a full page reload or a fresh login, the same in-memory-only gap
+   * `conversationId` surviving navigation (above) doesn't cover on its
+   * own. Only sets it if nothing's set yet (see AppShell.tsx's own
+   * guard), so this can never clobber a conversation already in
+   * progress in this tab. */
+  setConversationId: (conversationId: string) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -58,4 +65,5 @@ export const useChatStore = create<ChatState>((set) => ({
     set((state) => ({ conversationId, messages: [...state.messages, message] })),
   setSending: (isSending) => set({ isSending }),
   clear: () => set({ messages: [], isSending: false }),
+  setConversationId: (conversationId) => set({ conversationId }),
 }));

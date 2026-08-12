@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, status
 from app.api.dependencies import get_chat_service, get_current_identity
 from app.api.v1.chat.schemas import (
     ChatMessageResponse,
+    LatestConversationResponse,
     SendChatMessageRequest,
     SendChatMessageResponse,
 )
@@ -58,3 +59,14 @@ async def send_chat_message(
         content=request.content,
     )
     return _turn_response(turn)
+
+
+@router.get("/chat/conversations/latest", response_model=LatestConversationResponse)
+async def get_latest_conversation(
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ChatService = Depends(get_chat_service),
+) -> LatestConversationResponse:
+    conversation_id = await service.get_latest_conversation_id(
+        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
+    )
+    return LatestConversationResponse(conversation_id=conversation_id)

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.db.models import ChatConversationModel, ChatMessageModel
@@ -56,6 +56,21 @@ class SqlAlchemyChatConversationRepository:
                 ChatConversationModel.tenant_id == tenant_id,
                 ChatConversationModel.id == conversation_id,
             )
+        )
+        model = result.scalar_one_or_none()
+        return _conversation_to_domain(model) if model else None
+
+    async def get_latest_for_user(
+        self, tenant_id: UUID, user_id: UUID
+    ) -> ChatConversation | None:
+        result = await self._session.execute(
+            select(ChatConversationModel)
+            .where(
+                ChatConversationModel.tenant_id == tenant_id,
+                ChatConversationModel.user_id == user_id,
+            )
+            .order_by(desc(ChatConversationModel.created_at))
+            .limit(1)
         )
         model = result.scalar_one_or_none()
         return _conversation_to_domain(model) if model else None

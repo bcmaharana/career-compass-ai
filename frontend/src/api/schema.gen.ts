@@ -733,6 +733,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/conversations/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Latest Conversation */
+        get: operations["get_latest_conversation_api_v1_chat_conversations_latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quote-of-the-day": {
         parameters: {
             query?: never;
@@ -1812,6 +1829,11 @@ export interface components {
             occurred_on: string | null;
             /** Display Order */
             display_order: number;
+        };
+        /** LatestConversationResponse */
+        LatestConversationResponse: {
+            /** Conversation Id */
+            conversation_id: string | null;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -4611,6 +4633,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_latest_conversation_api_v1_chat_conversations_latest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LatestConversationResponse"];
                 };
             };
         };
