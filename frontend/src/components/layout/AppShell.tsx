@@ -130,7 +130,7 @@ export function AppShell() {
     // different user) could briefly show whatever data the *previous*
     // session had cached before a background refetch replaced it.
     queryClient.clear();
-    navigate("/login", { replace: true });
+    navigate("/", { replace: true });
   }
 
   return (
