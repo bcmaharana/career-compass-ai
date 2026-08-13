@@ -282,6 +282,294 @@
   }
 }
 
+/*
+ * LandingPage.tsx's hero background wave, phase 1 ("flock"). Two
+ * independent animations run on every flock dot, on two different CSS
+ * properties, so they compose instead of one overriding the other:
+ *
+ * hero-wave-flock-orbit (the `transform` property, one shared instance,
+ * `1` iteration, `linear` timing — no `infinite`, set in LandingPage.tsx):
+ * an ellipse (130×55, centered on the main graph's hub and sized off the
+ * V-formation's apex — see LandingPage.tsx's FLOCK_APEX_X/FLOCK_ORBIT_RX),
+ * starting at the ellipse's leftmost point (0% = (0, 0), i.e. no
+ * displacement from each dot's own starting spot, which is already left
+ * of the graph) and sweeping up, over the top, and around. 24 points at
+ * equal 15° angle increments, not the original 8 at 45° — verified live
+ * that 8 points with `ease-in-out` visibly paused/stuttered at each
+ * waypoint (the "not smooth" complaint); `linear` timing across enough
+ * closely-spaced points is what actually reads as one continuous glide
+ * instead of a sequence of decelerate-then-accelerate hops. Identical
+ * for every dot, so the whole cluster glides together in sync — the
+ * "smooth, like birds" part.
+ *
+ * hero-wave-fly-1..4 (the separate `translate` property — distinct from
+ * `transform` since CSS Transforms Level 2, and composed with it rather
+ * than replacing it): a handful of quick, small, multi-directional hops,
+ * deliberately kept small relative to the static gap between neighboring
+ * dots (see LandingPage.tsx's FLOCK_ROW_SPACING) — verified live that
+ * even two dots jittering toward each other at the same instant don't
+ * close the gap enough to touch. Each dot is assigned one variant, so
+ * individually they dart around their own spot on top of the group's
+ * shared glide — the "like flies" part.
+ */
+@keyframes hero-wave-flock-orbit {
+  0% {
+    transform: translate(0px, 0px);
+  }
+  4.1667% {
+    transform: translate(4.43px, -14.24px);
+  }
+  8.3333% {
+    transform: translate(17.42px, -27.5px);
+  }
+  12.5% {
+    transform: translate(38.08px, -38.89px);
+  }
+  16.6667% {
+    transform: translate(65px, -47.63px);
+  }
+  20.8333% {
+    transform: translate(96.35px, -53.13px);
+  }
+  25% {
+    transform: translate(130px, -55px);
+  }
+  29.1667% {
+    transform: translate(163.65px, -53.13px);
+  }
+  33.3333% {
+    transform: translate(195px, -47.63px);
+  }
+  37.5% {
+    transform: translate(221.92px, -38.89px);
+  }
+  41.6667% {
+    transform: translate(242.58px, -27.5px);
+  }
+  45.8333% {
+    transform: translate(255.57px, -14.24px);
+  }
+  50% {
+    transform: translate(260px, 0px);
+  }
+  54.1667% {
+    transform: translate(255.57px, 14.24px);
+  }
+  58.3333% {
+    transform: translate(242.58px, 27.5px);
+  }
+  62.5% {
+    transform: translate(221.92px, 38.89px);
+  }
+  66.6667% {
+    transform: translate(195px, 47.63px);
+  }
+  70.8333% {
+    transform: translate(163.65px, 53.13px);
+  }
+  75% {
+    transform: translate(130px, 55px);
+  }
+  79.1667% {
+    transform: translate(96.35px, 53.13px);
+  }
+  83.3333% {
+    transform: translate(65px, 47.63px);
+  }
+  87.5% {
+    transform: translate(38.08px, 38.89px);
+  }
+  91.6667% {
+    transform: translate(17.42px, 27.5px);
+  }
+  95.8333% {
+    transform: translate(4.43px, 14.24px);
+  }
+  100% {
+    transform: translate(0px, 0px);
+  }
+}
+@keyframes hero-wave-fly-1 {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  25% {
+    translate: 1.8px -1.5px;
+  }
+  50% {
+    translate: -1.2px -2px;
+  }
+  75% {
+    translate: -1.8px 1.2px;
+  }
+}
+@keyframes hero-wave-fly-2 {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  30% {
+    translate: -1.5px 1.8px;
+  }
+  55% {
+    translate: 1.5px 1.5px;
+  }
+  80% {
+    translate: 1.8px -1.2px;
+  }
+}
+@keyframes hero-wave-fly-3 {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  20% {
+    translate: 1.2px 1.8px;
+  }
+  50% {
+    translate: -1.8px 0.9px;
+  }
+  75% {
+    translate: -0.9px -1.8px;
+  }
+}
+@keyframes hero-wave-fly-4 {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  35% {
+    translate: -1.8px -1.2px;
+  }
+  60% {
+    translate: 0.9px -1.8px;
+  }
+  85% {
+    translate: 1.8px 1.5px;
+  }
+}
+
+/*
+ * LandingPage.tsx's hero background wave, phase 2 ("scattered"): six
+ * hand-authored long, sweeping glide paths (hero-wave-flight-1..6) — each dot is
+ * assigned one by index, so dots visibly fly from one side of the
+ * canvas toward the other and loop, rather than wobbling in place near
+ * a fixed spot. Horizontal travel is large (~150-200px) since there's
+ * open page space either side of the graphic; vertical travel is kept
+ * much smaller (~30-45px) since the graphic sits close under the fixed
+ * header and just above the page heading, where a big vertical swing
+ * would visibly fly into that surrounding text. Every variant returns
+ * to (0, 0) at 0%/100% for a seamless loop, and every dot uses the same
+ * duration + `ease-in-out` timing in LandingPage.tsx (a glide
+ * naturally speeds up/slows down, unlike a robotic constant rate) — so
+ * despite the different-looking paths, every dot's overall pace reads
+ * as consistent; only start delay differs, so they're out of phase
+ * with each other rather than synchronized. Color: separately cycles
+ * through the spectrum via hue-rotate. Plain top-level @keyframes (not
+ * inside @layer) — SMIL (<animateTransform>) was tried first and,
+ * verified live, doesn't reliably auto-start when inserted dynamically
+ * by React in Chromium; CSS animations don't have that quirk.
+ */
+@keyframes hero-wave-flight-1 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(150px, -30px);
+  }
+  45% {
+    transform: translate(-90px, 40px);
+  }
+  70% {
+    transform: translate(-170px, -18px);
+  }
+}
+@keyframes hero-wave-flight-2 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-140px, 32px);
+  }
+  55% {
+    transform: translate(110px, 42px);
+  }
+  80% {
+    transform: translate(160px, -28px);
+  }
+}
+@keyframes hero-wave-flight-3 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  15% {
+    transform: translate(95px, 35px);
+  }
+  40% {
+    transform: translate(-165px, 20px);
+  }
+  65% {
+    transform: translate(-75px, -42px);
+  }
+}
+@keyframes hero-wave-flight-4 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  30% {
+    transform: translate(-170px, -18px);
+  }
+  60% {
+    transform: translate(55px, 44px);
+  }
+  85% {
+    transform: translate(150px, 24px);
+  }
+}
+@keyframes hero-wave-flight-5 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  35% {
+    transform: translate(130px, -38px);
+  }
+  60% {
+    transform: translate(-145px, -22px);
+  }
+  90% {
+    transform: translate(-45px, 40px);
+  }
+}
+@keyframes hero-wave-flight-6 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  22% {
+    transform: translate(-100px, -40px);
+  }
+  48% {
+    transform: translate(160px, -12px);
+  }
+  78% {
+    transform: translate(60px, 38px);
+  }
+}
+@keyframes hero-wave-hue {
+  from {
+    filter: hue-rotate(0deg);
+  }
+  to {
+    filter: hue-rotate(360deg);
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
