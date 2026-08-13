@@ -47,6 +47,7 @@ class RequestPasswordResetService:
         email_provider: EmailProviderInterface,
         audit: AuditService,
         frontend_base_url: str,
+        from_email: str,
     ) -> None:
         self._tenants = tenants
         self._users = users
@@ -55,6 +56,7 @@ class RequestPasswordResetService:
         self._email_provider = email_provider
         self._audit = audit
         self._frontend_base_url = frontend_base_url.rstrip("/")
+        self._from_email = from_email
 
     async def execute(self, *, subdomain: str | None, email: str) -> None:
         # Same "blank means Personal account" convention as
@@ -103,6 +105,7 @@ class RequestPasswordResetService:
                         "<p>If you didn't request this, you can safely ignore this "
                         "email.</p>"
                     ),
+                    from_email=self._from_email,
                 )
             )
         except CareerCompassError:

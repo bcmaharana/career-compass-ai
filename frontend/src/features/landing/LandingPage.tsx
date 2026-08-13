@@ -40,7 +40,6 @@ import { Navigate, Link } from "react-router-dom";
 // the swap from "circling together" to "peeling off individually" reads
 // as the flock dispersing, not a jump cut. Color (`hero-wave-hue`)
 // cycles the same way in both phases.
-const HUB_X = 300;
 const HUB_Y = 140;
 // V-formation: row 0 is the single leader at the apex; rows 1-8 each add
 // one more dot than the last (2, 3, 4, ... 9), fanning out behind it;
@@ -53,8 +52,6 @@ const FLOCK_HALF_ANGLE_DEG = 26; // how wide the V opens, for rows with enough d
 const FLOCK_ROW_DOT_SPACING = 24; // minimum lateral spacing between dots *within* a row — the early rows (2-3 dots) are so close to the apex that the V's own angle alone would space them closer than this and touch; this floor wins for most rows
 const FLOCK_APEX_X = 170; // the leader's position — left of the graph, clear of the main graph's left node (edge at x=181)
 const FLOCK_APEX_Y = HUB_Y;
-const FLOCK_ORBIT_RX = HUB_X - FLOCK_APEX_X; // ellipse, not a circle — sized off the apex, which is what "starts left of the graph" now refers to
-const FLOCK_ORBIT_RY = 55;
 const FLOCK_DURATION_S = 4;
 const FLOCK_FLY_VARIANT_COUNT = 4;
 const SCATTER_TRANSITION_S = 1.4;
@@ -62,7 +59,8 @@ const SCATTER_TRANSITION_S = 1.4;
 function flockRowInfo(seed: number): { row: number; indexInRow: number; rowCount: number } {
   let remaining = seed;
   for (let row = 0; row < FLOCK_ROW_COUNTS.length; row++) {
-    const rowCount = FLOCK_ROW_COUNTS[row];
+    // Safe: the loop bound (FLOCK_ROW_COUNTS.length) guarantees this index is in range.
+    const rowCount = FLOCK_ROW_COUNTS[row]!;
     if (remaining < rowCount) return { row, indexInRow: remaining, rowCount };
     remaining -= rowCount;
   }

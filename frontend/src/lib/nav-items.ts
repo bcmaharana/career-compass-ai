@@ -4,6 +4,7 @@ import {
   Gauge,
   LineChart,
   Settings,
+  ShieldCheck,
   Sparkles,
   User,
   UserCircle,
@@ -88,7 +89,27 @@ export const SETTINGS_NAV_ITEMS: NavItem[] = [
     end: true,
     purpose: "Permanently delete your account and all your data.",
   },
+  {
+    to: "/settings/platform-admin",
+    label: "Platform Admin",
+    icon: ShieldCheck,
+    end: true,
+    purpose: "Manage platform-wide settings and admin access.",
+  },
 ];
+
+/**
+ * Settings sub-nav entries that require no special access — everyone
+ * signed in sees these. "Platform Admin" is deliberately excluded here
+ * (see AccountPanelContent.tsx, which appends it back only for a caller
+ * with at least one platform.* permission) — it stays in
+ * SETTINGS_NAV_ITEMS itself so matchNavItem still resolves the right
+ * page title/purpose for someone who *does* have access and is actually
+ * on that page.
+ */
+export const STANDARD_SETTINGS_NAV_ITEMS: NavItem[] = SETTINGS_NAV_ITEMS.filter(
+  (item) => item.to !== "/settings/platform-admin",
+);
 
 /** Header title/purpose only for the bare /settings landing page — kept
  * out of SETTINGS_NAV_ITEMS so it never renders as a clickable sub-nav

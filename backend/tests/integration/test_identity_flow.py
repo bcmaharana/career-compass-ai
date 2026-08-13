@@ -828,6 +828,57 @@ class TestDeleteAccount:
             )
             assert result.scalar_one() == 0
 
+    async def test_delete_removes_platform_admin_grant(
+        self, client: AsyncClient, email_provider: FakeEmailProvider
+    ) -> None:
+        """A platform_admins row referencing this user (NOT NULL FK on
+        both tenant_id and user_id, no ON DELETE CASCADE) must not block
+        deletion — the exact bug caught live building the platform-admin
+        feature: deleting an account that held a platform_admins grant
+        raised a raw ForeignKeyViolation 500 before PlatformAdminModel
+        was added to SqlAlchemyAccountDeletionRepository's step-3 delete
+        loop. Inserted directly (no self-grant API exists), same as
+        this class's phone-login sibling test.
+        """
+        email = _unique_email()
+        registration = await _signup_personal(
+            client, email=email, password="a-real-password-1", email_provider=email_provider
+        )
+        headers = {"Authorization": f"Bearer {registration['access_token']}"}
+        tenant_id = uuid.UUID(registration["tenant_id"])
+        user_id = uuid.UUID(registration["user_id"])
+
+        async with async_session_factory() as session:
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO platform_admins
+                        (id, tenant_id, user_id, email, full_name, permission_codes, granted_by_user_id)
+                    VALUES
+                        (:id, :tenant_id, :user_id, :email, :full_name, :permission_codes, :user_id)
+                    """
+                ),
+                {
+                    "id": uuid.uuid4(),
+                    "tenant_id": tenant_id,
+                    "user_id": user_id,
+                    "email": email,
+                    "full_name": "Jordan Rivera",
+                    "permission_codes": '["platform.settings.view"]',
+                },
+            )
+            await session.commit()
+
+        delete_response = await client.delete("/api/v1/identity/me", headers=headers)
+        assert delete_response.status_code == 204, delete_response.text
+
+        async with async_session_factory() as session:
+            result = await session.execute(
+                text("SELECT count(*) FROM platform_admins WHERE user_id = :user_id"),
+                {"user_id": user_id},
+            )
+            assert result.scalar_one() == 0
+
     async def test_delete_removes_the_tenant_and_login_then_fails(
         self, client: AsyncClient, email_provider: FakeEmailProvider
     ) -> None:

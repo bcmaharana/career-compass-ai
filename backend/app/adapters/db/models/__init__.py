@@ -57,6 +57,7 @@ from app.adapters.db.models.identity import (
     UserModel,
     UserRoleModel,
 )
+from app.adapters.db.models.platform_admin import PlatformAdminModel, PlatformSettingModel
 from app.adapters.db.models.resume_intelligence import ResumeModel
 from app.adapters.db.models.search import ContentEmbeddingModel, EmbeddingModelModel
 
@@ -88,6 +89,8 @@ __all__ = [
     "PendingSignupModel",
     "PermissionModel",
     "PersonalPhoneLoginModel",
+    "PlatformAdminModel",
+    "PlatformSettingModel",
     "PrerequisiteOfEdgeModel",
     "PromptVersionModel",
     "RelatedSkillModel",

@@ -1,8 +1,14 @@
 import { useCareerProfile } from "@/api/queries/career-profile";
+import { usePlatformAdminMe } from "@/api/queries/platform-admin";
 import { Tooltip } from "@/components/ui/tooltip";
 import { TargetRolesWidget } from "@/features/career-profile/TargetRolesWidget";
 import { formatDisplayDate } from "@/lib/date-format";
-import { SETTINGS_NAV_ITEMS, isSettingsRoute, matchNavItem } from "@/lib/nav-items";
+import {
+  SETTINGS_NAV_ITEMS,
+  STANDARD_SETTINGS_NAV_ITEMS,
+  isSettingsRoute,
+  matchNavItem,
+} from "@/lib/nav-items";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { Crosshair, LogOut, Settings, UserCircle } from "lucide-react";
@@ -95,11 +101,21 @@ export function AccountPanelContent({
 }: AccountPanelContentProps) {
   const user = useAuthStore((state) => state.user);
   const { data: profile } = useCareerProfile();
+  const { data: platformAdmin } = usePlatformAdminMe();
   const [photoLoadFailed, setPhotoLoadFailed] = useState(false);
   const now = useLocalClock();
   const location = useLocation();
   const isCareerProfilePage = matchNavItem(location.pathname).to === "/profile";
   const inSettings = isSettingsRoute(location.pathname);
+  // Platform Admin only shows up in the sub-nav for a caller who
+  // actually has at least one platform.* permission — everyone else
+  // sees the standard three (see nav-items.ts's own docstring on this
+  // split). The write endpoints enforce this regardless; this is only
+  // about not showing a link that would just 403.
+  const visibleSettingsNavItems =
+    platformAdmin && platformAdmin.permission_codes.length > 0
+      ? SETTINGS_NAV_ITEMS
+      : STANDARD_SETTINGS_NAV_ITEMS;
 
   const localIsoDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   const weekday = now.toLocaleDateString(undefined, { weekday: "long" });
@@ -231,7 +247,7 @@ export function AccountPanelContent({
       <div className="flex-1 overflow-y-auto bg-primary">
         {inSettings ? (
           <nav className="flex flex-col gap-1 p-3">
-            {SETTINGS_NAV_ITEMS.map(({ to, label, icon: Icon, end }) => {
+            {visibleSettingsNavItems.map(({ to, label, icon: Icon, end }) => {
               const link = (
                 <NavLink
                   key={to}

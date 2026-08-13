@@ -9,16 +9,18 @@ No foreign key in this schema has ON DELETE CASCADE (confirmed live
 against the real schema, not assumed) — deletion order matters and is
 enforced here explicitly, children before parents. See
 app/application/identity/delete_account.py's docstring for why this
-approach was chosen over adding CASCADE to every FK, and for the one
-known, accepted edge case (content_revisions.reviewed_by) this doesn't
-handle.
+approach was chosen over adding CASCADE to every FK, and for the known,
+accepted edge cases (content_revisions.reviewed_by,
+platform_admins.granted_by_user_id) this doesn't handle — both are
+NOT NULL FKs a deleted user can be referenced by from *outside* their
+own tenant, which this file's tenant-scoped deletes can't reach.
 """
 
 from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.db.models.career_profile import (
@@ -46,6 +48,7 @@ from app.adapters.db.models.identity import (
     UserModel,
     UserRoleModel,
 )
+from app.adapters.db.models.platform_admin import PlatformAdminModel, PlatformSettingModel
 from app.adapters.db.models.resume_intelligence import ResumeModel
 from app.domain.identity.account_deletion import TenantDeletionArtifacts
 
@@ -118,10 +121,33 @@ class SqlAlchemyAccountDeletionRepository:
             PersonalPhoneLoginModel,
             CareerGoalModel,
             UserRoleModel,
+            PlatformAdminModel,
         ):
             await self._session.execute(
                 delete(direct_model).where(direct_model.tenant_id == tenant_id)
             )
+
+        # platform_settings.updated_by_user_id is nullable and genuinely
+        # global (not tenant-owned) — clear the attribution rather than
+        # deleting the setting itself, which would wrongly destroy real
+        # platform config just because whoever last edited it also had
+        # their account deleted.
+        await self._session.execute(
+            update(PlatformSettingModel)
+            .where(
+                PlatformSettingModel.updated_by_user_id.in_(
+                    select(UserModel.id).where(UserModel.tenant_id == tenant_id)
+                )
+            )
+            .values(updated_by_user_id=None)
+        )
+        # Known, accepted edge case (same shape as content_revisions.reviewed_by,
+        # see this file's module docstring): platform_admins.granted_by_user_id
+        # is NOT NULL — if this tenant's user granted platform-admin access to
+        # a still-existing admin in a *different* tenant, deleting this
+        # tenant correctly fails loudly (FK violation) rather than silently
+        # leaving that grant's "granted by" attribution dangling. Not
+        # expected to come up in practice at this app's admin-count scale.
 
         # 4. target_roles — after career_profiles/resumes (both reference
         # target_role_id) are already gone.

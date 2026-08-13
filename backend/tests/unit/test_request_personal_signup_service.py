@@ -98,6 +98,7 @@ def _build(*, email_provider: FakeEmailProvider | None = None) -> _Setup:
         pending_signups=pending_signups,
         email_provider=email_provider,
         frontend_base_url="https://example.com",
+        from_email="noreply@example.com",
     )
     return service, tenants, pending_signups, email_provider
 

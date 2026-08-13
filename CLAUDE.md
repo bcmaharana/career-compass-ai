@@ -1278,6 +1278,181 @@ Known environment gotchas already solved, don't reintroduce:
   `scaledbrain.com` in prod (schema present, `agreed_to_terms: false`
   rejected with the custom message, `agreed_to_terms: true` creates a
   real `pending_signups` row with consent recorded).
+- **support@scaledbrain.com email + welcome email + Platform Admin**
+  (2026-08-13) — done, deployed and verified live in both dev and prod.
+  Three related pieces of work from the same session. **(1)**
+  `support@scaledbrain.com` now forwards to a real inbox via Cloudflare
+  Email Routing (MX/SPF records auto-added by Cloudflare, destination
+  address verified) — pure DNS/dashboard config, no code or repo
+  changes. The one real gotcha: a freshly-forwarded message reliably
+  lands in the destination's Spam folder on the first send (forwarded
+  mail's envelope doesn't SPF/DKIM-align with the original sender), not
+  a misconfiguration — fixed client-side with "Not spam" once, or a
+  permanent Gmail filter rule. **(2)** A new post-verification welcome
+  email (`"Welcome to Career Compass AI!"`, sent from a distinct
+  `welcome@scaledbrain.com` identity, separate from `noreply@`'s
+  verification/reset emails) fires at the end of `VerifySignupService.execute`
+  — best-effort (a provider outage logs and continues, doesn't block the
+  login that verification already earned). `EmailMessage` gained an
+  optional `from_email` override so one `ResendEmailProvider` instance
+  can send from multiple verified identities on the same domain without
+  a second provider instance; `RequestPersonalSignupService`/
+  `RequestOrganizationSignupService`/`RequestPasswordResetService` all
+  now take an explicit `from_email` too, sourced the same way (see
+  Platform Admin below), not just `VerifySignupService`. **(3) Platform
+  Admin** — the first genuinely cross-tenant admin concept in this app,
+  prompted by wanting `resend_from_email`/`resend_welcome_from_email` to
+  be editable from a real UI instead of only via `.env` + a redeploy,
+  then explicitly generalized on request into: a reusable
+  `platform_settings` key/value store, and a real grant/revoke system
+  so more than one person (potentially in different tenants entirely)
+  can hold platform-admin access at different permission levels.
+  Deliberately does **not** reuse the existing tenant-scoped RBAC engine
+  (`require_permission`/`has_permission`/`roles`/`user_roles`) — that
+  engine's role resolution is inherently scoped to the caller's own
+  tenant via RLS, which is the wrong shape for "is this specific
+  (tenant_id, user_id) a platform admin, regardless of which tenant
+  they belong to." Instead follows the established
+  "purpose-built table with no RLS at all" precedent
+  (`personal_phone_logins`, `password_reset_tokens`) with two new
+  global tables: `platform_admins` (tenant_id/user_id/email/full_name
+  snapshot/`permission_codes` JSON list/granted_at/granted_by_user_id,
+  unique per (tenant_id, user_id)) and `platform_settings` (key/value/
+  description/updated_at/updated_by_user_id, unique per key) — neither
+  gets `ENABLE`/`FORCE ROW LEVEL SECURITY`, same as `model_versions`/
+  `prompt_versions`. Three permission codes
+  (`app/domain/platform_admin/permissions.py` — a plain constant tuple,
+  not a DB reference table, since there are only three and they never
+  vary per tenant): `platform.settings.view`, `platform.settings.edit`,
+  `platform.admins.manage`. New `require_platform_permission(code)`
+  dependency (`app/api/dependencies.py`) is the cross-tenant sibling of
+  `require_permission` — checks the caller's own grant directly by
+  `(tenant_id, user_id)` from their JWT, no RLS-scoped role resolution
+  involved. `PlatformAdminService.grant()` resolves a target account by
+  email using the *exact* same subdomain-resolution login already uses
+  (`derive_personal_subdomain(email)` for a bare email, an explicit
+  subdomain for Enterprise) — binds tenant context just long enough to
+  look the target user up, then writes to the RLS-exempt
+  `platform_admins` table. A defensive check
+  (`count_with_permission(PLATFORM_ADMINS_MANAGE) <= 1`) blocks
+  revoking or downgrading the last remaining holder of
+  `platform.admins.manage`, so the system can never end up with no one
+  able to grant access back. 7 new endpoints under
+  `/api/v1/platform-admin/*` (`GET /me` needs no permission — any
+  authenticated user can ask "am I an admin," returning empty
+  `permission_codes` if not; the rest are gated per-code).
+  `resend_from_email`/`resend_welcome_from_email` are now resolved from
+  `platform_settings` at request time (via `get_resend_from_email`/
+  `get_resend_welcome_from_email` in dependencies.py, constructing a
+  repository directly rather than through the later-defined
+  `get_platform_settings_repository` — `Depends()` default arguments
+  are resolved at function-*definition* time, so referencing a
+  not-yet-defined function there would raise `NameError` at import),
+  falling back to the static env value if no admin has ever edited it —
+  `scripts/seed_platform_defaults.py` seeds the initial row from
+  today's env value exactly once, never overwriting a real admin edit
+  on reseed. New `PLATFORM_ADMIN_BOOTSTRAP_ACCOUNTS` env var (comma-
+  separated `subdomain:email` or bare `email` entries) bootstraps the
+  very first platform admin(s) at seed time — necessary because with
+  zero admins granted, nobody could ever reach the admin page to grant
+  the first one; idempotent, and silently skips (logs, doesn't error)
+  any account that doesn't exist yet in that environment. Frontend: new
+  Settings > Platform Admin page
+  (`frontend/src/features/settings/SettingsPlatformAdminPage.tsx`,
+  `/settings/platform-admin`) — a Settings key/value editor and an
+  Admins list/grant/revoke panel, each section gated on the caller's
+  own `permission_codes` (read via a new `usePlatformAdminMe()` hook
+  hitting `GET /platform-admin/me`, not stored in the JWT/auth-store —
+  deliberately always resolved fresh per load, not cached at login
+  time, so a revoked admin's nav access disappears on their next
+  navigation rather than surviving until next login). `nav-items.ts`
+  gained a `STANDARD_SETTINGS_NAV_ITEMS` export (the existing three,
+  minus Platform Admin) so `AccountPanelContent.tsx` can render the
+  full list only for a caller with at least one `platform.*`
+  permission, while `SETTINGS_NAV_ITEMS` itself still includes Platform
+  Admin so `matchNavItem` resolves the right page title for someone who
+  *does* have access.
+  **Four real bugs caught building and live-verifying this, not by
+  review**: (1) `docker compose -f infra/docker-compose.yml up -d`
+  (single explicit `-f`, run from the repo root rather than `cd infra
+  && docker compose up`) silently drops `docker-compose.override.yml`
+  — which is what actually supplies `--reload` to the dev backend's
+  uvicorn command — since Compose only auto-includes the override file
+  when *no* `-f` flag is given at all. Recreating the container this
+  way for an `.env` pickup (a legitimate, previously-documented need)
+  quietly strips hot-reload for every code change afterward until the
+  container is recreated correctly (`cd infra && docker compose up -d`,
+  no explicit `-f`, matching `start-dev.ps1`'s own invocation) — a code
+  fix can silently keep failing to take effect with zero error, which
+  is exactly what happened mid-session here. (2) The `resend_send_failed`
+  warning log only ever recorded `str(exc)` for an `httpx.HTTPStatusError`
+  — which is a generic `"Client error '403 Forbidden' for url ...'"`
+  message, **not** Resend's actual response body, despite an existing
+  code comment claiming otherwise. This hid the real diagnosis of a
+  welcome-email send failing with 403 for several debugging rounds (it
+  turned out to be sending from the *wrong* address — the new
+  `resend_welcome_from_email` setting wasn't reaching the container at
+  all, for the exact `docker compose up` reason above — Resend's actual
+  error, `"You can only send testing emails to your own email
+  address..."`, immediately would have named the real sender in use).
+  Fixed in `resend_provider.py` by catching `HTTPStatusError`
+  specifically and logging `exc.response.text` — worth keeping this
+  fix regardless of the specific bug that surfaced it. (3) Deleting an
+  account that held a `platform_admins` grant (as either owner or
+  granter) raised a raw `ForeignKeyViolation` 500 —
+  `SqlAlchemyAccountDeletionRepository.delete_tenant` didn't know about
+  either new table. Fixed: `PlatformAdminModel` added to the existing
+  ordered direct-children delete loop (before `UserModel`);
+  `platform_settings.updated_by_user_id` (nullable) is set to `NULL`
+  for the deleted tenant's users rather than deleting the setting row
+  itself, since a real platform-wide config value shouldn't vanish just
+  because whoever last edited it also deleted their account.
+  `platform_admins.granted_by_user_id` (NOT NULL) granting *someone
+  else's* still-existing admin row is accepted as a known, undhandled
+  edge case — same shape and same reasoning as the pre-existing
+  `content_revisions.reviewed_by` gap this file's own docstring already
+  documented — not expected to come up at this app's admin-count scale.
+  New regression test:
+  `TestDeleteAccount::test_delete_removes_platform_admin_grant`. (4)
+  Deploying the frontend to prod for the first time since the previous
+  session's "animated two-phase background wave" commit landed revealed
+  that commit had shipped with 5 real TypeScript errors in
+  `LandingPage.tsx` (`noUncheckedIndexedAccess` flagging
+  `FLOCK_ROW_COUNTS[row]` as possibly-`undefined`, plus two genuinely
+  dead constants left over from an earlier version of the animation) —
+  invisible via `npm run dev` (Vite's dev server doesn't block on
+  `tsc`), but a hard failure for `npm run build`, meaning prod's
+  frontend image had been unbuildable since that commit without anyone
+  noticing until this session's deploy. Fixed (a non-null assertion
+  where the loop bound already guarantees the index is in range; the
+  two dead constants deleted) — unrelated to Platform Admin itself, but
+  found and fixed in the course of shipping it.
+  Verified live end-to-end in dev via a real headless-Chromium
+  Playwright run driving the actual UI (not just API calls): logged in
+  as a real platform admin, edited `resend_from_email` and confirmed
+  "Saved," reverted it, granted a second real account
+  `platform.settings.view` through the real grant form, confirmed it
+  appeared in the Admins list, revoked it through the real UI with its
+  `ConfirmDialog`, and confirmed via direct Postgres queries that both
+  the setting's final value and the post-revoke admin list matched
+  exactly what the UI showed. (Caught one test-script-only gotcha along
+  the way, already documented elsewhere in this file for Resume
+  Intelligence but re-confirmed here: a hard `page.goto()` to an
+  internal route wipes the in-memory access token, since
+  `auth-store.ts` never persists it — client-side navigation only.)
+  Also verified live: a full real personal-account signup +
+  verification (via a real mailinator inbox, not a mock) showing both
+  the verification email from `noreply@scaledbrain.com` and the new
+  welcome email from `welcome@scaledbrain.com` arriving in the same
+  inbox. 377 backend tests passing (277 unit + 100 integration, 1 new
+  regression test), mypy clean across all 189 backend source files.
+  Deployed to prod: migration `a3f8c1d92b47` applied, seed script run
+  (bootstrapped `bcmaharana@gmail.com`'s existing Personal account as a
+  full platform admin — the `scaledbrain` Enterprise tenant doesn't
+  exist in prod yet, so that half of
+  `PLATFORM_ADMIN_BOOTSTRAP_ACCOUNTS` correctly no-ops there for now),
+  both backend and frontend images rebuilt and redeployed, health
+  checked end-to-end.
 - **Not yet started**: Phase 6 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in

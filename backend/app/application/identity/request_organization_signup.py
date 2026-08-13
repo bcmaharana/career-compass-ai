@@ -31,11 +31,13 @@ class RequestOrganizationSignupService:
         pending_signups: PendingSignupRepository,
         email_provider: EmailProviderInterface,
         frontend_base_url: str,
+        from_email: str,
     ) -> None:
         self._tenants = tenants
         self._pending_signups = pending_signups
         self._email_provider = email_provider
         self._frontend_base_url = frontend_base_url.rstrip("/")
+        self._from_email = from_email
 
     async def execute(
         self,
@@ -91,6 +93,7 @@ class RequestOrganizationSignupService:
                         "<p>If you didn't request this, you can safely ignore this "
                         "email.</p>"
                     ),
+                    from_email=self._from_email,
                 )
             )
         except CareerCompassError:

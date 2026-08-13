@@ -90,6 +90,7 @@ class TestRequestOrganizationSignup:
             pending_signups=pending_signups,
             email_provider=email_provider,
             frontend_base_url="https://example.com",
+            from_email="noreply@example.com",
         )
 
         await service.execute(
@@ -122,6 +123,7 @@ class TestRequestOrganizationSignup:
             pending_signups=pending_signups,
             email_provider=FakeEmailProvider(),
             frontend_base_url="https://example.com",
+            from_email="noreply@example.com",
         )
 
         with pytest.raises(ConflictError) as exc_info:

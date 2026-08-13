@@ -42,21 +42,30 @@ class ResendEmailProvider:
                     "https://api.resend.com/emails",
                     headers={"Authorization": f"Bearer {self._api_key}"},
                     json={
-                        "from": self._from_email,
+                        "from": message.from_email or self._from_email,
                         "to": [message.to],
                         "subject": message.subject,
                         "html": message.html_body,
                     },
                 )
                 response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            # Resend's own response body (e.g. sandbox restrictions on the
+            # recipient domain) is logged server-side only — it can
+            # contain vendor-internal wording that shouldn't be relayed
+            # verbatim to whoever triggered the send (this provider's
+            # callers include self-serve signup, which deliberately
+            # surfaces send failures rather than swallowing them — see
+            # RequestPersonalSignupService's docstring). httpx's own
+            # str(exc) does NOT include the response body, only a generic
+            # "Client error '403 Forbidden' for url ..." message — the
+            # body has to be read explicitly.
+            logger.warning(
+                "resend_send_failed",
+                status_code=exc.response.status_code,
+                body=exc.response.text,
+            )
+            raise ResendProviderError("Failed to send the email. Please try again shortly.") from exc
         except httpx.HTTPError as exc:
-            # The raw exception (for an HTTPStatusError, this includes
-            # Resend's own response body) is logged server-side only —
-            # it can contain vendor-internal wording (e.g. sandbox
-            # restrictions on the recipient domain) that shouldn't be
-            # relayed verbatim to whoever triggered the send (this
-            # provider's callers include self-serve signup, which
-            # deliberately surfaces send failures rather than swallowing
-            # them — see RequestPersonalSignupService's docstring).
             logger.warning("resend_send_failed", error=str(exc))
             raise ResendProviderError("Failed to send the email. Please try again shortly.") from exc

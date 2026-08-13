@@ -155,11 +155,31 @@ class Settings(BaseSettings):
     # config change only, not a code change.
     resend_api_key: str = Field(default="")
     resend_from_email: str = Field(default="onboarding@resend.dev")
+    # Distinct sender identity for the post-signup welcome email only
+    # (see verify_signup.py) — same Resend domain verification as
+    # resend_from_email covers any address @scaledbrain.com, so this is
+    # a config-only addition, no separate Resend/DNS setup needed.
+    resend_welcome_from_email: str = Field(default="onboarding@resend.dev")
     # Used to build links embedded in emails (e.g. the password-reset
     # link) — the default matches Vite's dev server port so this works
     # out of the box locally; production sets this to the real public
     # domain in .env.production.
     frontend_base_url: str = Field(default="http://localhost:5173")
+
+    # --- Platform admin bootstrap ---
+    # The one seed-time bootstrap step this genuinely needs: with no
+    # platform admins granted yet, nobody could ever reach the admin
+    # page to grant the first one. Comma-separated list of accounts to
+    # grant every platform.* permission to (idempotent — a no-op on
+    # repeat runs once granted). Each entry is either a bare email
+    # (Personal account, tenant resolved via derive_personal_subdomain,
+    # same as login) or "subdomain:email" (Enterprise account, explicit
+    # subdomain — same shape the login form itself requires for
+    # Enterprise). Example:
+    #   PLATFORM_ADMIN_BOOTSTRAP_ACCOUNTS=scaledbrain:owner@example.com,owner@gmail.com
+    # Empty by default so a fresh environment with no owner configured
+    # yet just skips this step rather than guessing who the owner is.
+    platform_admin_bootstrap_accounts: str = Field(default="")
 
     @property
     def is_local(self) -> bool:

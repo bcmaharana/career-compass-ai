@@ -2,7 +2,6 @@ import { useCurrentUser } from "@/api/queries/auth";
 import { useHealthCheck } from "@/api/queries/health";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SystemStatusCard } from "@/features/dashboard/SystemStatusCard";
 
 /**
  * Placeholder dashboard. Its job so far is to prove the whole chain
@@ -69,8 +68,6 @@ export function DashboardPage() {
           )}
         </CardContent>
       </Card>
-
-      <SystemStatusCard />
     </div>
   );
 }

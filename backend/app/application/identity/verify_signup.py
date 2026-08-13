@@ -15,9 +15,13 @@ from datetime import UTC, datetime
 from app.adapters.identity_providers.internal_jwt import InternalJWTProvider
 from app.application.identity.dto import LoginResult
 from app.application.identity.register_tenant import RegisterTenantService
-from app.core.exceptions import UnauthorizedError
+from app.core.email_provider_interface import EmailMessage, EmailProviderInterface
+from app.core.exceptions import CareerCompassError, UnauthorizedError
+from app.core.logging import get_logger
 from app.domain.identity.personal_accounts import derive_personal_subdomain
 from app.domain.identity.repositories import PendingSignupRepository, UserRepository
+
+logger = get_logger(__name__)
 
 
 class VerifySignupService:
@@ -27,11 +31,15 @@ class VerifySignupService:
         register_tenant: RegisterTenantService,
         users: UserRepository,
         identity_provider: InternalJWTProvider,
+        email_provider: EmailProviderInterface,
+        welcome_from_email: str,
     ) -> None:
         self._pending_signups = pending_signups
         self._register_tenant = register_tenant
         self._users = users
         self._identity_provider = identity_provider
+        self._email_provider = email_provider
+        self._welcome_from_email = welcome_from_email
 
     async def execute(self, *, token: str) -> LoginResult:
         token_hash = hashlib.sha256(token.encode()).hexdigest()
@@ -68,6 +76,26 @@ class VerifySignupService:
         )
 
         await self._pending_signups.delete(pending.id)
+
+        # Best-effort: the account already exists at this point, so a
+        # provider outage here must not block login the way a failed
+        # verification-link send blocks signup itself.
+        try:
+            await self._email_provider.send_email(
+                EmailMessage(
+                    to=pending.email,
+                    subject="Welcome to Career Compass AI!",
+                    html_body=(
+                        f"<p>Hi {pending.first_name},</p>"
+                        "<p>Your Career Compass AI account is ready. We're excited to "
+                        "help you build your career profile and plan your next move.</p>"
+                        "<p>Log in any time to pick up where you left off.</p>"
+                    ),
+                    from_email=self._welcome_from_email,
+                )
+            )
+        except CareerCompassError:
+            logger.warning("welcome_email_failed", email=pending.email)
 
         user = await self._users.get_by_id(result.tenant_id, result.admin_user_id)
         assert user is not None, "just-created user must exist"

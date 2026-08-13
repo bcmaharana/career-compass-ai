@@ -16,6 +16,7 @@ from app.api.v1.career_profile.router import router as career_profile_router
 from app.api.v1.chat.router import router as chat_router
 from app.api.v1.health import router as health_router
 from app.api.v1.identity.router import router as identity_router
+from app.api.v1.platform_admin.router import router as platform_admin_router
 from app.api.v1.quotes.router import router as quotes_router
 from app.api.v1.resume_intelligence.router import router as resume_intelligence_router
 from app.api.v1.skill_intelligence.router import router as skill_intelligence_router
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(career_intelligence_router, prefix="/api/v1")
     app.include_router(resume_intelligence_router, prefix="/api/v1")
     app.include_router(system_status_router, prefix="/api/v1")
+    app.include_router(platform_admin_router, prefix="/api/v1")
 
     logger.info("app_startup", app_env=settings.app_env)
     return app

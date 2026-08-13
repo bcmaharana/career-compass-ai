@@ -13,6 +13,7 @@ import { TermsOfServicePage } from "@/features/legal/TermsOfServicePage";
 import { SettingsAIModelPage } from "@/features/settings/SettingsAIModelPage";
 import { SettingsAccountPage } from "@/features/settings/SettingsAccountPage";
 import { SettingsLandingPage } from "@/features/settings/SettingsLandingPage";
+import { SettingsPlatformAdminPage } from "@/features/settings/SettingsPlatformAdminPage";
 import { SettingsProfilePage } from "@/features/settings/SettingsProfilePage";
 import { ResumeIntelligencePage } from "@/features/resume-intelligence/ResumeIntelligencePage";
 import { NotFoundPage } from "@/routes/NotFound";
@@ -81,6 +82,7 @@ export const router = createBrowserRouter([
           { path: "settings/profile", element: <SettingsProfilePage /> },
           { path: "settings/ai-model", element: <SettingsAIModelPage /> },
           { path: "settings/account", element: <SettingsAccountPage /> },
+          { path: "settings/platform-admin", element: <SettingsPlatformAdminPage /> },
         ],
       },
     ],

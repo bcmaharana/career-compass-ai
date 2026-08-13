@@ -17,6 +17,11 @@ class EmailMessage:
     to: str
     subject: str
     html_body: str
+    # None = use the provider's configured default sender (settings.resend_from_email).
+    # Set to send from a different verified address on the same domain
+    # (e.g. welcome@scaledbrain.com for the welcome email) without a
+    # second provider instance.
+    from_email: str | None = None
 
 
 class EmailProviderInterface(Protocol):

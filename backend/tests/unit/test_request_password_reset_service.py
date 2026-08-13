@@ -178,6 +178,7 @@ def _build(*, email_provider: FakeEmailProvider | None = None) -> _Setup:
         email_provider=email_provider,
         audit=AuditService(audit_events),
         frontend_base_url="https://example.com",
+        from_email="noreply@example.com",
     )
     return service, tenants, users, reset_tokens, email_provider
 

@@ -18,7 +18,8 @@ from app.adapters.identity_providers.internal_jwt import InternalJWTProvider
 from app.application.identity.audit_service import AuditService
 from app.application.identity.register_tenant import RegisterTenantService
 from app.application.identity.verify_signup import VerifySignupService
-from app.core.exceptions import UnauthorizedError
+from app.core.email_provider_interface import EmailMessage
+from app.core.exceptions import CareerCompassError, UnauthorizedError
 from app.core.security import hash_password
 from app.domain.identity.entities import (
     AuditEvent,
@@ -144,6 +145,21 @@ class FakePendingSignupRepository:
             del self.signups[signup_id]
 
 
+class EmailProviderError(CareerCompassError):
+    code = "EMAIL_PROVIDER_ERROR"
+
+
+class FakeEmailProvider:
+    def __init__(self, *, should_fail: bool = False) -> None:
+        self.should_fail = should_fail
+        self.sent: list[EmailMessage] = []
+
+    async def send_email(self, message: EmailMessage) -> None:
+        if self.should_fail:
+            raise EmailProviderError("simulated provider failure")
+        self.sent.append(message)
+
+
 def _make_pending(
     *,
     kind: str = "personal",
@@ -173,8 +189,12 @@ def _make_pending(
     )
 
 
-def _build() -> tuple[
-    VerifySignupService, FakeTenantRepository, FakePendingSignupRepository, FakeUserRepository
+def _build(*, email_should_fail: bool = False) -> tuple[
+    VerifySignupService,
+    FakeTenantRepository,
+    FakePendingSignupRepository,
+    FakeUserRepository,
+    FakeEmailProvider,
 ]:
     tenants = FakeTenantRepository()
     organizations = FakeOrganizationRepository()
@@ -182,6 +202,7 @@ def _build() -> tuple[
     roles = FakeRoleRepository()
     pending_signups = FakePendingSignupRepository()
     audit_events = FakeAuditEventRepository()
+    email_provider = FakeEmailProvider(should_fail=email_should_fail)
 
     register_tenant = RegisterTenantService(
         tenants=tenants,
@@ -197,14 +218,16 @@ def _build() -> tuple[
         register_tenant=register_tenant,
         users=users,
         identity_provider=identity_provider,
+        email_provider=email_provider,
+        welcome_from_email="welcome@scaledbrain.com",
     )
-    return service, tenants, pending_signups, users
+    return service, tenants, pending_signups, users, email_provider
 
 
 @pytest.mark.unit
 class TestVerifySignup:
     async def test_valid_personal_token_creates_a_real_account_and_a_working_token(self) -> None:
-        service, tenants, pending_signups, users = _build()
+        service, tenants, pending_signups, users, email_provider = _build()
         pending = _make_pending(kind="personal", raw_token="a-real-token")
         await pending_signups.create(pending)
 
@@ -224,10 +247,24 @@ class TestVerifySignup:
         assert created_user.agreed_to_terms_at == pending.agreed_to_terms_at
         assert created_user.terms_version == CURRENT_TERMS_VERSION
 
+        assert len(email_provider.sent) == 1
+        assert email_provider.sent[0].to == "jordan@example.com"
+        assert email_provider.sent[0].from_email == "welcome@scaledbrain.com"
+
+    async def test_welcome_email_failure_does_not_block_a_successful_verification(self) -> None:
+        service, _, pending_signups, _, email_provider = _build(email_should_fail=True)
+        pending = _make_pending(raw_token="a-real-token")
+        await pending_signups.create(pending)
+
+        result = await service.execute(token="a-real-token")
+
+        assert result.access_token
+        assert email_provider.sent == []
+
     async def test_valid_enterprise_token_creates_a_real_account_with_the_chosen_subdomain(
         self,
     ) -> None:
-        service, tenants, pending_signups, _ = _build()
+        service, tenants, pending_signups, _, _ = _build()
         pending = _make_pending(
             kind="enterprise",
             raw_token="a-real-token",
@@ -244,7 +281,7 @@ class TestVerifySignup:
         assert tenant.id == result.tenant_id
 
     async def test_expired_token_is_rejected(self) -> None:
-        service, _, pending_signups, _ = _build()
+        service, _, pending_signups, _, _ = _build()
         pending = _make_pending(raw_token="expired-token", expires_delta=timedelta(minutes=-1))
         await pending_signups.create(pending)
 
@@ -254,7 +291,7 @@ class TestVerifySignup:
         assert exc_info.value.code == "INVALID_SIGNUP_TOKEN"
 
     async def test_unknown_token_is_rejected(self) -> None:
-        service, _, _, _ = _build()
+        service, _, _, _, _ = _build()
 
         with pytest.raises(UnauthorizedError) as exc_info:
             await service.execute(token="never-issued")
@@ -262,7 +299,7 @@ class TestVerifySignup:
         assert exc_info.value.code == "INVALID_SIGNUP_TOKEN"
 
     async def test_token_cannot_be_reused(self) -> None:
-        service, _, pending_signups, _ = _build()
+        service, _, pending_signups, _, _ = _build()
         pending = _make_pending(raw_token="one-shot-token")
         await pending_signups.create(pending)
 

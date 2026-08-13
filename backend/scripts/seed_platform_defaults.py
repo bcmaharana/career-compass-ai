@@ -22,16 +22,22 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.db.base import async_session_factory
+from app.adapters.db.base import async_session_factory, set_tenant_context
 from app.adapters.db.models import (
     ModelVersionModel,
     PermissionModel,
+    PlatformAdminModel,
+    PlatformSettingModel,
     PromptVersionModel,
     RoleModel,
     RolePermissionModel,
+    TenantModel,
+    UserModel,
 )
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.domain.identity.personal_accounts import derive_personal_subdomain
+from app.domain.platform_admin.permissions import ALL_PLATFORM_PERMISSION_CODES
 
 logger = get_logger(__name__)
 
@@ -535,11 +541,126 @@ async def _seed_ai_platform_defaults(session: AsyncSession) -> None:
             logger.info("defaulted_model_version", model_name=fallback.model_name)
 
 
+async def _seed_platform_settings_defaults(session: AsyncSession) -> None:
+    """Seeds the two settings the admin page (Settings > Platform Admin)
+    was built to make editable — from the current env values, so a fresh
+    environment starts with exactly today's behavior. Never overwrites
+    an existing row (an admin's real edit must never be clobbered by a
+    reseed), matching _seed_permissions/_seed_roles's own idempotency.
+    """
+    settings = get_settings()
+    defaults: list[tuple[str, str, str]] = [
+        (
+            "resend_from_email",
+            settings.resend_from_email,
+            "Default sender address for account emails (verification links, password resets).",
+        ),
+        (
+            "resend_welcome_from_email",
+            settings.resend_welcome_from_email,
+            "Sender address for the post-signup welcome email.",
+        ),
+    ]
+    for key, value, description in defaults:
+        result = await session.execute(
+            select(PlatformSettingModel).where(PlatformSettingModel.key == key)
+        )
+        if result.scalar_one_or_none() is not None:
+            continue
+        session.add(
+            PlatformSettingModel(id=uuid.uuid4(), key=key, value=value, description=description)
+        )
+        logger.info("seeded_platform_setting", key=key)
+
+
+def _parse_bootstrap_accounts(raw: str) -> list[tuple[str | None, str]]:
+    """Parses PLATFORM_ADMIN_BOOTSTRAP_ACCOUNTS into (subdomain, email)
+    pairs — subdomain is None for a bare email (Personal account).
+    "subdomain:email" (Enterprise) splits on the *last* colon so an
+    email itself never needs escaping.
+    """
+    accounts: list[tuple[str | None, str]] = []
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        if ":" in entry:
+            subdomain, email = entry.rsplit(":", 1)
+            accounts.append((subdomain.strip(), email.strip()))
+        else:
+            accounts.append((None, entry))
+    return accounts
+
+
+async def _seed_platform_admin_bootstrap(session: AsyncSession) -> None:
+    """Grants every account in PLATFORM_ADMIN_BOOTSTRAP_ACCOUNTS every
+    platform.* permission, if not already granted — the one seed-time
+    step the admin page genuinely needs, since with zero admins granted,
+    nobody could ever reach the page to grant the first one. Resolves
+    each account the same way login does (derive_personal_subdomain for
+    a bare email, the explicit subdomain for "subdomain:email"). Skips
+    (logs and continues) any account that doesn't exist yet — this can
+    run before that account has signed up in a brand-new environment, so
+    "account not found yet" is expected, not an error.
+    """
+    accounts = _parse_bootstrap_accounts(get_settings().platform_admin_bootstrap_accounts)
+    for subdomain, email in accounts:
+        resolved_subdomain = subdomain or derive_personal_subdomain(email)
+        tenant_result = await session.execute(
+            select(TenantModel).where(TenantModel.subdomain == resolved_subdomain)
+        )
+        tenant = tenant_result.scalar_one_or_none()
+        if tenant is None:
+            logger.info("platform_admin_bootstrap_skipped_no_account", email=email)
+            continue
+
+        # users is RLS-forced — must bind tenant context before this
+        # query, same as every other cross-tenant-resolution flow in
+        # this codebase (e.g. AuthenticateUserService.execute).
+        await set_tenant_context(session, tenant.id)
+        user_result = await session.execute(
+            select(UserModel).where(UserModel.tenant_id == tenant.id, UserModel.email == email)
+        )
+        user = user_result.scalar_one_or_none()
+        if user is None:
+            logger.info("platform_admin_bootstrap_skipped_no_account", email=email)
+            continue
+
+        grant_result = await session.execute(
+            select(PlatformAdminModel).where(
+                PlatformAdminModel.tenant_id == tenant.id, PlatformAdminModel.user_id == user.id
+            )
+        )
+        if grant_result.scalar_one_or_none() is not None:
+            continue
+
+        full_name = (
+            " ".join(part for part in (user.salutation, user.first_name, user.last_name) if part)
+            or user.email
+        )
+        session.add(
+            PlatformAdminModel(
+                id=uuid.uuid4(),
+                tenant_id=tenant.id,
+                user_id=user.id,
+                email=user.email,
+                full_name=full_name,
+                permission_codes=sorted(ALL_PLATFORM_PERMISSION_CODES),
+                # Self-attributed — there's no other admin to credit
+                # this bootstrap grant to.
+                granted_by_user_id=user.id,
+            )
+        )
+        logger.info("seeded_platform_admin_bootstrap", email=email)
+
+
 async def seed_platform_defaults() -> None:
     async with async_session_factory() as session:
         permission_ids_by_code = await _seed_permissions(session)
         await _seed_roles(session, permission_ids_by_code)
         await _seed_ai_platform_defaults(session)
+        await _seed_platform_settings_defaults(session)
+        await _seed_platform_admin_bootstrap(session)
         await session.commit()
     logger.info("seed_complete")
 

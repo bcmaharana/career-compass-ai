@@ -1215,6 +1215,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform-admin/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get My Platform Admin Grant */
+        get: operations["get_my_platform_admin_grant_api_v1_platform_admin_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform-admin/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Platform Permissions */
+        get: operations["list_platform_permissions_api_v1_platform_admin_permissions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform-admin/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Platform Settings */
+        get: operations["list_platform_settings_api_v1_platform_admin_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform-admin/settings/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Platform Setting */
+        patch: operations["update_platform_setting_api_v1_platform_admin_settings__key__patch"];
+        trace?: never;
+    };
+    "/api/v1/platform-admin/admins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Platform Admins */
+        get: operations["list_platform_admins_api_v1_platform_admin_admins_get"];
+        put?: never;
+        /** Grant Platform Admin */
+        post: operations["grant_platform_admin_api_v1_platform_admin_admins_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform-admin/admins/{grant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Platform Admin */
+        delete: operations["revoke_platform_admin_api_v1_platform_admin_admins__grant_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Platform Admin */
+        patch: operations["update_platform_admin_api_v1_platform_admin_admins__grant_id__patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1787,6 +1891,15 @@ export interface components {
             /** Target Role Gaps */
             target_role_gaps: components["schemas"]["TargetRoleGapResponse"][];
         };
+        /** GrantPlatformAdminRequest */
+        GrantPlatformAdminRequest: {
+            /** Email */
+            email: string;
+            /** Subdomain */
+            subdomain?: string | null;
+            /** Permission Codes */
+            permission_codes?: string[];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1912,6 +2025,11 @@ export interface components {
             /** Direction */
             direction: string;
         };
+        /** MyPlatformAdminResponse */
+        MyPlatformAdminResponse: {
+            /** Permission Codes */
+            permission_codes: string[];
+        };
         /** OrganizationSignupRequest */
         OrganizationSignupRequest: {
             /** Tenant Name */
@@ -1990,6 +2108,68 @@ export interface components {
         PhotoUploadResponse: {
             /** Photo Url */
             photo_url: string;
+        };
+        /** PlatformAdminGrantResponse */
+        PlatformAdminGrantResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Email */
+            email: string;
+            /** Full Name */
+            full_name: string;
+            /** Permission Codes */
+            permission_codes: string[];
+            /**
+             * Granted At
+             * Format: date-time
+             */
+            granted_at: string;
+            /**
+             * Granted By User Id
+             * Format: uuid
+             */
+            granted_by_user_id: string;
+        };
+        /** PlatformPermissionResponse */
+        PlatformPermissionResponse: {
+            /** Code */
+            code: string;
+            /** Description */
+            description: string;
+        };
+        /** PlatformSettingResponse */
+        PlatformSettingResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Value */
+            value: string;
+            /** Description */
+            description: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By User Id */
+            updated_by_user_id: string | null;
         };
         /** ProposeRevisionRequest */
         ProposeRevisionRequest: {
@@ -2464,6 +2644,21 @@ export interface components {
             state?: string | null;
             /** Postal Code */
             postal_code?: string | null;
+        };
+        /** UpdatePlatformAdminRequest */
+        UpdatePlatformAdminRequest: {
+            /** Permission Codes */
+            permission_codes: string[];
+        };
+        /** UpdatePlatformSettingRequest */
+        UpdatePlatformSettingRequest: {
+            /** Value */
+            value: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -5443,6 +5638,218 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemStatusResponse"];
+                };
+            };
+        };
+    };
+    get_my_platform_admin_grant_api_v1_platform_admin_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyPlatformAdminResponse"];
+                };
+            };
+        };
+    };
+    list_platform_permissions_api_v1_platform_admin_permissions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformPermissionResponse"][];
+                };
+            };
+        };
+    };
+    list_platform_settings_api_v1_platform_admin_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSettingResponse"][];
+                };
+            };
+        };
+    };
+    update_platform_setting_api_v1_platform_admin_settings__key__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePlatformSettingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSettingResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_platform_admins_api_v1_platform_admin_admins_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformAdminGrantResponse"][];
+                };
+            };
+        };
+    };
+    grant_platform_admin_api_v1_platform_admin_admins_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantPlatformAdminRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformAdminGrantResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_platform_admin_api_v1_platform_admin_admins__grant_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_platform_admin_api_v1_platform_admin_admins__grant_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePlatformAdminRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformAdminGrantResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

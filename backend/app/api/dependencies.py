@@ -75,6 +75,10 @@ from app.adapters.db.repositories.governance import (
     SqlAlchemyContentHistoryRepository,
     SqlAlchemyContentRevisionRepository,
 )
+from app.adapters.db.repositories.platform_admin import (
+    SqlAlchemyPlatformAdminRepository,
+    SqlAlchemyPlatformSettingsRepository,
+)
 from app.adapters.db.repositories.resume_intelligence import SqlAlchemyResumeRepository
 from app.adapters.email.resend_provider import ResendEmailProvider
 from app.adapters.db.repositories.search import (
@@ -127,6 +131,8 @@ from app.application.identity.request_personal_signup import RequestPersonalSign
 from app.application.identity.reset_password import ResetPasswordService
 from app.application.identity.update_user_profile import UpdateUserProfileService
 from app.application.identity.verify_signup import VerifySignupService
+from app.application.platform_admin.grant_service import PlatformAdminService
+from app.application.platform_admin.settings_service import PlatformSettingsService
 from app.application.quotes.quote_of_the_day_service import QuoteOfTheDayService
 from app.application.resume_intelligence.resume_extraction_service import ResumeExtractionService
 from app.application.resume_intelligence.resume_merge_service import ResumeMergeService
@@ -269,6 +275,49 @@ def require_permission(permission_code: str) -> Callable[..., Awaitable[Identity
         if not has_permission(roles, permission_code):
             raise ForbiddenError(
                 f"Missing required permission: {permission_code}", code="PERMISSION_DENIED"
+            )
+        return identity
+
+    return dependency
+
+
+def get_platform_admin_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyPlatformAdminRepository:
+    """Plain session, no tenant context — platform_admins carries no RLS
+    (see its own module docstring), so there's no tenant to scope to.
+    """
+    return SqlAlchemyPlatformAdminRepository(session)
+
+
+def require_platform_permission(
+    *permission_codes: str,
+) -> Callable[..., Awaitable[IdentityClaims]]:
+    """Dependency factory: the cross-tenant equivalent of
+    require_permission. Checks the caller's own platform_admins grant
+    directly by (tenant_id, user_id) from their JWT — no RLS-scoped role
+    resolution involved, since this table has no RLS at all.
+
+    Accepts one or more codes with OR semantics (any one is enough) —
+    e.g. GET /platform-admin/settings accepts either
+    platform.settings.view or platform.settings.edit, since someone
+    granted edit-only access with no view grant would otherwise see
+    "You don't have access to this page" despite genuinely being able
+    to edit it once there — a real gap caught live granting exactly
+    that combination. The single-code call sites (PATCH .../settings,
+    the /admins.* routes) are unaffected; a single string is just the
+    degenerate case of "any of one code."
+    """
+
+    async def dependency(
+        identity: IdentityClaims = Depends(get_current_identity),
+        grants: SqlAlchemyPlatformAdminRepository = Depends(get_platform_admin_repository),
+    ) -> IdentityClaims:
+        grant = await grants.get_for_user(UUID(identity.tenant_id), UUID(identity.user_id))
+        if grant is None or not any(code in grant.permission_codes for code in permission_codes):
+            raise ForbiddenError(
+                f"Missing required platform permission: {' or '.join(permission_codes)}",
+                code="PLATFORM_PERMISSION_DENIED",
             )
         return identity
 
@@ -428,6 +477,26 @@ def get_email_provider() -> ResendEmailProvider:
     return ResendEmailProvider(get_settings())
 
 
+async def get_resend_from_email(session: AsyncSession = Depends(get_db_session)) -> str:
+    """The default sender address, resolved from platform_settings (the
+    admin-editable "resend_from_email" key) at request time, falling
+    back to the static RESEND_FROM_EMAIL env value if no admin has ever
+    edited it. A plain session, not get_platform_settings_repository —
+    that dependency is defined later in this file (see the "Platform
+    admin wiring" section below) and Depends() default arguments are
+    resolved at function-definition time, so referencing it here would
+    raise NameError at import time.
+    """
+    setting = await SqlAlchemyPlatformSettingsRepository(session).get("resend_from_email")
+    return setting.value if setting else get_settings().resend_from_email
+
+
+async def get_resend_welcome_from_email(session: AsyncSession = Depends(get_db_session)) -> str:
+    """Same as get_resend_from_email, for the "resend_welcome_from_email" key."""
+    setting = await SqlAlchemyPlatformSettingsRepository(session).get("resend_welcome_from_email")
+    return setting.value if setting else get_settings().resend_welcome_from_email
+
+
 def get_request_password_reset_service(
     tenants: SqlAlchemyTenantRepository = Depends(get_tenant_repository),
     users: SqlAlchemyUserRepository = Depends(get_user_repository),
@@ -437,6 +506,7 @@ def get_request_password_reset_service(
     tenant_context: SqlAlchemyTenantContextBinder = Depends(get_tenant_context_binder),
     email_provider: ResendEmailProvider = Depends(get_email_provider),
     audit: AuditService = Depends(get_plain_audit_service),
+    from_email: str = Depends(get_resend_from_email),
 ) -> RequestPasswordResetService:
     return RequestPasswordResetService(
         tenants=tenants,
@@ -446,6 +516,7 @@ def get_request_password_reset_service(
         email_provider=email_provider,
         audit=audit,
         frontend_base_url=get_settings().frontend_base_url,
+        from_email=from_email,
     )
 
 
@@ -475,12 +546,14 @@ def get_request_personal_signup_service(
     tenants: SqlAlchemyTenantRepository = Depends(get_tenant_repository),
     pending_signups: SqlAlchemyPendingSignupRepository = Depends(get_pending_signup_repository),
     email_provider: ResendEmailProvider = Depends(get_email_provider),
+    from_email: str = Depends(get_resend_from_email),
 ) -> RequestPersonalSignupService:
     return RequestPersonalSignupService(
         tenants=tenants,
         pending_signups=pending_signups,
         email_provider=email_provider,
         frontend_base_url=get_settings().frontend_base_url,
+        from_email=from_email,
     )
 
 
@@ -488,12 +561,14 @@ def get_request_organization_signup_service(
     tenants: SqlAlchemyTenantRepository = Depends(get_tenant_repository),
     pending_signups: SqlAlchemyPendingSignupRepository = Depends(get_pending_signup_repository),
     email_provider: ResendEmailProvider = Depends(get_email_provider),
+    from_email: str = Depends(get_resend_from_email),
 ) -> RequestOrganizationSignupService:
     return RequestOrganizationSignupService(
         tenants=tenants,
         pending_signups=pending_signups,
         email_provider=email_provider,
         frontend_base_url=get_settings().frontend_base_url,
+        from_email=from_email,
     )
 
 
@@ -502,13 +577,48 @@ def get_verify_signup_service(
     register_tenant: RegisterTenantService = Depends(get_register_tenant_service),
     users: SqlAlchemyUserRepository = Depends(get_user_repository),
     identity_provider: InternalJWTProvider = Depends(get_internal_jwt_provider),
+    email_provider: ResendEmailProvider = Depends(get_email_provider),
+    welcome_from_email: str = Depends(get_resend_welcome_from_email),
 ) -> VerifySignupService:
     return VerifySignupService(
         pending_signups=pending_signups,
         register_tenant=register_tenant,
         users=users,
         identity_provider=identity_provider,
+        email_provider=email_provider,
+        welcome_from_email=welcome_from_email,
     )
+
+
+# --- Platform admin wiring (protected, but genuinely cross-tenant) ---
+# Every repository here uses get_db_session (no tenant context) since
+# platform_admins/platform_settings carry no RLS at all — see
+# app/domain/platform_admin/entities.py's module docstring.
+
+
+def get_platform_settings_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyPlatformSettingsRepository:
+    return SqlAlchemyPlatformSettingsRepository(session)
+
+
+def get_platform_admin_service(
+    grants: SqlAlchemyPlatformAdminRepository = Depends(get_platform_admin_repository),
+    tenants: SqlAlchemyTenantRepository = Depends(get_tenant_repository),
+    users: SqlAlchemyUserRepository = Depends(get_user_repository),
+    tenant_context: SqlAlchemyTenantContextBinder = Depends(get_tenant_context_binder),
+) -> PlatformAdminService:
+    return PlatformAdminService(
+        grants=grants, tenants=tenants, users=users, tenant_context=tenant_context
+    )
+
+
+def get_platform_settings_service(
+    settings_repo: SqlAlchemyPlatformSettingsRepository = Depends(
+        get_platform_settings_repository
+    ),
+) -> PlatformSettingsService:
+    return PlatformSettingsService(settings_repo)
 
 
 # --- Post-auth flow wiring (protected routes) ---
