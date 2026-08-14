@@ -97,6 +97,13 @@ const YANTRA_ACCENT_POINTS: { x: number; y: number; color: string }[] = [
 // clearly outside that.
 const YANTRA_CIRCLE_INNER_R = YANTRA_R * 1.3;
 const YANTRA_CIRCLE_OUTER_R = YANTRA_R * 1.42;
+// The circles sit lower than the triangle/bindu center (YANTRA_CY), per
+// explicit request — the viewBox height below is sized with this
+// already accounted for, so the shifted-down outer circle still fits
+// with margin.
+const YANTRA_CIRCLE_CY = YANTRA_CY + 12;
+const YANTRA_CIRCLE_MID_R = (YANTRA_CIRCLE_INNER_R + YANTRA_CIRCLE_OUTER_R) / 2;
+const YANTRA_CIRCLE_GAP_WIDTH = YANTRA_CIRCLE_OUTER_R - YANTRA_CIRCLE_INNER_R;
 
 /**
  * Public marketing/entry page at "/". Deliberately outside AppShell —
@@ -169,7 +176,7 @@ export function LandingPage() {
             image request, reusing the page's own rainbow-accent
             gradient def for the connecting edges. */}
         <div className="relative mx-auto mb-8 max-w-[403px]" aria-hidden="true">
-          <svg viewBox="0 0 600 292" className="relative h-auto w-full">
+          <svg viewBox="0 0 600 305" className="relative h-auto w-full">
             <defs>
               <filter id="hero-graph-glow" x="-50%" y="-50%" width="200%" height="200%">
                 <feGaussianBlur stdDeviation="14" />
@@ -184,12 +191,28 @@ export function LandingPage() {
               filter="url(#hero-graph-glow)"
             />
 
-            {/* Two boundary circles enclosing the triangle lattice —
-                radii picked so neither touches a triangle vertex (see
-                YANTRA_CIRCLE_INNER_R/OUTER_R above). */}
+            {/* Gap between the two boundary circles, filled with a
+                slowly flashing rainbow band (hero-ring-flash,
+                globals.css) — rendered as one thick stroke at the
+                midpoint radius, so its own edges line up exactly with
+                the two thin boundary circles drawn on top of it. */}
             <circle
               cx={YANTRA_CX}
-              cy={YANTRA_CY}
+              cy={YANTRA_CIRCLE_CY}
+              r={YANTRA_CIRCLE_MID_R}
+              fill="none"
+              stroke="url(#rainbow-accent-gradient)"
+              strokeWidth={YANTRA_CIRCLE_GAP_WIDTH}
+              style={{ animation: "hero-ring-flash 3s ease-in-out infinite" }}
+            />
+
+            {/* Two boundary circles enclosing the triangle lattice —
+                radii picked so neither touches a triangle vertex (see
+                YANTRA_CIRCLE_INNER_R/OUTER_R above), shifted down from
+                the triangle/bindu center per explicit request. */}
+            <circle
+              cx={YANTRA_CX}
+              cy={YANTRA_CIRCLE_CY}
               r={YANTRA_CIRCLE_OUTER_R}
               fill="none"
               stroke="url(#rainbow-accent-gradient)"
@@ -198,7 +221,7 @@ export function LandingPage() {
             />
             <circle
               cx={YANTRA_CX}
-              cy={YANTRA_CY}
+              cy={YANTRA_CIRCLE_CY}
               r={YANTRA_CIRCLE_INNER_R}
               fill="none"
               stroke="url(#rainbow-accent-gradient)"

@@ -298,6 +298,25 @@
   }
 }
 
+/*
+ * LandingPage.tsx's Sri Yantra hero graphic — the rainbow-gradient band
+ * filling the gap between the two boundary circles slowly flashes,
+ * same "opacity only" approach as hero-bindu-flash above. Kept to a
+ * modest peak opacity (0.45, vs the bindu's full 1) since this is a
+ * thick ring sitting right around the triangle lattice — full opacity
+ * would visually overpower the triangle lines rather than complement
+ * them.
+ */
+@keyframes hero-ring-flash {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.1;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
