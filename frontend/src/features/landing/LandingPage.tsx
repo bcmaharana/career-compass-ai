@@ -101,7 +101,7 @@ const YANTRA_CIRCLE_OUTER_R = YANTRA_R * 1.42;
 // explicit request — the viewBox height below is sized with this
 // already accounted for, so the shifted-down outer circle still fits
 // with margin.
-const YANTRA_CIRCLE_CY = YANTRA_CY + 12;
+const YANTRA_CIRCLE_CY = YANTRA_CY + 6;
 const YANTRA_CIRCLE_MID_R = (YANTRA_CIRCLE_INNER_R + YANTRA_CIRCLE_OUTER_R) / 2;
 const YANTRA_CIRCLE_GAP_WIDTH = YANTRA_CIRCLE_OUTER_R - YANTRA_CIRCLE_INNER_R;
 
