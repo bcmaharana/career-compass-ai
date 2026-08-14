@@ -63,34 +63,36 @@ function yantraTrianglePoints(t: YantraTriangleSpec): string {
 // same count/spirit as the hexagon motif this replaced, so the hero
 // graphic still reads as a connected, colored network, not just static
 // geometry.
-// 6 distinct, vivid colors, one per vertex — the original set repeated
-// purple (both the first and last point used #a855f7) and leaned on
-// pale pastel shades for two others, so two vertices read as
-// near-duplicates instead of 6 clearly different colors. Red is
-// deliberately excluded from this set — the bindu at center is already
-// red, and reusing it on a vertex would read as a duplicate again.
+// 6 distinct, vivid colors, one per vertex. Gone through two rounds of
+// live feedback: the original set repeated purple twice; the first fix
+// (a rainbow-only set) put teal next to green, which read as another
+// near-duplicate pair. This set drops the "must be a rainbow hue"
+// constraint entirely and instead just maximizes perceptual separation
+// (spread across the hue wheel, mixing warm/cool/neutral) — no red
+// (matches the bindu already being red) and no green at all, so the
+// near-duplicate problem can't recur the same way.
 const YANTRA_ACCENT_POINTS: { x: number; y: number; color: string }[] = [
-  { x: YANTRA_CX, y: YANTRA_CY - YANTRA_UP[0]!.apex * YANTRA_R, color: "#14b8a6" }, // teal
+  { x: YANTRA_CX, y: YANTRA_CY - YANTRA_UP[0]!.apex * YANTRA_R, color: "#92400e" }, // brown
   {
     x: YANTRA_CX - YANTRA_UP[0]!.halfWidth * YANTRA_R,
     y: YANTRA_CY + YANTRA_UP[0]!.base * YANTRA_R,
-    color: "#3b82f6", // blue
+    color: "#2563eb", // blue
   },
   {
     x: YANTRA_CX + YANTRA_UP[0]!.halfWidth * YANTRA_R,
     y: YANTRA_CY + YANTRA_UP[0]!.base * YANTRA_R,
-    color: "#22c55e", // green
+    color: "#0891b2", // cyan
   },
-  { x: YANTRA_CX, y: YANTRA_CY + YANTRA_DOWN[0]!.apex * YANTRA_R, color: "#f97316" }, // orange
+  { x: YANTRA_CX, y: YANTRA_CY + YANTRA_DOWN[0]!.apex * YANTRA_R, color: "#db2777" }, // magenta
   {
     x: YANTRA_CX - YANTRA_DOWN[0]!.halfWidth * YANTRA_R,
     y: YANTRA_CY - YANTRA_DOWN[0]!.base * YANTRA_R,
-    color: "#eab308", // yellow
+    color: "#ca8a04", // gold
   },
   {
     x: YANTRA_CX + YANTRA_DOWN[0]!.halfWidth * YANTRA_R,
     y: YANTRA_CY - YANTRA_DOWN[0]!.base * YANTRA_R,
-    color: "#8b5cf6", // violet
+    color: "#7c3aed", // violet
   },
 ];
 
