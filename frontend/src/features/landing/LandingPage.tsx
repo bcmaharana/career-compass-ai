@@ -63,16 +63,18 @@ function yantraTrianglePoints(t: YantraTriangleSpec): string {
 // same count/spirit as the hexagon motif this replaced, so the hero
 // graphic still reads as a connected, colored network, not just static
 // geometry.
-// 6 distinct, vivid colors, one per vertex. Gone through two rounds of
-// live feedback: the original set repeated purple twice; the first fix
-// (a rainbow-only set) put teal next to green, which read as another
-// near-duplicate pair. This set drops the "must be a rainbow hue"
-// constraint entirely and instead just maximizes perceptual separation
-// (spread across the hue wheel, mixing warm/cool/neutral) — no red
-// (matches the bindu already being red) and no green at all, so the
-// near-duplicate problem can't recur the same way.
+// 6 distinct, vivid colors, one per vertex. Gone through three rounds
+// of live feedback: the original set repeated purple twice; a
+// rainbow-only fix put teal next to green (another near-duplicate
+// pair); brown and magenta then both got flagged as reading as shades
+// of red. This set is confined to hues clearly outside the red/pink
+// range (roughly 45°-270° on the hue wheel — gold through violet,
+// skipping the 270°-45° red/magenta/orange band entirely) and drops
+// brown/muddy earth tones for fully saturated color instead — still
+// spread enough to stay perceptually distinct from each other, and
+// nowhere near the bindu's red.
 const YANTRA_ACCENT_POINTS: { x: number; y: number; color: string }[] = [
-  { x: YANTRA_CX, y: YANTRA_CY - YANTRA_UP[0]!.apex * YANTRA_R, color: "#92400e" }, // brown
+  { x: YANTRA_CX, y: YANTRA_CY - YANTRA_UP[0]!.apex * YANTRA_R, color: "#16a34a" }, // green
   {
     x: YANTRA_CX - YANTRA_UP[0]!.halfWidth * YANTRA_R,
     y: YANTRA_CY + YANTRA_UP[0]!.base * YANTRA_R,
@@ -83,7 +85,7 @@ const YANTRA_ACCENT_POINTS: { x: number; y: number; color: string }[] = [
     y: YANTRA_CY + YANTRA_UP[0]!.base * YANTRA_R,
     color: "#0891b2", // cyan
   },
-  { x: YANTRA_CX, y: YANTRA_CY + YANTRA_DOWN[0]!.apex * YANTRA_R, color: "#db2777" }, // magenta
+  { x: YANTRA_CX, y: YANTRA_CY + YANTRA_DOWN[0]!.apex * YANTRA_R, color: "#4f46e5" }, // indigo
   {
     x: YANTRA_CX - YANTRA_DOWN[0]!.halfWidth * YANTRA_R,
     y: YANTRA_CY - YANTRA_DOWN[0]!.base * YANTRA_R,
@@ -249,16 +251,9 @@ export function LandingPage() {
               />
             ))}
 
-            {/* Bindu — the central convergence point. Red, slowly
-                flashing (hero-bindu-flash, globals.css) rather than a
-                flat solid fill, per explicit request. */}
-            <circle
-              cx={YANTRA_CX}
-              cy={YANTRA_CY}
-              r="3.5"
-              fill="#dc2626"
-              style={{ animation: "hero-bindu-flash 3s ease-in-out infinite" }}
-            />
+            {/* Bindu — the central convergence point. Red, static (the
+                flashing animation was tried and reverted on request). */}
+            <circle cx={YANTRA_CX} cy={YANTRA_CY} r="3.5" fill="#dc2626" />
 
             {YANTRA_ACCENT_POINTS.map((p) => (
               <circle key={`node-${p.x}-${p.y}`} cx={p.x} cy={p.y} r="6" fill={p.color} />

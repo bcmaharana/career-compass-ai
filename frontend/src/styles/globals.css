@@ -283,28 +283,13 @@
 }
 
 /*
- * LandingPage.tsx's Sri Yantra hero graphic — the central bindu dot
- * slowly fades in and out ("flashes") rather than staying a flat solid
- * fill, applied via `animation` on the <circle> itself (opacity only —
- * fill color/size are plain SVG attributes, untouched by this).
- */
-@keyframes hero-bindu-flash {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.25;
-  }
-}
-
-/*
  * LandingPage.tsx's Sri Yantra hero graphic — the rainbow-gradient band
- * filling the gap between the two boundary circles slowly flashes,
- * same "opacity only" approach as hero-bindu-flash above. The first
- * version's peak (0.45) read as too washed out live — bumped to 0.85,
- * close to the bindu's full-opacity flash, so the color is clearly
- * visible at the bright point of the cycle.
+ * filling the gap between the two boundary circles slowly flashes (an
+ * opacity-only animation on the <circle> itself; the bindu at center
+ * was tried with a similar flash too, but that was reverted on
+ * request — it's a plain static fill now). The first version's peak
+ * (0.45) read as too washed out live — bumped to 0.85 so the color is
+ * clearly visible at the bright point of the cycle.
  */
 @keyframes hero-ring-flash {
   0%,
