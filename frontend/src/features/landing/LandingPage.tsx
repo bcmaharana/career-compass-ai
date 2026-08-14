@@ -63,28 +63,34 @@ function yantraTrianglePoints(t: YantraTriangleSpec): string {
 // same count/spirit as the hexagon motif this replaced, so the hero
 // graphic still reads as a connected, colored network, not just static
 // geometry.
+// 6 distinct, vivid colors, one per vertex — the original set repeated
+// purple (both the first and last point used #a855f7) and leaned on
+// pale pastel shades for two others, so two vertices read as
+// near-duplicates instead of 6 clearly different colors. Red is
+// deliberately excluded from this set — the bindu at center is already
+// red, and reusing it on a vertex would read as a duplicate again.
 const YANTRA_ACCENT_POINTS: { x: number; y: number; color: string }[] = [
-  { x: YANTRA_CX, y: YANTRA_CY - YANTRA_UP[0]!.apex * YANTRA_R, color: "#a855f7" },
+  { x: YANTRA_CX, y: YANTRA_CY - YANTRA_UP[0]!.apex * YANTRA_R, color: "#14b8a6" }, // teal
   {
     x: YANTRA_CX - YANTRA_UP[0]!.halfWidth * YANTRA_R,
     y: YANTRA_CY + YANTRA_UP[0]!.base * YANTRA_R,
-    color: "#3b82f6",
+    color: "#3b82f6", // blue
   },
   {
     x: YANTRA_CX + YANTRA_UP[0]!.halfWidth * YANTRA_R,
     y: YANTRA_CY + YANTRA_UP[0]!.base * YANTRA_R,
-    color: "#22c55e",
+    color: "#22c55e", // green
   },
-  { x: YANTRA_CX, y: YANTRA_CY + YANTRA_DOWN[0]!.apex * YANTRA_R, color: "#fdba74" },
+  { x: YANTRA_CX, y: YANTRA_CY + YANTRA_DOWN[0]!.apex * YANTRA_R, color: "#f97316" }, // orange
   {
     x: YANTRA_CX - YANTRA_DOWN[0]!.halfWidth * YANTRA_R,
     y: YANTRA_CY - YANTRA_DOWN[0]!.base * YANTRA_R,
-    color: "#fca5a5",
+    color: "#eab308", // yellow
   },
   {
     x: YANTRA_CX + YANTRA_DOWN[0]!.halfWidth * YANTRA_R,
     y: YANTRA_CY - YANTRA_DOWN[0]!.base * YANTRA_R,
-    color: "#a855f7",
+    color: "#8b5cf6", // violet
   },
 ];
 
