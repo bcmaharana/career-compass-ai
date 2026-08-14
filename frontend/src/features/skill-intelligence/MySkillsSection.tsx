@@ -11,7 +11,11 @@ import { MoveButtons } from "@/components/ui/move-buttons";
 import { RenameCategoryDialog } from "@/features/skill-intelligence/RenameCategoryDialog";
 import { RenameSkillDialog } from "@/features/skill-intelligence/RenameSkillDialog";
 import { getErrorMessage } from "@/lib/errors";
-import { groupCompetenciesByCategoryWithMoveIndex, moveCategoryGroup } from "@/lib/group-by-category";
+import {
+  buildCompetenciesFromAddInput,
+  groupCompetenciesByCategoryWithMoveIndex,
+  moveCategoryGroup,
+} from "@/lib/group-by-category";
 import { cn } from "@/lib/utils";
 import { ArrowDown, ArrowUp, PencilLine, Plus, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -92,6 +96,15 @@ export function MySkillsSection({ cardBackground }: MySkillsSectionProps) {
   function handleDialogSubmit(event: FormEvent) {
     event.preventDefault();
     if (!dialogTarget) return;
+
+    if (dialogTarget.mode === "add") {
+      const newItems = buildCompetenciesFromAddInput(formName, formCategory, skills);
+      if (newItems.length === 0) return;
+      persist([...skills, ...newItems]);
+      setDialogTarget(null);
+      return;
+    }
+
     const trimmed = formName.trim();
     if (!trimmed) return;
     const collides = skills.some(
@@ -109,15 +122,9 @@ export function MySkillsSection({ cardBackground }: MySkillsSectionProps) {
       // CoreCompetenciesSection.tsx on the Career Profile page, which
       // shares this exact field) rather than silently resetting it.
       include_in_resume:
-        dialogTarget.mode === "edit"
-          ? (skills.find((s) => s.name === dialogTarget.originalName)?.include_in_resume ?? true)
-          : true,
+        skills.find((s) => s.name === dialogTarget.originalName)?.include_in_resume ?? true,
     };
-    if (dialogTarget.mode === "add") {
-      persist([...skills, nextItem]);
-    } else {
-      persist(skills.map((s) => (s.name === dialogTarget.originalName ? nextItem : s)));
-    }
+    persist(skills.map((s) => (s.name === dialogTarget.originalName ? nextItem : s)));
     setDialogTarget(null);
   }
 
@@ -251,6 +258,11 @@ export function MySkillsSection({ cardBackground }: MySkillsSectionProps) {
         isPending={updateProfile.isPending}
         title={dialogTarget?.mode === "add" ? "Add skill" : "Edit skill"}
         submitLabel={dialogTarget?.mode === "add" ? "Add" : "Save"}
+        nameHint={
+          dialogTarget?.mode === "add"
+            ? "Separate multiple names with commas to add them all at once."
+            : undefined
+        }
       />
 
       <RenameCategoryDialog

@@ -31,6 +31,11 @@ interface RenameSkillDialogProps {
   // an existing one.
   title?: string;
   submitLabel?: string;
+  // Optional muted helper text under the name field — Core Competencies
+  // and My Skills pass this only in "add" mode, to surface that the
+  // field accepts several comma-separated names in one submission (see
+  // buildCompetenciesFromAddInput).
+  nameHint?: string;
 }
 
 /**
@@ -62,6 +67,7 @@ export function RenameSkillDialog({
   categoryOptions,
   title = "Rename skill",
   submitLabel = "Save",
+  nameHint,
 }: RenameSkillDialogProps) {
   const showCategory = onCategoryChange !== undefined;
   const options = categoryOptions ?? [];
@@ -105,6 +111,7 @@ export function RenameSkillDialog({
             value={name}
             onChange={(e) => onNameChange(e.target.value)}
           />
+          {nameHint && <p className="text-xs text-muted-foreground">{nameHint}</p>}
         </div>
         {showCategory && (
           <div className="flex flex-col gap-1.5">

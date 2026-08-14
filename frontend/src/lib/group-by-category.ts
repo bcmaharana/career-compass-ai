@@ -95,6 +95,39 @@ export function groupCompetenciesByCategoryWithMoveIndex(items: CoreCompetency[]
  * relevant button via isFirst/isLast rather than relying on this alone
  * (same convention as MoveButtons' other callers).
  */
+/**
+ * Parses the add-dialog's Name field into one or more new competencies
+ * — splitting on comma lets one submission add several at once
+ * ("Python, SQL, AWS"). Every resulting name shares the same category
+ * typed into the dialog; a blank category defaults to the literal
+ * "Unknown" category (a real, renamable group) rather than the
+ * null/Uncategorized bucket, since a bulk add is explicitly being
+ * sorted into *something*. Names already present (case-insensitively)
+ * in `existing`, or repeated within the same input, are silently
+ * dropped rather than blocking the whole batch over one collision.
+ */
+export function buildCompetenciesFromAddInput(
+  rawNames: string,
+  rawCategory: string,
+  existing: CoreCompetency[],
+): CoreCompetency[] {
+  const names = rawNames
+    .split(",")
+    .map((n) => n.trim())
+    .filter(Boolean);
+  const category = rawCategory.trim() || "Unknown";
+  const existingLower = new Set(existing.map((c) => c.name.toLowerCase()));
+  const seenLower = new Set<string>();
+  const result: CoreCompetency[] = [];
+  for (const name of names) {
+    const lower = name.toLowerCase();
+    if (existingLower.has(lower) || seenLower.has(lower)) continue;
+    seenLower.add(lower);
+    result.push({ name, category, include_in_resume: true });
+  }
+  return result;
+}
+
 export function moveCategoryGroup(
   items: CoreCompetency[],
   category: string,

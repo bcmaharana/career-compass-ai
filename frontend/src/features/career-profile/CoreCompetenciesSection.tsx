@@ -13,7 +13,11 @@ import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import type { SectionOrderProps } from "@/features/career-profile/section-order";
 import { getErrorMessage } from "@/lib/errors";
-import { groupCompetenciesByCategoryWithMoveIndex, moveCategoryGroup } from "@/lib/group-by-category";
+import {
+  buildCompetenciesFromAddInput,
+  groupCompetenciesByCategoryWithMoveIndex,
+  moveCategoryGroup,
+} from "@/lib/group-by-category";
 import { cn } from "@/lib/utils";
 import { ArrowDown, ArrowUp, Eraser, PencilLine, Plus, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -117,6 +121,15 @@ export function CoreCompetenciesSection({
   function handleDialogSubmit(event: FormEvent) {
     event.preventDefault();
     if (!dialogTarget) return;
+
+    if (dialogTarget.mode === "add") {
+      const newItems = buildCompetenciesFromAddInput(formName, formCategory, competencies);
+      if (newItems.length === 0) return;
+      persist([...competencies, ...newItems]);
+      setDialogTarget(null);
+      return;
+    }
+
     const trimmed = formName.trim();
     if (!trimmed) return;
     const collides = competencies.some(
@@ -133,16 +146,9 @@ export function CoreCompetenciesSection({
       // has no control for it — that lives on the chip itself, see
       // toggleItemResume) rather than silently resetting it to on.
       include_in_resume:
-        dialogTarget.mode === "edit"
-          ? (competencies.find((c) => c.name === dialogTarget.originalName)?.include_in_resume ??
-            true)
-          : true,
+        competencies.find((c) => c.name === dialogTarget.originalName)?.include_in_resume ?? true,
     };
-    if (dialogTarget.mode === "add") {
-      persist([...competencies, nextItem]);
-    } else {
-      persist(competencies.map((c) => (c.name === dialogTarget.originalName ? nextItem : c)));
-    }
+    persist(competencies.map((c) => (c.name === dialogTarget.originalName ? nextItem : c)));
     setDialogTarget(null);
   }
 
@@ -295,6 +301,11 @@ export function CoreCompetenciesSection({
         isPending={updateProfile.isPending}
         title={dialogTarget?.mode === "add" ? "Add competency" : "Edit competency"}
         submitLabel={dialogTarget?.mode === "add" ? "Add" : "Save"}
+        nameHint={
+          dialogTarget?.mode === "add"
+            ? "Separate multiple names with commas to add them all at once."
+            : undefined
+        }
       />
 
       <RenameCategoryDialog
