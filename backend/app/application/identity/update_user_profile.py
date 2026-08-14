@@ -22,6 +22,7 @@ from app.domain.identity.repositories import (
     TenantRepository,
     UserRepository,
 )
+from app.domain.platform_admin.repositories import PlatformAdminRepository
 
 
 def _to_e164(phone_number: str | None, country: str | None) -> str | None:
@@ -50,11 +51,13 @@ class UpdateUserProfileService:
         roles: RoleRepository,
         tenants: TenantRepository,
         personal_phone_logins: PersonalPhoneLoginRepository,
+        platform_admins: PlatformAdminRepository,
     ) -> None:
         self._users = users
         self._roles = roles
         self._tenants = tenants
         self._personal_phone_logins = personal_phone_logins
+        self._platform_admins = platform_admins
 
     async def execute(
         self,
@@ -131,6 +134,26 @@ class UpdateUserProfileService:
             else None
         )
         updated = await self._users.update(user)
+
+        # platform_admins.full_name is a snapshot (see its own module
+        # docstring), taken at grant time and otherwise only refreshed
+        # when the grant itself is edited — so without this, a platform
+        # admin's name/salutation change here would silently go stale on
+        # the Platform Admin admins list until someone happened to
+        # re-save their permission level. Cheap to check unconditionally:
+        # this table holds a handful of rows platform-wide, not one per
+        # tenant.
+        existing_grant = await self._platform_admins.get_for_user(tenant_id, user_id)
+        if existing_grant is not None:
+            await self._platform_admins.upsert(
+                tenant_id=existing_grant.tenant_id,
+                user_id=existing_grant.user_id,
+                email=existing_grant.email,
+                full_name=updated.display_name or updated.email,
+                subdomain=existing_grant.subdomain,
+                permission_codes=existing_grant.permission_codes,
+                granted_by_user_id=existing_grant.granted_by_user_id,
+            )
 
         # Phone login for Personal accounts needs a cross-tenant lookup
         # (personal_phone_logins) to resolve which tenant a phone number

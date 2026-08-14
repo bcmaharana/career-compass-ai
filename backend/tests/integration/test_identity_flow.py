@@ -29,6 +29,7 @@ from app.api.dependencies import get_email_provider, get_firebase_phone_verifier
 from app.core.email_provider_interface import EmailMessage
 from app.core.security import hash_password
 from app.domain.identity.entities import User, UserRoleAssignment
+from app.domain.identity.personal_accounts import derive_personal_subdomain
 from app.main import app
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("apply_migrations_and_seed")]
@@ -853,9 +854,9 @@ class TestDeleteAccount:
                 text(
                     """
                     INSERT INTO platform_admins
-                        (id, tenant_id, user_id, email, full_name, permission_codes, granted_by_user_id)
+                        (id, tenant_id, user_id, email, full_name, subdomain, permission_codes, granted_by_user_id)
                     VALUES
-                        (:id, :tenant_id, :user_id, :email, :full_name, :permission_codes, :user_id)
+                        (:id, :tenant_id, :user_id, :email, :full_name, :subdomain, :permission_codes, :user_id)
                     """
                 ),
                 {
@@ -864,6 +865,7 @@ class TestDeleteAccount:
                     "user_id": user_id,
                     "email": email,
                     "full_name": "Jordan Rivera",
+                    "subdomain": derive_personal_subdomain(email),
                     "permission_codes": '["platform.settings.view"]',
                 },
             )

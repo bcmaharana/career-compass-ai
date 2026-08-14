@@ -11,6 +11,7 @@ import pytest
 from app.application.identity.update_user_profile import UpdateUserProfileService
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.domain.identity.entities import Role, Tenant, User
+from app.domain.platform_admin.entities import PlatformAdminGrant
 
 
 class FakeUserRepository:
@@ -106,6 +107,64 @@ class FakePersonalPhoneLoginRepository:
                 del self.rows[number]
 
 
+class FakePlatformAdminRepository:
+    """Mirrors the real repository's upsert-by-(tenant_id, user_id)
+    shape closely enough to exercise UpdateUserProfileService's
+    full_name-refresh step — see that service's docstring comment for
+    why this exists (platform_admins.full_name is a snapshot that would
+    otherwise go stale on a salutation/name change)."""
+
+    def __init__(self) -> None:
+        self.grants: dict[tuple[uuid.UUID, uuid.UUID], PlatformAdminGrant] = {}
+
+    async def get_for_user(
+        self, tenant_id: uuid.UUID, user_id: uuid.UUID
+    ) -> PlatformAdminGrant | None:
+        grant = self.grants.get((tenant_id, user_id))
+        return replace(grant) if grant else None
+
+    async def get_by_id(self, grant_id: uuid.UUID) -> PlatformAdminGrant | None:
+        for grant in self.grants.values():
+            if grant.id == grant_id:
+                return replace(grant)
+        return None
+
+    async def list_all(self) -> list[PlatformAdminGrant]:
+        return [replace(g) for g in self.grants.values()]
+
+    async def count_with_permission(self, permission_code: str) -> int:
+        return sum(1 for g in self.grants.values() if permission_code in g.permission_codes)
+
+    async def upsert(
+        self,
+        *,
+        tenant_id: uuid.UUID,
+        user_id: uuid.UUID,
+        email: str,
+        full_name: str,
+        subdomain: str,
+        permission_codes: frozenset[str],
+        granted_by_user_id: uuid.UUID,
+    ) -> PlatformAdminGrant:
+        existing = self.grants.get((tenant_id, user_id))
+        grant = PlatformAdminGrant(
+            id=existing.id if existing else uuid.uuid4(),
+            tenant_id=tenant_id,
+            user_id=user_id,
+            email=email,
+            full_name=full_name,
+            subdomain=subdomain,
+            permission_codes=permission_codes,
+            granted_at=existing.granted_at if existing else datetime.now(UTC),
+            granted_by_user_id=granted_by_user_id,
+        )
+        self.grants[(tenant_id, user_id)] = grant
+        return replace(grant)
+
+    async def delete(self, grant_id: uuid.UUID) -> None:
+        self.grants = {k: v for k, v in self.grants.items() if v.id != grant_id}
+
+
 def _make_tenant(*, tenant_id: uuid.UUID, subdomain: str) -> Tenant:
     now = datetime.now(UTC)
     return Tenant(
@@ -141,7 +200,11 @@ def _make_user(*, tenant_id: uuid.UUID, user_id: uuid.UUID) -> User:
 def service() -> tuple[UpdateUserProfileService, FakeUserRepository]:
     users = FakeUserRepository()
     svc = UpdateUserProfileService(
-        users, FakeRoleRepository(), FakeTenantRepository(), FakePersonalPhoneLoginRepository()
+        users,
+        FakeRoleRepository(),
+        FakeTenantRepository(),
+        FakePersonalPhoneLoginRepository(),
+        FakePlatformAdminRepository(),
     )
     return svc, users
 
@@ -744,7 +807,9 @@ class TestPersonalPhoneLoginLookup:
         phone_logins = FakePersonalPhoneLoginRepository()
         if tenant is not None:
             tenants.tenants[tenant.id] = tenant
-        svc = UpdateUserProfileService(users, FakeRoleRepository(), tenants, phone_logins)
+        svc = UpdateUserProfileService(
+            users, FakeRoleRepository(), tenants, phone_logins, FakePlatformAdminRepository()
+        )
         return svc, users, phone_logins
 
     async def test_personal_tenant_phone_save_registers_lookup(self) -> None:
@@ -891,3 +956,93 @@ class TestPersonalPhoneLoginLookup:
         assert exc_info.value.code == "PHONE_NUMBER_ALREADY_REGISTERED"
         # First user's registration is untouched by the failed attempt.
         assert await phone_logins.get_tenant_id("+14155552671") == tenant_id
+
+
+@pytest.mark.unit
+class TestPlatformAdminSnapshotRefresh:
+    """platform_admins.full_name is a snapshot taken at grant time (see
+    PlatformAdminGrant's own docstring) — without this refresh, a
+    platform admin changing their own salutation/name here would leave
+    the Platform Admin admins list showing stale text indefinitely."""
+
+    def _service(
+        self,
+    ) -> tuple[UpdateUserProfileService, FakeUserRepository, FakePlatformAdminRepository]:
+        users = FakeUserRepository()
+        platform_admins = FakePlatformAdminRepository()
+        svc = UpdateUserProfileService(
+            users,
+            FakeRoleRepository(),
+            FakeTenantRepository(),
+            FakePersonalPhoneLoginRepository(),
+            platform_admins,
+        )
+        return svc, users, platform_admins
+
+    async def test_refreshes_existing_grants_full_name(self) -> None:
+        tenant_id, user_id, granter_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        svc, users, platform_admins = self._service()
+        await users.create(_make_user(tenant_id=tenant_id, user_id=user_id))
+        platform_admins.grants[(tenant_id, user_id)] = PlatformAdminGrant(
+            id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            user_id=user_id,
+            email="jordan@example.com",
+            full_name="Dr. First Last",
+            subdomain="p-abc123",
+            permission_codes=frozenset({"platform.settings.view"}),
+            granted_at=datetime.now(UTC),
+            granted_by_user_id=granter_id,
+        )
+
+        await svc.execute(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            salutation=None,
+            first_name="Jordan",
+            last_name="Rivera",
+            phone_number=None,
+            country=None,
+            language=None,
+            address_line1=None,
+            address_line2=None,
+            city=None,
+            state=None,
+            postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
+        )
+
+        refreshed = platform_admins.grants[(tenant_id, user_id)]
+        assert refreshed.full_name == "Jordan Rivera"
+        # Everything else about the grant is preserved untouched.
+        assert refreshed.permission_codes == frozenset({"platform.settings.view"})
+        assert refreshed.subdomain == "p-abc123"
+        assert refreshed.granted_by_user_id == granter_id
+
+    async def test_no_op_when_user_is_not_a_platform_admin(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        svc, users, platform_admins = self._service()
+        await users.create(_make_user(tenant_id=tenant_id, user_id=user_id))
+
+        await svc.execute(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            salutation="Ms.",
+            first_name="Jordan",
+            last_name="Rivera",
+            phone_number=None,
+            country=None,
+            language=None,
+            address_line1=None,
+            address_line2=None,
+            city=None,
+            state=None,
+            postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
+        )
+
+        assert platform_admins.grants == {}

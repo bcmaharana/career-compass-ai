@@ -25,6 +25,7 @@ def _grant_to_domain(model: PlatformAdminModel) -> PlatformAdminGrant:
         user_id=model.user_id,
         email=model.email,
         full_name=model.full_name,
+        subdomain=model.subdomain,
         permission_codes=frozenset(model.permission_codes),
         granted_at=model.granted_at,
         granted_by_user_id=model.granted_by_user_id,
@@ -82,6 +83,7 @@ class SqlAlchemyPlatformAdminRepository:
         user_id: UUID,
         email: str,
         full_name: str,
+        subdomain: str,
         permission_codes: frozenset[str],
         granted_by_user_id: UUID,
     ) -> PlatformAdminGrant:
@@ -98,6 +100,7 @@ class SqlAlchemyPlatformAdminRepository:
                 user_id=user_id,
                 email=email,
                 full_name=full_name,
+                subdomain=subdomain,
                 permission_codes=sorted(permission_codes),
                 granted_by_user_id=granted_by_user_id,
             )
@@ -105,6 +108,7 @@ class SqlAlchemyPlatformAdminRepository:
         else:
             model.email = email
             model.full_name = full_name
+            model.subdomain = subdomain
             model.permission_codes = sorted(permission_codes)
             model.granted_by_user_id = granted_by_user_id
 

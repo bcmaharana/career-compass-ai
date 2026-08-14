@@ -327,7 +327,11 @@ function PlatformAdminRow({ admin }: { admin: PlatformAdminGrantResponse }) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium">{admin.full_name}</p>
-          <p className="text-xs text-muted-foreground">{admin.email}</p>
+          <p className="text-xs text-muted-foreground">
+            {admin.email}
+            {" — "}
+            {admin.is_personal ? "Personal account" : `Enterprise · ${admin.subdomain}`}
+          </p>
         </div>
         <Button variant="ghost" onClick={() => setConfirmingRevoke(true)}>
           Revoke

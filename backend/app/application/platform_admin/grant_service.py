@@ -74,6 +74,7 @@ class PlatformAdminService:
             user_id=user.id,
             email=user.email,
             full_name=user.display_name or user.email,
+            subdomain=tenant.subdomain,
             permission_codes=permission_codes,
             granted_by_user_id=granted_by_user_id,
         )
@@ -100,6 +101,7 @@ class PlatformAdminService:
             user_id=existing.user_id,
             email=existing.email,
             full_name=existing.full_name,
+            subdomain=existing.subdomain,
             permission_codes=permission_codes,
             granted_by_user_id=granted_by_user_id,
         )

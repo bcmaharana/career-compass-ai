@@ -40,6 +40,12 @@ class PlatformAdminGrantResponse(BaseModel):
     user_id: UUID
     email: str
     full_name: str
+    #: The granted account's tenant subdomain, and whether it's a
+    #: Personal (subdomain-less to the end user) or Enterprise account —
+    #: lets the admins list tell apart two grants for the same email
+    #: under different tenants, which is otherwise indistinguishable.
+    subdomain: str
+    is_personal: bool
     permission_codes: list[str]
     granted_at: datetime
     granted_by_user_id: UUID

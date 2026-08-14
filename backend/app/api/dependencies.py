@@ -664,9 +664,14 @@ def get_update_user_profile_service(
     personal_phone_logins: SqlAlchemyPersonalPhoneLoginRepository = Depends(
         get_personal_phone_login_repository_scoped
     ),
+    platform_admins: SqlAlchemyPlatformAdminRepository = Depends(get_platform_admin_repository),
 ) -> UpdateUserProfileService:
     return UpdateUserProfileService(
-        users=users, roles=roles, tenants=tenants, personal_phone_logins=personal_phone_logins
+        users=users,
+        roles=roles,
+        tenants=tenants,
+        personal_phone_logins=personal_phone_logins,
+        platform_admins=platform_admins,
     )
 
 

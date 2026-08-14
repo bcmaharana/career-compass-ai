@@ -2230,6 +2230,10 @@ export interface components {
             email: string;
             /** Full Name */
             full_name: string;
+            /** Subdomain */
+            subdomain: string;
+            /** Is Personal */
+            is_personal: boolean;
             /** Permission Codes */
             permission_codes: string[];
             /**

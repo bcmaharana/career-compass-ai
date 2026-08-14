@@ -37,10 +37,14 @@ class PlatformAdminModel(Base):
         PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
     # Snapshot at grant time, refreshed on every update — avoids a
-    # cross-tenant users lookup just to render the admins list (RLS would
-    # block that without already knowing this exact tenant_id).
+    # cross-tenant users/tenants lookup just to render the admins list
+    # (RLS would block that without already knowing this exact
+    # tenant_id). subdomain lets the admins list tell apart two grants
+    # for the same email under different tenants (e.g. Personal vs
+    # Enterprise accounts sharing an email).
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    subdomain: Mapped[str] = mapped_column(String(63), nullable=False)
     permission_codes: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     granted_by_user_id: Mapped[uuid.UUID] = mapped_column(

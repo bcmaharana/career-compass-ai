@@ -33,6 +33,7 @@ from app.adapters.db.repositories.platform_admin import SqlAlchemyPlatformAdminR
 from app.application.platform_admin.grant_service import PlatformAdminService
 from app.application.platform_admin.settings_service import PlatformSettingsService
 from app.core.identity_provider_interface import IdentityClaims
+from app.domain.identity.personal_accounts import is_personal_subdomain
 from app.domain.platform_admin.entities import PlatformAdminGrant, PlatformSetting
 from app.domain.platform_admin.permissions import (
     ALL_PLATFORM_PERMISSIONS,
@@ -51,6 +52,8 @@ def _grant_response(grant: PlatformAdminGrant) -> PlatformAdminGrantResponse:
         user_id=grant.user_id,
         email=grant.email,
         full_name=grant.full_name,
+        subdomain=grant.subdomain,
+        is_personal=is_personal_subdomain(grant.subdomain),
         permission_codes=sorted(grant.permission_codes),
         granted_at=grant.granted_at,
         granted_by_user_id=grant.granted_by_user_id,

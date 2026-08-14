@@ -33,13 +33,15 @@ class PlatformAdminRepository(Protocol):
         user_id: UUID,
         email: str,
         full_name: str,
+        subdomain: str,
         permission_codes: frozenset[str],
         granted_by_user_id: UUID,
     ) -> PlatformAdminGrant:
         """Creates a new grant, or replaces the permission_codes/email/
-        full_name of an existing one for the same (tenant_id, user_id)
-        pair — upsert, not two separate methods, since the caller (the
-        admin API) never needs to distinguish the two cases."""
+        full_name/subdomain of an existing one for the same (tenant_id,
+        user_id) pair — upsert, not two separate methods, since the
+        caller (the admin API) never needs to distinguish the two
+        cases."""
         ...
 
     async def delete(self, grant_id: UUID) -> None: ...
