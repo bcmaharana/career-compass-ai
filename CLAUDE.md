@@ -1718,9 +1718,138 @@ Known environment gotchas already solved, don't reintroduce:
   real Postgres persistence, not just client cache → save the 3 new
   Settings > Profile fields → confirm those persist the same way) and
   directly via HTTP (Settings > Profile round trip, resume generation
-  respecting both toggle levels together). **Not yet deployed to
-  prod**: migration `d8f3a5c17b62` not yet applied there, prod images
-  not yet rebuilt.
+  respecting both toggle levels together). Deployed to prod later the
+  same day (see the next entry), which is what finally applied
+  `d8f3a5c17b62` there.
+- **Account-recovery investigation + Platform Admin/Dashboard/Skill
+  Intelligence fixes** (2026-08-14) — done, deployed and verified live
+  in both dev and prod. A long single session, starting from a real
+  incident: the user reported all profile data missing for both
+  `bcmaharana@hotmail.com` and `bcmaharana@gmail.com` in prod.
+  Root-caused via direct DB queries plus the real audit-event login
+  trail (not guessed): `derive_personal_subdomain(email)`'s hash-based
+  scheme (introduced by the Email-verification commit, `cde9183`,
+  20:09 on 2026-08-10) was never backfilled onto the hotmail Personal
+  tenant, which had been created *before* that commit under a literal
+  `subdomain="personal"` — from that point on, Personal login for that
+  email computed a completely different subdomain and could never
+  resolve to it again, even though the tenant (and its real, actively-
+  used profile data — 13 real logins, a real password reset, an hour
+  of real profile editing on 2026-08-10) was still sitting untouched in
+  the database. Fixed with a one-row `UPDATE tenants SET subdomain =
+  ...` to the correct hash value — confirmed live afterward (user
+  logged in and saw their real data). A second sub-investigation
+  (whether a since-downloaded resume implied data had "moved" from one
+  account to another) turned out to be dev/prod confusion, not a bug:
+  extracting the actual `.docx` file's text and cross-referencing
+  `resume_generated_at` timestamps against both databases showed the
+  file came from a long-standing **dev** account (`scaledbrain`
+  subdomain, since 2026-07-19) entirely unrelated to prod's empty
+  same-named Enterprise account — the two are separate databases that
+  happen to share a subdomain string. No code changes resulted from
+  either investigation; both were pure data/forensics work using direct
+  `psql` queries, real login-audit timestamps, and (for the resume
+  file) `System.IO.Compression` to unzip and read `document.xml`
+  directly.
+
+  From there, four real follow-on fixes, each triggered by the user
+  actually using the app and noticing something wrong — the standing
+  pattern for this whole session, not a coincidence:
+
+  1. **Platform Admin: same-email grants were indistinguishable.**
+     Granting both a Personal and an Enterprise account under the same
+     email (a direct consequence of the recovery above) showed two
+     identical-looking rows in the Admins list. Fixed by snapshotting
+     `subdomain` on `platform_admins` (migration `e1f4b8d67a52`, same
+     "avoid a cross-tenant lookup" reasoning as the existing email/
+     full_name snapshot) and labeling each row "Personal account" or
+     "Enterprise · `<subdomain>`". While there: noticed the *existing*
+     `full_name` snapshot goes stale forever once set (only refreshed
+     when the grant itself is re-saved) — `UpdateUserProfileService`
+     now refreshes any existing grant's `full_name` after every profile
+     save, plus a one-time backfill for the rows that were already
+     stale in both dev and prod.
+  2. **Dashboard rebuilt.** The two Phase-0 placeholder cards (a raw
+     health-check ping, a "signed in as" debug readout) had zero
+     product value once System Status and the Right Nav identity box
+     existed — user flagged this directly. Replaced with three real
+     cards built entirely from data already fetched elsewhere (Career
+     Profile summary, Gap Analysis, Resume Intelligence history) — no
+     new backend endpoints — one row per profile (Master + each Target
+     Role Profile), refined through several rounds of live feedback:
+     a completeness percentage instead of a headline preview, per-role
+     missing-skill counts instead of individual skill badges (renamed
+     "Skill Gaps" → "Skill Intelligence" to match the actual page
+     name), last-uploaded/last-downloaded resume per profile (renamed
+     "Resumes" → "Resume Intelligence"), cards stacked vertically per
+     explicit request. `useHealthCheck`/`health.ts` deleted as fully
+     orphaned once nothing called it anymore.
+  3. **Core Competencies/My Skills: comma-separated multi-add.** The
+     existing Add dialog only ever created one competency per
+     submission; typing `Python, SQL, AWS` created one literally named
+     that. Now splits on comma, applied identically to both pages since
+     they edit the same field — new `buildCompetenciesFromAddInput` in
+     `lib/group-by-category.ts`. A blank category on a bulk add now
+     defaults to the literal `"Unknown"` category (real, renamable) —
+     the "Fully matched/N uncategorized" Dashboard messaging below
+     exists specifically because this real user data has a lot of
+     `"Unknown"`-tagged skills now.
+  4. **Career Profile: state/DOM leaking across Master ↔ Target Role
+     switch — two bugs, the second a regression from fixing the
+     first.** Switching profiles is a client-side `?role=` search-param
+     change, not a navigation, so no section component ever unmounted
+     on switch. First report: leaving Core Competencies in edit mode on
+     a Target Role Profile and switching to Master showed Master's Core
+     Competencies already in edit mode — every scope-dependent
+     component (`ProfileHeader`, `ExecutiveSummarySection`,
+     `ResumeDownloadBar`, every reorderable section) now keys off scope
+     to force a real remount, same pattern Resume Intelligence's review
+     screen already uses. **That fix's first pass introduced a second,
+     worse bug**: giving three sibling elements (`ResumeDownloadBar`,
+     `ProfileHeader`, `ExecutiveSummarySection`) the exact same literal
+     key broke React's reconciliation between them — reported live as
+     the profile photo/header visibly duplicating and accumulating with
+     every target-role click. Reproduced both bugs and confirmed the
+     real fix (each sibling keyed uniquely) via an actual headless-
+     browser session against a throwaway dev account — React's own
+     "two children with the same key" console warning, and a photo-
+     header count climbing 1→2→3→4→5 across clicks, both gone
+     afterward.
+  5. **Gap Analysis silently ignored target-role-specific
+     competencies.** `GapAnalysisService` only ever read the Master
+     Profile's `core_competencies` for every role's gap computation,
+     never that specific role's own (Core Competencies became a
+     genuinely per-profile field after Target Role Profiles were made
+     fully independent, but this service was never updated to match).
+     Reported live against the user's real data: "Senior Scrum
+     Master/Team Coach" had ~38 required skills nearly all satisfied by
+     competencies added directly to *that* target role's own profile,
+     but showed almost all of them as missing, since Master's unrelated
+     competency list barely overlapped. Fixed by unioning Master's
+     competencies with the specific target role's own when computing
+     "owned" skills — backward compatible, a role nobody's tailored
+     stays Master-only. Verified live via a direct (read-only,
+     non-destructive) API call against the real account this was
+     reported on: the role now shows zero missing skills.
+
+  Every fix in this session was verified live before being called
+  done, not just reasoned about — direct `psql` queries against both
+  the dev and prod databases throughout, and, for every frontend
+  change, real headless-Chromium Playwright sessions driving the
+  actual app (including two throwaway dev accounts created via the
+  low-level `/tenants` primitive specifically for reproduction, each
+  deleted via the real self-service `DELETE /identity/me` afterward —
+  never left lying around). One reusable technique worth keeping: to
+  verify a fix against a specific real user's account without ever
+  touching their password, mint a short-lived JWT locally (dev's
+  `JWT_SECRET_KEY` is a known placeholder) matching `IdentityClaims`'
+  shape and call the real API directly — read-only, nothing persisted,
+  no credential ever touched. 406 backend tests passing, mypy clean,
+  frontend `typecheck`/`lint` clean throughout. `start-prod.ps1` also
+  gained a wait-for-frontend-to-accept-connections step this session
+  (separate, smaller fix, same day) so the Cloudflare Tunnel has less
+  of a gap to log connection-refused errors into after a machine/Docker
+  restart.
 - **Not yet started**: Phase 6 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in
