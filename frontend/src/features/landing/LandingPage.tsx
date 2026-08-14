@@ -39,7 +39,10 @@ const YANTRA_UP: YantraTriangleSpec[] = [
   { dir: "up", apex: 1.0, base: 0.74, halfWidth: 0.96 },
   { dir: "up", apex: 0.78, base: 0.5, halfWidth: 0.7 },
   { dir: "up", apex: 0.52, base: 0.26, halfWidth: 0.46 },
-  { dir: "up", apex: 0.26, base: 0.04, halfWidth: 0.2 },
+  // Shifted down slightly (apex reduced, base increased by the same
+  // 0.03 amount — moves the whole triangle without resizing it) per
+  // explicit request; was { apex: 0.26, base: 0.04 }.
+  { dir: "up", apex: 0.23, base: 0.07, halfWidth: 0.2 },
 ];
 // 5 downward ("Shakti") triangles, largest to smallest.
 const YANTRA_DOWN: YantraTriangleSpec[] = [
