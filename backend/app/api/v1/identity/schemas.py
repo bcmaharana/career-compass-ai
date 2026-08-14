@@ -139,6 +139,9 @@ class UpdateCurrentUserRequest(BaseModel):
     city: str | None = Field(default=None, max_length=100)
     state: str | None = Field(default=None, max_length=100)
     postal_code: str | None = Field(default=None, max_length=20)
+    visa_status: str | None = Field(default=None, max_length=100)
+    linkedin_url: str | None = Field(default=None, max_length=2048)
+    other_professional_url: str | None = Field(default=None, max_length=2048)
 
 
 class CurrentUserResponse(BaseModel):
@@ -158,6 +161,9 @@ class CurrentUserResponse(BaseModel):
     city: str | None
     state: str | None
     postal_code: str | None
+    visa_status: str | None
+    linkedin_url: str | None
+    other_professional_url: str | None
     roles: list[str]
 
 

@@ -27,6 +27,11 @@ dependencies = [
     "pgvector>=0.3,<1.0",
     "pdfplumber>=0.11,<1.0",
     "python-docx>=1.1,<2.0",
+    # PDF *generation* for the Download Resume feature (resume_pdf_builder.py)
+    # — pdfplumber above is read-only. Pure-Python, no system dependencies
+    # (unlike weasyprint's Pango/cairo/gdk-pixbuf), so it doesn't grow the
+    # Docker image the way a full HTML-to-PDF renderer would.
+    "reportlab>=4.2,<5.0",
 ]
 
 [project.optional-dependencies]

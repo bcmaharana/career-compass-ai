@@ -54,4 +54,7 @@ class CurrentUserResult:
     city: str | None
     state: str | None
     postal_code: str | None
+    visa_status: str | None
+    linkedin_url: str | None
+    other_professional_url: str | None
     roles: tuple[str, ...]

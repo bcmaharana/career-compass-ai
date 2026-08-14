@@ -90,6 +90,7 @@ class CertificationService:
         expiration_date: date | None,
         credential_id: str | None,
         credential_url: str | None,
+        include_in_resume: bool = True,
     ) -> Certification:
         certification = await self._get_owned_or_raise(
             tenant_id=tenant_id, user_id=user_id, certification_id=certification_id
@@ -100,6 +101,7 @@ class CertificationService:
         certification.expiration_date = expiration_date
         certification.credential_id = credential_id
         certification.credential_url = credential_url
+        certification.include_in_resume = include_in_resume
         return await self._certifications.update(certification)
 
     async def delete(self, *, tenant_id: UUID, user_id: UUID, certification_id: UUID) -> None:

@@ -72,6 +72,9 @@ class UpdateUserProfileService:
         city: str | None,
         state: str | None,
         postal_code: str | None,
+        visa_status: str | None,
+        linkedin_url: str | None,
+        other_professional_url: str | None,
     ) -> CurrentUserResult:
         user = await self._users.get_by_id(tenant_id, user_id)
         if user is None or not user.is_active:
@@ -114,6 +117,19 @@ class UpdateUserProfileService:
         user.city = city.strip() if city and city.strip() else None
         user.state = state.strip() if state and state.strip() else None
         user.postal_code = postal_code.strip() if postal_code and postal_code.strip() else None
+        # Same permissive "frontend dropdown/format constrains it, backend
+        # just stores the string" treatment as country/language above —
+        # visa_status's fixed value set lives entirely in the frontend
+        # dropdown (frontend/src/lib/visa-status-options.ts), and the two
+        # URLs get no format validation, same as credential_url elsewhere
+        # in this codebase.
+        user.visa_status = visa_status.strip() if visa_status and visa_status.strip() else None
+        user.linkedin_url = linkedin_url.strip() if linkedin_url and linkedin_url.strip() else None
+        user.other_professional_url = (
+            other_professional_url.strip()
+            if other_professional_url and other_professional_url.strip()
+            else None
+        )
         updated = await self._users.update(user)
 
         # Phone login for Personal accounts needs a cross-tenant lookup
@@ -154,5 +170,8 @@ class UpdateUserProfileService:
             city=updated.city,
             state=updated.state,
             postal_code=updated.postal_code,
+            visa_status=updated.visa_status,
+            linkedin_url=updated.linkedin_url,
+            other_professional_url=updated.other_professional_url,
             roles=tuple(role.name for role in roles),
         )

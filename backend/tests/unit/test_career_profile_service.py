@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import replace
+from datetime import UTC, datetime
 
 import pytest
 
 from app.application.career_profile.career_profile_service import CareerProfileService
-from app.core.exceptions import CareerCompassError
+from app.core.exceptions import CareerCompassError, ConflictError
 from app.domain.career_profile.entities import CareerProfile, CareerProfileVersion
 
 
@@ -130,6 +131,74 @@ class TestGetOrCreate:
         second = await svc.get_or_create(tenant_id=tenant_id, user_id=user_id)
 
         assert first.id == second.id
+        assert len(profiles.profiles) == 1
+
+
+class RacyCareerProfileRepository(FakeCareerProfileRepository):
+    """Simulates losing a create-on-first-access race: the Career Profile
+    page fires several section list requests in parallel on first load,
+    each independently calling get_or_create for a user whose profile
+    doesn't exist yet — two requests can both see "no profile" and both
+    attempt to create() one. The loser's real INSERT hits
+    uq_career_profiles_master_per_user/..._target_role_per_user (see
+    app/adapters/db/repositories/career_profile.py's SAVEPOINT-based
+    IntegrityError handling), which SqlAlchemyCareerProfileRepository
+    translates to ConflictError — that's what this fake reproduces,
+    after seeding storage with the concurrent "winner"'s row directly
+    (mirroring what a real second request would have already committed
+    by the time this one's INSERT fails).
+    """
+
+    def __init__(self, winner: CareerProfile) -> None:
+        super().__init__()
+        self._winner = winner
+        self._create_calls = 0
+
+    async def create(self, profile: CareerProfile) -> CareerProfile:
+        self._create_calls += 1
+        if self._create_calls == 1:
+            self.profiles[self._winner.id] = self._winner
+            raise ConflictError(
+                "A career profile for this user/scope already exists.",
+                code="CAREER_PROFILE_ALREADY_EXISTS",
+            )
+        return await super().create(profile)
+
+
+@pytest.mark.unit
+class TestGetOrCreateRaceRecovery:
+    """Regression test for a real bug caught live (not by review): two
+    concurrent requests for a brand-new user's Career Profile page both
+    called get_or_create before either had committed, and the loser
+    surfaced a raw 500 instead of the profile. See
+    CareerProfileService.get_or_create's own ConflictError handling.
+    """
+
+    async def test_returns_the_concurrent_winners_profile_instead_of_raising(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        now = datetime.now(UTC)
+        winner = CareerProfile(
+            id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            user_id=user_id,
+            current_version=1,
+            headline=None,
+            summary=None,
+            career_readiness_score=None,
+            photo_url=None,
+            core_competencies=[],
+            created_at=now,
+            updated_at=now,
+        )
+        profiles = RacyCareerProfileRepository(winner)
+        versions = FakeCareerProfileVersionRepository()
+        svc = CareerProfileService(profiles, versions)
+
+        result = await svc.get_or_create(tenant_id=tenant_id, user_id=user_id)
+
+        assert result.id == winner.id
+        # No second row was created — the loser recovered by re-fetching,
+        # not by inserting its own duplicate.
         assert len(profiles.profiles) == 1
 
 

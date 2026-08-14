@@ -1453,6 +1453,274 @@ Known environment gotchas already solved, don't reintroduce:
   `PLATFORM_ADMIN_BOOTSTRAP_ACCOUNTS` correctly no-ops there for now),
   both backend and frontend images rebuilt and redeployed, health
   checked end-to-end.
+- **Platform Admin follow-ups + Career Profile > Download Resume**
+  (2026-08-13, same day) — done, deployed and verified live in both dev
+  and prod. Three Platform Admin refinements requested after the first
+  round of real usage, then a large new feature. **(1)** System Status
+  moved from the Dashboard to Settings > Platform Admin, laid out
+  side-by-side with Platform Settings (`SettingsPlatformAdminPage.tsx`:
+  `grid lg:grid-cols-2` — Platform Settings + Platform Admins stacked in
+  the left column, System Status alone on the right, so the second
+  card's height never pushes the left column's own internal spacing
+  around — an earlier version nested System Status *inside* the shared
+  grid row itself, which left a large, confusing gap between Platform
+  Settings and Platform Admins whenever System Status was the taller of
+  the two). **(2)** Real gap found live: a grant with only
+  `platform.settings.edit` (no `platform.settings.view`) hit "You don't
+  have access to this page," since edit access didn't imply view
+  access anywhere. Fixed by making `require_platform_permission` variadic
+  with OR semantics (`app/api/dependencies.py`) — `GET
+  /platform-admin/settings` now accepts either code — and mirroring the
+  same OR logic in the frontend's own gate. **(3)** The permission
+  checkbox list (pick any combination of the three codes) was replaced
+  with a proper radio group of three ordered access levels — View, Edit
+  (implies View), Manage (implies both, full access) — since the three
+  codes were never really independent in practice; `LEVEL_CODES` in
+  `SettingsPlatformAdminPage.tsx` is the one place that maps a level to
+  its underlying code set, used identically by the grant form and each
+  existing admin's row.
+  **Download Resume**: from the Career Profile page (Master or any
+  Target Role Profile — these are already fully independent profiles
+  in this app, per Phase 2's design, so "download this specific
+  profile's resume" needed no new tailoring/generation-from-Master
+  logic, just rendering whichever profile is currently open), a new
+  action bar (`ResumeDownloadBar.tsx`) generates a formatted `.docx` or
+  `.pdf` resume, downloads it immediately, and saves it as *the*
+  current resume for that profile — regenerating a format replaces the
+  previous file for that format (never accumulates a history), the
+  same model `CareerProfile.photo_url` already established. Three new
+  nullable columns on `career_profiles`
+  (`resume_docx_key`/`resume_pdf_key`/`resume_generated_at`, migration
+  `c7e2f9a04d18`) back a persistent "View Word / View PDF" link shown
+  on the profile page from then on. New `app/adapters/documents/`
+  package: `resume_docx_builder.py` (python-docx — already a
+  dependency, used today only for *reading* uploaded resumes; its
+  `Document` API is bidirectional so no new dependency was needed to
+  write one) and `resume_pdf_builder.py` (new dependency: `reportlab`,
+  chosen over `weasyprint` specifically to avoid adding Pango/cairo/
+  gdk-pixbuf system packages to the Docker image — reportlab is pure
+  Python). Both builders share `resume_data.py`'s `ResumeData` bundle
+  and mirror the exact "a description line starting with '• ' is a
+  real bullet, everything else is a plain paragraph line" convention
+  already used by the Career Profile page's own UI and the resume
+  -extraction prompt, so a generated resume's bullet/paragraph shape
+  matches what the person already sees on their profile. New
+  `ResumeExportService` (`app/application/career_profile/`) gathers the
+  profile + every child section + the owning `User` (for the name/
+  contact header — `CareerProfile` itself has no name/email/phone,
+  those live on `User`), builds the requested format, uploads it to the
+  same private resumes bucket Resume Intelligence already established,
+  and updates the profile's key fields. Storage keys, not URLs, are
+  what's persisted — `GET`/`PATCH /career-profile` and the new `POST
+  .../resume-export` all resolve a *fresh* presigned URL on every
+  response (1 hour TTL, deliberately longer than
+  resume_intelligence's own 300s single-use default, since this one is
+  meant to sit on the page as a clickable link, not be used once
+  immediately after upload) rather than ever storing a presigned URL,
+  which would silently go stale. `PrivateObjectStorageRepository`
+  (`app/domain/resume_intelligence/storage.py` — already documented as
+  a deliberately generic, cross-domain-reusable port) gained an
+  optional `download_filename` param on `get_presigned_url`, setting
+  `ResponseContentDisposition` so opening the link downloads with a
+  real name ("Jordan Rivera - Staff Engineer - Resume.docx") instead of
+  the raw storage key/UUID.
+  **A real bug caught live, not by review**: the very first generated
+  download URL pointed at `http://minio:9000/...` — the backend's
+  *internal* Docker endpoint, unreachable from any browser, silently
+  broken despite a 200 response and a correctly-shaped URL. Root cause:
+  boto3's presigned-URL signing bakes the request's `Host` into the
+  SigV4 signature itself, and the existing single S3 client was
+  constructed with `endpoint_url=OBJECT_STORAGE_ENDPOINT` (the
+  internal address) for every operation, presigning included — the
+  long-documented `OBJECT_STORAGE_ENDPOINT` vs `OBJECT_STORAGE_PUBLIC_URL`
+  gotcha elsewhere in this file turned out to apply to presigned URLs
+  too, not just the public-bucket `upload()` path that gotcha was
+  originally written about. Fixed with a *second* boto3 client in
+  `S3ObjectStorageRepository`, identical except constructed with
+  `endpoint_url=OBJECT_STORAGE_PUBLIC_URL`, used only by
+  `get_presigned_url()` — confirmed live afterward with a real `curl`
+  against the returned URL showing `200`, the correct
+  `Content-Disposition` header, and the correct file bytes.
+  Also hit again this session: the now-twice-documented `docker compose
+  -f infra/docker-compose.yml up` (explicit `-f`, run from the repo
+  root) silently drops `docker-compose.override.yml`'s `--reload` —
+  this cost a fresh migration file that had to be re-`docker cp`'d in
+  after a container recreate wiped it. Both the migration and code are
+  now baked into a real rebuilt dev image (`docker compose build backend`
+  from `infra/`, not just `up`) specifically to stop relying on `docker
+  cp` surviving future recreates.
+  7 new unit tests for `ResumeExportService` (fake repositories +
+  fake storage, real document builders — no database, no real object
+  storage, matching this test suite's own established boundary: no
+  existing test anywhere hits real MinIO, including Resume
+  Intelligence's own upload-and-parse flow). 383 backend tests passing
+  (1 pre-existing, documented flaky failure — the phone-number-collision
+  test noted earlier in this file — confirmed unrelated by rerunning in
+  isolation), mypy clean across all 194 backend source files. Verified
+  live end-to-end via real headless-Chromium Playwright runs: generated
+  both formats from a real Master profile, confirmed the persistent
+  "View Word"/"View PDF" links survive a fresh client-side navigation
+  (a real `GET /career-profile`, not just the mutation's cached
+  response), and separately confirmed a Target Role Profile's generated
+  resume gets its own independent file (own storage key, own filename
+  including the role name) without touching the Master profile's.
+  Deployed to prod: migration `c7e2f9a04d18` applied, backend +
+  frontend images rebuilt, health checked end-to-end.
+- **Resume-inclusion toggles + 3 new profile fields** (2026-08-14,
+  same session as Download Resume) — done, verified live in dev; prod
+  migration/rebuild not yet done. Two features requested together:
+  (1) a per-section and per-item "include this in a generated resume?"
+  toggle across the whole Career Profile page; (2) three new Settings >
+  Profile fields — Visa Status (dropdown), LinkedIn Profile URL, Other
+  Professional URL.
+
+  **Toggle data model**: `include_in_resume BOOLEAN NOT NULL DEFAULT
+  true` added to all 7 per-item orderable entities (Experience,
+  Education, Certification, CareerGoal, CareerHighlight, KeyAchievement,
+  PeerEndorsement) plus `CoreCompetency.include_in_resume` (inside the
+  existing `core_competencies` JSON blob — no new column). Whole-section
+  toggles live in a new `career_profiles.resume_section_toggles JSON
+  NULL` column, keyed by the same section keys
+  `CareerProfilePage.tsx`'s `SECTION_DEFS`/`section_order` already use —
+  a missing key (including a profile that's never touched this at all)
+  means "on," so no existing profile's resume output changes until
+  someone actually flips a toggle. Migration `d8f3a5c17b62`. Every
+  entity's `update()` endpoint/service/repository gained an
+  `include_in_resume` param (reusing the existing per-item update flow
+  rather than adding 8 new toggle-specific endpoints, matching how
+  `CoreCompetenciesSection.tsx`/`CareerProfilePage.tsx` already resend
+  unchanged fields alongside a real change); `create()`/`add()` paths
+  were deliberately left untouched — new items rely on the entity's own
+  Python-level `default=True`.
+
+  **Two sections newly join resume generation**: Career Goals and
+  Recommendations (Peer Endorsements) were never part of a generated
+  resume before this (see the Download Resume entry above, which
+  explicitly scoped them out) — added as real renderable sections in
+  both `resume_docx_builder.py`/`resume_pdf_builder.py`
+  (`_render_career_goals`/`_render_recommendations`, the latter using
+  DOCX's built-in "Intense Quote" style / a custom indented reportlab
+  style for the testimonial text) and `DEFAULT_RESUME_SECTION_ORDER`/
+  `resolve_resume_section_order` in `resume_data.py`. `ResumeData`
+  gained `career_goals`/`recommendations` fields;
+  `ResumeExportService._gather()` now also fetches
+  `CareerGoalRepository`/`PeerEndorsementRepository` (career_goals via
+  `list_for_user`, since that entity is `user_id`-scoped not
+  `career_profile_id`-scoped — shared across Master and every Target
+  Role Profile, unlike everything else this service gathers) and
+  filters every list two ways before handing it to the builders: drop
+  items with `include_in_resume=False`, and drop the *entire* list if
+  `resume_section_toggles` has that section's key set to `false`
+  (`ResumeExportService._section_enabled`) — a section-off wins over
+  any individual item's own toggle. Core Competencies gets the same
+  treatment via a `dataclasses.replace()`'d profile view
+  (`resume_profile`) passed to the builders, keeping the *actual*
+  persisted profile (with its full, unfiltered `core_competencies`)
+  intact for the `resume_docx_key`/`resume_pdf_key` update at the end
+  of `generate()`.
+
+  **Frontend**: new hand-rolled `Switch` component
+  (`components/ui/switch.tsx`, no Radix — matches this app's existing
+  minimal-dependency convention) plus a `ResumeIncludeToggle` wrapper
+  (`features/career-profile/ResumeIncludeToggle.tsx`) used identically
+  at both the section level (`SectionOrderProps` gained
+  `resumeIncluded`/`onToggleResumeIncluded`/`resumeToggleDisabled`,
+  computed once in `CareerProfilePage.tsx` and threaded through every
+  `SECTION_DEFS` entry) and the per-item level (every one of the 7
+  entity section components, plus each Core Competency chip — gated
+  behind that section's existing `isEditMode` for the chips specifically,
+  since chips are dense and already gate their pencil/X icons the same
+  way; the 7 full-card sections show their per-item switch always,
+  not edit-mode-gated, since toggling inclusion isn't itself an edit
+  action). Placement and behavior were refined twice from live
+  feedback during the build: the switch moved to be the *first* control
+  in every action row (before Add/Edit/Clear), the redundant "Resume"
+  text label next to it was dropped (the switch reads clearly enough on
+  its own once it's first), it's vertically centered (`self-center`)
+  against its taller sibling buttons, and its hover title reads "Toggle
+  off to exclude this from the resume" / "Toggle on to include this in
+  the resume" depending on current state. Settings > Profile's 3 new
+  fields follow the existing form's exact pattern — Visa Status is a
+  `<Select>` sourced from a new plain curated list
+  (`lib/visa-status-options.ts`, the standard US work-authorization
+  values, not `Intl.DisplayNames`-backed like country/language since
+  there's no such registry for this), LinkedIn/Other Professional URL
+  are plain `<Input type="url">` with no format validation (same
+  permissive treatment as `credential_url` elsewhere in this app).
+  `openapi-typescript`'s generated types made every request schema's
+  `include_in_resume` field non-optional (a known
+  has-a-default-so-it's-"required" behavior, not a bug in the OpenAPI
+  spec itself, which correctly omits it from `required`) — every
+  existing add/update call site across 9 components had to start
+  explicitly sending it, which surfaced two more real spots doing the
+  same field-preservation dance: `CoreCompetenciesSection.tsx` and
+  `MySkillsSection.tsx`'s (skill-intelligence page) edit-dialog submits
+  now look up and preserve the item's existing `include_in_resume`
+  rather than silently resetting it to `true` on every edit.
+
+  **A real, pre-existing concurrency bug was caught live while testing
+  this feature, not by review**: a brand-new user's first Career Profile
+  page visit fires roughly eight parallel section-list GET requests
+  (experiences, educations, certifications, highlights, achievements,
+  goals, target-roles, endorsements), each independently calling
+  `CareerProfileService.get_or_create` — since none of them see an
+  existing profile yet, more than one can race to `INSERT` the Master
+  profile row, and the loser hit a raw, unhandled
+  `psycopg.errors.UniqueViolation` on
+  `uq_career_profiles_master_per_user` (or `..._target_role_per_user`
+  for a Target Role Profile), surfacing as a genuine 500 to the browser
+  — reproduced repeatedly via headless-Playwright runs against a fresh
+  account, not a one-off fluke. This class of bug almost certainly
+  predates this session's changes (nothing about the toggle feature
+  touches `get_or_create`'s concurrency shape) but had never previously
+  been exercised by any test or live-verification pass that happened to
+  hit this exact "brand new user's very first page load" timing. Fixed
+  in `SqlAlchemyCareerProfileRepository.create()`
+  (`app/adapters/db/repositories/career_profile.py`): the `INSERT` now
+  runs inside a SAVEPOINT (`session.begin_nested()`), and a caught
+  `IntegrityError` matching `uq_career_profiles` is translated to a
+  domain `ConflictError` — deliberately *not* a plain
+  `await self._session.rollback()`, which would also discard the RLS
+  tenant-context GUC (`set_config('app.tenant_id', ..., true)`, set
+  once per request in `get_tenant_scoped_session` and transaction-local
+  like `SET LOCAL`) and silently break RLS for every later query in the
+  same request; a savepoint rollback undoes only the failed `INSERT`.
+  `CareerProfileService.get_or_create()` catches that `ConflictError`
+  and re-fetches via `get_by_user_id` to return the concurrent winner's
+  row instead of raising. Regression test added
+  (`TestGetOrCreateRaceRecovery` in `test_career_profile_service.py`,
+  a fake repository that raises `ConflictError` on its first `create()`
+  call after seeding the "winner"'s row directly, mirroring what a real
+  losing request would see). Verified live afterward: 4 consecutive
+  fresh-account Playwright runs against the real dev stack, zero
+  console errors, zero 5xx responses (the same repro that had
+  intermittently failed roughly half the time before the fix).
+
+  **Also requested live, after the toggle feature was otherwise done**:
+  the resume header's contact line (previously just `email | phone`)
+  now also shows location (`city, state`), Visa Status, and LinkedIn URL
+  with its `https://`/`https://www.` scheme+host prefix stripped (a
+  bare `linkedin.com/in/name` reads cleaner in a resume header) — new
+  shared `contact_line_parts()`/`_strip_url_scheme()` helpers in
+  `resume_data.py`, used identically by both builders so the two
+  formats' headers can't drift apart. 6 new unit tests
+  (`TestContactLineParts`), verified live via a real generated DOCX
+  (`admin@... | +1 415 555 0100 | San Francisco, CA | H-1B |
+  linkedin.com/in/admintestuser`).
+
+  418 backend tests passing (1 pre-existing, documented flaky failure —
+  the same phone-number-collision test noted earlier in this file —
+  confirmed unrelated by rerunning in isolation), mypy clean across all
+  195 backend source files, frontend `typecheck`/`lint` both clean.
+  Verified live end-to-end in dev via real headless-Playwright runs
+  (fresh account → toggle a per-item switch off → toggle a whole
+  section off → confirm both survive a brand-new login session, i.e.
+  real Postgres persistence, not just client cache → save the 3 new
+  Settings > Profile fields → confirm those persist the same way) and
+  directly via HTTP (Settings > Profile round trip, resume generation
+  respecting both toggle levels together). **Not yet deployed to
+  prod**: migration `d8f3a5c17b62` not yet applied there, prod images
+  not yet rebuilt.
 - **Not yet started**: Phase 6 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in

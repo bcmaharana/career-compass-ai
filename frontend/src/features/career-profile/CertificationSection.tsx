@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
 import { Select } from "@/components/ui/select";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
+import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
@@ -34,6 +35,7 @@ interface FormState {
   expiration_date: string;
   credential_id: string;
   credential_url: string;
+  include_in_resume: boolean;
 }
 
 const EMPTY_FORM: FormState = {
@@ -43,6 +45,7 @@ const EMPTY_FORM: FormState = {
   expiration_date: "",
   credential_id: "",
   credential_url: "",
+  include_in_resume: true,
 };
 
 function toFormState(certification: Certification): FormState {
@@ -53,6 +56,7 @@ function toFormState(certification: Certification): FormState {
     expiration_date: certification.expiration_date ?? "",
     credential_id: certification.credential_id ?? "",
     credential_url: certification.credential_url ?? "",
+    include_in_resume: certification.include_in_resume,
   };
 }
 
@@ -63,6 +67,9 @@ export function CertificationSection({
   isLast,
   moveDisabled,
   cardBackground,
+  resumeIncluded,
+  onToggleResumeIncluded,
+  resumeToggleDisabled,
 }: SectionOrderProps) {
   const scope = useProfileScope();
   const { data: certifications, isLoading } = useCertifications(scope);
@@ -107,6 +114,7 @@ export function CertificationSection({
       expiration_date: form.expiration_date || null,
       credential_id: form.credential_id || null,
       credential_url: form.credential_url || null,
+      include_in_resume: form.include_in_resume,
     };
 
     const mutation = editingId
@@ -121,6 +129,21 @@ export function CertificationSection({
       .catch(() => {});
   }
 
+  function toggleItemResume(certification: Certification, include: boolean) {
+    updateCertification.mutate({
+      id: certification.id,
+      body: {
+        name: certification.name,
+        issuing_organization: certification.issuing_organization,
+        issue_date: certification.issue_date,
+        expiration_date: certification.expiration_date,
+        credential_id: certification.credential_id,
+        credential_url: certification.credential_url,
+        include_in_resume: include,
+      },
+    });
+  }
+
   const isSaving = addCertification.isPending || updateCertification.isPending;
   const saveError = addCertification.error ?? updateCertification.error;
 
@@ -129,6 +152,12 @@ export function CertificationSection({
       <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Certifications</CardTitle>
         <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
+          <ResumeIncludeToggle
+            checked={resumeIncluded}
+            onCheckedChange={onToggleResumeIncluded}
+            disabled={resumeToggleDisabled}
+            label="the Certifications section"
+          />
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
@@ -193,6 +222,12 @@ export function CertificationSection({
               )}
             </div>
             <div className={cn("flex shrink-0", ACTION_BUTTON_ROW_GAP)}>
+              <ResumeIncludeToggle
+                checked={certification.include_in_resume}
+                onCheckedChange={(checked) => toggleItemResume(certification, checked)}
+                disabled={updateCertification.isPending}
+                label={`the "${certification.name}" certification entry`}
+              />
               {isEditMode && (
                 <>
                   <Button variant="ghost" size="sm" onClick={() => openEditDialog(certification)}>

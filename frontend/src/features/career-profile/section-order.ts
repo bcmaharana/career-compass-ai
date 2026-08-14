@@ -17,6 +17,12 @@ export interface SectionOrderProps {
   isLast: boolean;
   moveDisabled?: boolean;
   cardBackground: "card" | "background";
+  /** Whole-section resume-inclusion toggle (CareerProfile.resume_section_toggles)
+   * — see ResumeIncludeToggle.tsx. Defaults to true (included) when the
+   * profile has never set a preference for this section. */
+  resumeIncluded: boolean;
+  onToggleResumeIncluded: (checked: boolean) => void;
+  resumeToggleDisabled?: boolean;
 }
 
 /**

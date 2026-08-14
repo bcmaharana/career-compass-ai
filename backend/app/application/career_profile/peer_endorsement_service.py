@@ -78,6 +78,7 @@ class PeerEndorsementService:
         recommender_title: str | None,
         relationship: str | None,
         content: str,
+        include_in_resume: bool = True,
     ) -> PeerEndorsement:
         endorsement = await self._get_owned_or_raise(
             tenant_id=tenant_id, user_id=user_id, endorsement_id=endorsement_id
@@ -86,6 +87,7 @@ class PeerEndorsementService:
         endorsement.recommender_title = recommender_title
         endorsement.relationship = relationship
         endorsement.content = content
+        endorsement.include_in_resume = include_in_resume
         return await self._endorsements.update(endorsement)
 
     async def delete(self, *, tenant_id: UUID, user_id: UUID, endorsement_id: UUID) -> None:

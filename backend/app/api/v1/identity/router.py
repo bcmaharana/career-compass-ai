@@ -210,6 +210,9 @@ async def get_me(
         city=result.city,
         state=result.state,
         postal_code=result.postal_code,
+        visa_status=result.visa_status,
+        linkedin_url=result.linkedin_url,
+        other_professional_url=result.other_professional_url,
         roles=list(result.roles),
     )
 
@@ -234,6 +237,9 @@ async def update_me(
         city=request.city,
         state=request.state,
         postal_code=request.postal_code,
+        visa_status=request.visa_status,
+        linkedin_url=request.linkedin_url,
+        other_professional_url=request.other_professional_url,
     )
     return CurrentUserResponse(
         user_id=result.user_id,
@@ -252,6 +258,9 @@ async def update_me(
         city=result.city,
         state=result.state,
         postal_code=result.postal_code,
+        visa_status=result.visa_status,
+        linkedin_url=result.linkedin_url,
+        other_professional_url=result.other_professional_url,
         roles=list(result.roles),
     )
 

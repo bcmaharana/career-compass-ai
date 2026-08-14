@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
 import { Textarea } from "@/components/ui/textarea";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
+import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
@@ -34,6 +35,7 @@ interface FormState {
   target_date: string;
   status: GoalStatus;
   description: string;
+  include_in_resume: boolean;
 }
 
 const EMPTY_FORM: FormState = {
@@ -41,6 +43,7 @@ const EMPTY_FORM: FormState = {
   target_date: "",
   status: "active",
   description: "",
+  include_in_resume: true,
 };
 
 function toFormState(goal: CareerGoal): FormState {
@@ -49,6 +52,7 @@ function toFormState(goal: CareerGoal): FormState {
     target_date: goal.target_date ?? "",
     status: goal.status as GoalStatus,
     description: goal.description ?? "",
+    include_in_resume: goal.include_in_resume,
   };
 }
 
@@ -65,6 +69,9 @@ export function CareerGoalsSection({
   isLast,
   moveDisabled,
   cardBackground,
+  resumeIncluded,
+  onToggleResumeIncluded,
+  resumeToggleDisabled,
 }: SectionOrderProps) {
   const { data: goals, isLoading } = useCareerGoals();
   const addGoal = useAddCareerGoal();
@@ -111,6 +118,7 @@ export function CareerGoalsSection({
             target_date: form.target_date || null,
             status: form.status,
             description: form.description || null,
+            include_in_resume: form.include_in_resume,
           },
         })
         .then(() => setDialogOpen(false))
@@ -121,6 +129,7 @@ export function CareerGoalsSection({
           target_role: form.target_role,
           target_date: form.target_date || null,
           description: form.description || null,
+          include_in_resume: form.include_in_resume,
         })
         .then(() => {
           setDialogOpen(false);
@@ -128,6 +137,19 @@ export function CareerGoalsSection({
         })
         .catch(() => {});
     }
+  }
+
+  function toggleItemResume(goal: CareerGoal, include: boolean) {
+    updateGoal.mutate({
+      id: goal.id,
+      body: {
+        target_role: goal.target_role,
+        target_date: goal.target_date,
+        status: goal.status as GoalStatus,
+        description: goal.description,
+        include_in_resume: include,
+      },
+    });
   }
 
   const isSaving = addGoal.isPending || updateGoal.isPending;
@@ -141,6 +163,12 @@ export function CareerGoalsSection({
           {isTargetRoleView && <Badge variant="default">Master profile</Badge>}
         </div>
         <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
+          <ResumeIncludeToggle
+            checked={resumeIncluded}
+            onCheckedChange={onToggleResumeIncluded}
+            disabled={resumeToggleDisabled}
+            label="the Career Goals section"
+          />
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
@@ -206,6 +234,12 @@ export function CareerGoalsSection({
               )}
             </div>
             <div className={cn("flex shrink-0", ACTION_BUTTON_ROW_GAP)}>
+              <ResumeIncludeToggle
+                checked={goal.include_in_resume}
+                onCheckedChange={(checked) => toggleItemResume(goal, checked)}
+                disabled={updateGoal.isPending}
+                label={`the "${goal.target_role}" career goal entry`}
+              />
               {isEditMode && (
                 <>
                   <Button variant="ghost" size="sm" onClick={() => openEditDialog(goal)}>

@@ -101,7 +101,18 @@ export function MySkillsSection({ cardBackground }: MySkillsSectionProps) {
     );
     if (collides) return;
     const trimmedCategory = formCategory.trim();
-    const nextItem: CoreCompetency = { name: trimmed, category: trimmedCategory || null };
+    const nextItem: CoreCompetency = {
+      name: trimmed,
+      category: trimmedCategory || null,
+      // Preserve the existing item's resume-inclusion toggle when
+      // editing — this page has no control for it (see
+      // CoreCompetenciesSection.tsx on the Career Profile page, which
+      // shares this exact field) rather than silently resetting it.
+      include_in_resume:
+        dialogTarget.mode === "edit"
+          ? (skills.find((s) => s.name === dialogTarget.originalName)?.include_in_resume ?? true)
+          : true,
+    };
     if (dialogTarget.mode === "add") {
       persist([...skills, nextItem]);
     } else {

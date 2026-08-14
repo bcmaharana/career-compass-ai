@@ -44,6 +44,22 @@ class S3ObjectStorageRepository:
             aws_secret_access_key=settings.object_storage_secret_key,
             region_name="us-east-1",  # required by boto3's S3 client; MinIO ignores the value
         )
+        # A second client, identical except for endpoint_url, used only
+        # for get_presigned_url(). SigV4 presigned URLs bake the host
+        # into the signature itself — a URL signed against the
+        # backend's internal endpoint_url (http://minio:9000, unreachable
+        # from a browser) would fail signature verification the moment
+        # the browser sent it to object_storage_public_url's host
+        # instead, even though the path/query would otherwise look
+        # identical. Confirmed live: the first version of this method
+        # returned a raw `minio:9000` URL straight into an API response.
+        self._presign_client = boto3.client(
+            "s3",
+            endpoint_url=settings.object_storage_public_url,
+            aws_access_key_id=settings.object_storage_access_key,
+            aws_secret_access_key=settings.object_storage_secret_key,
+            region_name="us-east-1",
+        )
         self._bucket_checked = False
         self._resumes_bucket_checked = False
 
@@ -148,12 +164,30 @@ class S3ObjectStorageRepository:
         except (ClientError, BotoCoreError) as exc:
             raise ObjectStorageError(f"Failed to upload private object '{key}'.") from exc
 
-    async def get_presigned_url(self, *, key: str, expires_in_seconds: int = 300) -> str:
+    async def get_presigned_url(
+        self,
+        *,
+        key: str,
+        expires_in_seconds: int = 300,
+        download_filename: str | None = None,
+    ) -> str:
+        """download_filename, when given, sets ResponseContentDisposition
+        so opening the URL downloads with that name (e.g. "Jordan Rivera
+        Resume.pdf") rather than the storage key itself — set per
+        request, not baked in at upload time, so the filename can
+        reflect current profile data (a changed headline/name) even for
+        an already-uploaded object. Used by ResumeExportService; the
+        resume-intelligence upload-and-parse flow never needs this
+        (those files are never offered back out for direct download).
+        """
+        params: dict[str, str] = {"Bucket": self._resumes_bucket, "Key": key}
+        if download_filename is not None:
+            params["ResponseContentDisposition"] = f'attachment; filename="{download_filename}"'
         try:
             return await asyncio.to_thread(
-                self._client.generate_presigned_url,
+                self._presign_client.generate_presigned_url,
                 "get_object",
-                Params={"Bucket": self._resumes_bucket, "Key": key},
+                Params=params,
                 ExpiresIn=expires_in_seconds,
             )
         except (ClientError, BotoCoreError) as exc:

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 type CareerProfileResponse = components["schemas"]["CareerProfileResponse"];
 type UpdateCareerProfileRequest = components["schemas"]["UpdateCareerProfileRequest"];
+type GenerateResumeRequest = components["schemas"]["GenerateResumeRequest"];
 type CareerProfileSummaryResponse = components["schemas"]["CareerProfileSummaryResponse"];
 type PhotoUploadResponse = components["schemas"]["PhotoUploadResponse"];
 
@@ -107,6 +108,26 @@ export function useUpdateCareerProfile(scope: Scope = null) {
       // invalidate on every profile update rather than threading a
       // "did core_competencies change" flag through every call site.
       queryClient.invalidateQueries({ queryKey: ["skills", "gap-analysis"] });
+    },
+  });
+}
+
+/** Generates (or regenerates — overwrites, doesn't accumulate a
+ * history) a downloadable resume document for this profile. The
+ * response carries a fresh presigned resume_docx_url/resume_pdf_url
+ * (see backend ResumeExportService) — the caller triggers the actual
+ * browser download by navigating to whichever one matches the format
+ * just requested. */
+export function useGenerateResume(scope: Scope = null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: GenerateResumeRequest) =>
+      apiClient.post<CareerProfileResponse>(
+        withScope("/api/v1/career-profile/resume-export", scope),
+        body,
+      ),
+    onSuccess: (data) => {
+      queryClient.setQueryData(KEYS.profile(scope), data);
     },
   });
 }

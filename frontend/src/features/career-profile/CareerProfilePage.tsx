@@ -18,6 +18,7 @@ import { KeyAchievementsSection } from "@/features/career-profile/KeyAchievement
 import { PeerEndorsementsSection } from "@/features/career-profile/PeerEndorsementsSection";
 import { ProfileHeader } from "@/features/career-profile/ProfileHeader";
 import { ProfileScopeProvider } from "@/features/career-profile/ProfileScopeContext";
+import { ResumeDownloadBar } from "@/features/career-profile/ResumeDownloadBar";
 import { Eraser } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ComponentType } from "react";
@@ -107,6 +108,19 @@ export function CareerProfilePage() {
     });
   }
 
+  // Same "always resend headline/summary" requirement as moveSection
+  // above — the backend overwrites both unconditionally on every PATCH
+  // (see CareerProfileService.update).
+  function toggleSectionResume(key: string, checked: boolean) {
+    if (!profile) return;
+    updateProfile.mutate({
+      headline: profile.headline,
+      summary: profile.summary,
+      core_competencies: profile.core_competencies,
+      resume_section_toggles: { ...(profile.resume_section_toggles ?? {}), [key]: checked },
+    });
+  }
+
   return (
     <ProfileScopeProvider targetRoleId={targetRoleId}>
       <div className="-mt-6 grid gap-3">
@@ -130,6 +144,7 @@ export function CareerProfilePage() {
             {activeRole ? "Clear This Target Role Profile" : "Clear Career Profile"}
           </Button>
         </div>
+        {profile && <ResumeDownloadBar profile={profile} scope={targetRoleId} />}
         <ProfileHeader />
         <ExecutiveSummarySection />
         {orderedKeys.map((key, index) => {
@@ -149,6 +164,9 @@ export function CareerProfilePage() {
               // section alternates starting back at white, then tinted,
               // etc.
               cardBackground={index % 2 === 0 ? "card" : "background"}
+              resumeIncluded={profile?.resume_section_toggles?.[key] ?? true}
+              onToggleResumeIncluded={(checked) => toggleSectionResume(key, checked)}
+              resumeToggleDisabled={updateProfile.isPending}
             />
           );
         })}

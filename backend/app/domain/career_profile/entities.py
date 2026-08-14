@@ -23,6 +23,10 @@ class CoreCompetency:
 
     name: str
     category: str | None = None
+    #: Per-item resume-inclusion toggle — default True (on). See
+    #: CareerProfile.resume_section_toggles for the section-level
+    #: (whole Core Competencies section) counterpart.
+    include_in_resume: bool = True
 
 
 @dataclass(slots=True)
@@ -49,6 +53,25 @@ class CareerProfile:
     # Master. See career_profile_service.py's get_or_create for how this
     # is resolved.
     target_role_id: UUID | None = None
+    # Storage keys (in the private resumes bucket) for the most recently
+    # generated resume document, one per format — same "regenerating
+    # overwrites, doesn't accumulate a history" model as photo_url.
+    # None if that format has never been generated for this profile. See
+    # ResumeExportService.
+    resume_docx_key: str | None = None
+    resume_pdf_key: str | None = None
+    resume_generated_at: datetime | None = None
+    # Whole-section resume-inclusion toggles, keyed by the same section
+    # keys CareerProfilePage.tsx's SECTION_DEFS/section_order already
+    # use (core_competencies, career_highlights, experience, education,
+    # certifications, key_achievements, career_goals, recommendations).
+    # A missing key (including None entirely, the default for a profile
+    # that's never touched this) means "on" — see
+    # ResumeExportService._section_enabled. Independent per profile
+    # (Master and each Target Role Profile has its own row), even
+    # though career_goals' underlying data is itself shared across all
+    # of a user's profiles.
+    resume_section_toggles: dict[str, bool] | None = None
 
 
 @dataclass(slots=True)
@@ -107,6 +130,8 @@ class Experience:
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
+    #: Per-item resume-inclusion toggle — default True (on).
+    include_in_resume: bool = True
 
 
 @dataclass(slots=True)
@@ -124,6 +149,8 @@ class Education:
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
+    #: Per-item resume-inclusion toggle — default True (on).
+    include_in_resume: bool = True
 
 
 @dataclass(slots=True)
@@ -141,6 +168,8 @@ class Certification:
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
+    #: Per-item resume-inclusion toggle — default True (on).
+    include_in_resume: bool = True
 
 
 @dataclass(slots=True)
@@ -156,6 +185,8 @@ class CareerGoal:
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
+    #: Per-item resume-inclusion toggle — default True (on).
+    include_in_resume: bool = True
 
 
 @dataclass(slots=True)
@@ -171,6 +202,8 @@ class CareerHighlight:
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
+    #: Per-item resume-inclusion toggle — default True (on).
+    include_in_resume: bool = True
 
 
 @dataclass(slots=True)
@@ -186,6 +219,8 @@ class KeyAchievement:
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
+    #: Per-item resume-inclusion toggle — default True (on).
+    include_in_resume: bool = True
 
 
 @dataclass(slots=True)
@@ -201,6 +236,8 @@ class PeerEndorsement:
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
+    #: Per-item resume-inclusion toggle — default True (on).
+    include_in_resume: bool = True
 
 
 @dataclass(slots=True)

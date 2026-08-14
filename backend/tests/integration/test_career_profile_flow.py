@@ -359,8 +359,8 @@ class TestCoreCompetencies:
 
         assert response.status_code == 200
         assert response.json()["core_competencies"] == [
-            {"name": "Stakeholder Management", "category": "Leadership"},
-            {"name": "Cloud Architecture", "category": None},
+            {"name": "Stakeholder Management", "category": "Leadership", "include_in_resume": True},
+            {"name": "Cloud Architecture", "category": None, "include_in_resume": True},
         ]
 
     async def test_omitting_core_competencies_leaves_them_unchanged(
@@ -383,7 +383,9 @@ class TestCoreCompetencies:
             json={"headline": "New headline", "summary": None},
         )
 
-        assert response.json()["core_competencies"] == [{"name": "Leadership", "category": None}]
+        assert response.json()["core_competencies"] == [
+            {"name": "Leadership", "category": None, "include_in_resume": True}
+        ]
 
 
 class TestCareerHighlights:

@@ -232,6 +232,23 @@ export interface paths {
         patch: operations["update_career_profile_api_v1_career_profile_patch"];
         trace?: never;
     };
+    "/api/v1/career-profile/resume-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Resume */
+        post: operations["generate_resume_api_v1_career_profile_resume_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/career-profile/summary": {
         parameters: {
             query?: never;
@@ -1385,6 +1402,11 @@ export interface components {
             target_date?: string | null;
             /** Description */
             description?: string | null;
+            /**
+             * Include In Resume
+             * @default true
+             */
+            include_in_resume: boolean;
         };
         /** CareerGoalResponse */
         CareerGoalResponse: {
@@ -1403,6 +1425,8 @@ export interface components {
             description: string | null;
             /** Display Order */
             display_order: number;
+            /** Include In Resume */
+            include_in_resume: boolean;
         };
         /** CareerGoalUpdateRequest */
         CareerGoalUpdateRequest: {
@@ -1412,6 +1436,11 @@ export interface components {
             target_date?: string | null;
             /** Description */
             description?: string | null;
+            /**
+             * Include In Resume
+             * @default true
+             */
+            include_in_resume: boolean;
             /** Status */
             status: string;
         };
@@ -1425,6 +1454,11 @@ export interface components {
             description?: string | null;
             /** Occurred On */
             occurred_on?: string | null;
+            /**
+             * Include In Resume
+             * @default true
+             */
+            include_in_resume: boolean;
         };
         /** CareerHighlightResponse */
         CareerHighlightResponse: {
@@ -1443,6 +1477,8 @@ export interface components {
             occurred_on: string | null;
             /** Display Order */
             display_order: number;
+            /** Include In Resume */
+            include_in_resume: boolean;
         };
         /** CareerProfileResponse */
         CareerProfileResponse: {
@@ -1465,6 +1501,16 @@ export interface components {
             core_competencies: components["schemas"]["CoreCompetencyPayload"][];
             /** Section Order */
             section_order: string[] | null;
+            /** Resume Docx Url */
+            resume_docx_url?: string | null;
+            /** Resume Pdf Url */
+            resume_pdf_url?: string | null;
+            /** Resume Generated At */
+            resume_generated_at?: string | null;
+            /** Resume Section Toggles */
+            resume_section_toggles?: {
+                [key: string]: boolean;
+            } | null;
         };
         /**
          * CareerProfileSummaryResponse
@@ -1507,6 +1553,11 @@ export interface components {
             credential_id?: string | null;
             /** Credential Url */
             credential_url?: string | null;
+            /**
+             * Include In Resume
+             * @default true
+             */
+            include_in_resume: boolean;
         };
         /** CertificationResponse */
         CertificationResponse: {
@@ -1529,6 +1580,8 @@ export interface components {
             credential_url: string | null;
             /** Display Order */
             display_order: number;
+            /** Include In Resume */
+            include_in_resume: boolean;
         };
         /** ChatMessageResponse */
         ChatMessageResponse: {
@@ -1638,6 +1691,11 @@ export interface components {
             name: string;
             /** Category */
             category?: string | null;
+            /**
+             * Include In Resume
+             * @default true
+             */
+            include_in_resume: boolean;
         };
         /** CreateSkillAliasRequest */
         CreateSkillAliasRequest: {
@@ -1693,6 +1751,12 @@ export interface components {
             state: string | null;
             /** Postal Code */
             postal_code: string | null;
+            /** Visa Status */
+            visa_status: string | null;
+            /** Linkedin Url */
+            linkedin_url: string | null;
+            /** Other Professional Url */
+            other_professional_url: string | null;
             /** Roles */
             roles: string[];
         };
@@ -1710,6 +1774,11 @@ export interface components {
             end_date?: string | null;
             /** Description */
             description?: string | null;
+            /**
+             * Include In Resume
+             * @default true
+             */
+            include_in_resume: boolean;
         };
         /** EducationResponse */
         EducationResponse: {
@@ -1732,6 +1801,8 @@ export interface components {
             description: string | null;
             /** Display Order */
             display_order: number;
+            /** Include In Resume */
+            include_in_resume: boolean;
         };
         /** ExperienceRequest */
         ExperienceRequest: {
@@ -1750,6 +1821,11 @@ export interface components {
             end_date?: string | null;
             /** Description */
             description?: string | null;
+            /**
+             * Include In Resume
+             * @default true
+             */
+            include_in_resume: boolean;
         };
         /** ExperienceResponse */
         ExperienceResponse: {
@@ -1775,6 +1851,8 @@ export interface components {
             description: string | null;
             /** Display Order */
             display_order: number;
+            /** Include In Resume */
+            include_in_resume: boolean;
         };
         /** ExtractedCareerHighlight */
         ExtractedCareerHighlight: {
@@ -1891,6 +1969,14 @@ export interface components {
             /** Target Role Gaps */
             target_role_gaps: components["schemas"]["TargetRoleGapResponse"][];
         };
+        /** GenerateResumeRequest */
+        GenerateResumeRequest: {
+            /**
+             * Format
+             * @enum {string}
+             */
+            format: "docx" | "pdf";
+        };
         /** GrantPlatformAdminRequest */
         GrantPlatformAdminRequest: {
             /** Email */
@@ -1924,6 +2010,11 @@ export interface components {
             description?: string | null;
             /** Occurred On */
             occurred_on?: string | null;
+            /**
+             * Include In Resume
+             * @default true
+             */
+            include_in_resume: boolean;
         };
         /** KeyAchievementResponse */
         KeyAchievementResponse: {
@@ -1942,6 +2033,8 @@ export interface components {
             occurred_on: string | null;
             /** Display Order */
             display_order: number;
+            /** Include In Resume */
+            include_in_resume: boolean;
         };
         /** LatestConversationResponse */
         LatestConversationResponse: {
@@ -2062,6 +2155,11 @@ export interface components {
             relationship?: string | null;
             /** Content */
             content: string;
+            /**
+             * Include In Resume
+             * @default true
+             */
+            include_in_resume: boolean;
         };
         /** PeerEndorsementResponse */
         PeerEndorsementResponse: {
@@ -2080,6 +2178,8 @@ export interface components {
             content: string;
             /** Display Order */
             display_order: number;
+            /** Include In Resume */
+            include_in_resume: boolean;
         };
         /** PersonalSignupRequest */
         PersonalSignupRequest: {
@@ -2619,6 +2719,10 @@ export interface components {
             core_competencies?: components["schemas"]["CoreCompetencyPayload"][] | null;
             /** Section Order */
             section_order?: string[] | null;
+            /** Resume Section Toggles */
+            resume_section_toggles?: {
+                [key: string]: boolean;
+            } | null;
         };
         /** UpdateCurrentUserRequest */
         UpdateCurrentUserRequest: {
@@ -2644,6 +2748,12 @@ export interface components {
             state?: string | null;
             /** Postal Code */
             postal_code?: string | null;
+            /** Visa Status */
+            visa_status?: string | null;
+            /** Linkedin Url */
+            linkedin_url?: string | null;
+            /** Other Professional Url */
+            other_professional_url?: string | null;
         };
         /** UpdatePlatformAdminRequest */
         UpdatePlatformAdminRequest: {
@@ -3154,6 +3264,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateCareerProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CareerProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_resume_api_v1_career_profile_resume_export_post: {
+        parameters: {
+            query?: {
+                target_role_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateResumeRequest"];
             };
         };
         responses: {

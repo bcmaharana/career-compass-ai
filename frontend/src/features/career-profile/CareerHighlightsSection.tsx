@@ -19,6 +19,7 @@ import { MoveButtons } from "@/components/ui/move-buttons";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
+import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
@@ -33,9 +34,16 @@ interface FormState {
   company: string;
   description: string;
   occurred_on: string;
+  include_in_resume: boolean;
 }
 
-const EMPTY_FORM: FormState = { title: "", company: "", description: "", occurred_on: "" };
+const EMPTY_FORM: FormState = {
+  title: "",
+  company: "",
+  description: "",
+  occurred_on: "",
+  include_in_resume: true,
+};
 
 function toFormState(highlight: CareerHighlight): FormState {
   return {
@@ -43,6 +51,7 @@ function toFormState(highlight: CareerHighlight): FormState {
     company: highlight.company ?? "",
     description: highlight.description ?? "",
     occurred_on: highlight.occurred_on ?? "",
+    include_in_resume: highlight.include_in_resume,
   };
 }
 
@@ -53,6 +62,9 @@ export function CareerHighlightsSection({
   isLast,
   moveDisabled,
   cardBackground,
+  resumeIncluded,
+  onToggleResumeIncluded,
+  resumeToggleDisabled,
 }: SectionOrderProps) {
   const scope = useProfileScope();
   const { data: highlights, isLoading } = useCareerHighlights(scope);
@@ -95,6 +107,7 @@ export function CareerHighlightsSection({
       company: form.company || null,
       description: form.description || null,
       occurred_on: form.occurred_on || null,
+      include_in_resume: form.include_in_resume,
     };
     const mutation = editingId
       ? updateHighlight.mutateAsync({ id: editingId, body })
@@ -107,6 +120,19 @@ export function CareerHighlightsSection({
       .catch(() => {});
   }
 
+  function toggleItemResume(highlight: CareerHighlight, include: boolean) {
+    updateHighlight.mutate({
+      id: highlight.id,
+      body: {
+        title: highlight.title,
+        company: highlight.company,
+        description: highlight.description,
+        occurred_on: highlight.occurred_on,
+        include_in_resume: include,
+      },
+    });
+  }
+
   const isSaving = addHighlight.isPending || updateHighlight.isPending;
   const saveError = addHighlight.error ?? updateHighlight.error;
 
@@ -115,6 +141,12 @@ export function CareerHighlightsSection({
       <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Career Highlights</CardTitle>
         <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
+          <ResumeIncludeToggle
+            checked={resumeIncluded}
+            onCheckedChange={onToggleResumeIncluded}
+            disabled={resumeToggleDisabled}
+            label="the Career Highlights section"
+          />
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
@@ -183,6 +215,12 @@ export function CareerHighlightsSection({
               )}
             </div>
             <div className={cn("flex shrink-0", ACTION_BUTTON_ROW_GAP)}>
+              <ResumeIncludeToggle
+                checked={highlight.include_in_resume}
+                onCheckedChange={(checked) => toggleItemResume(highlight, checked)}
+                disabled={updateHighlight.isPending}
+                label={`the "${highlight.title}" highlight entry`}
+              />
               {isEditMode && (
                 <>
                   <Button variant="ghost" size="sm" onClick={() => openEditDialog(highlight)}>

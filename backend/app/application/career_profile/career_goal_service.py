@@ -68,6 +68,7 @@ class CareerGoalService:
         target_date: date | None,
         status: str,
         description: str | None,
+        include_in_resume: bool = True,
     ) -> CareerGoal:
         if status not in VALID_STATUSES:
             raise ValidationError(
@@ -79,6 +80,7 @@ class CareerGoalService:
         goal.target_date = target_date
         goal.status = status
         goal.description = description
+        goal.include_in_resume = include_in_resume
         return await self._goals.update(goal)
 
     async def delete(self, *, tenant_id: UUID, user_id: UUID, goal_id: UUID) -> None:

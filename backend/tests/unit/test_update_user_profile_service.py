@@ -167,6 +167,9 @@ class TestUpdateUserProfile:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         assert result.first_name == "Jordan"
@@ -193,6 +196,9 @@ class TestUpdateUserProfile:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         assert result.salutation is None
@@ -217,6 +223,9 @@ class TestUpdateUserProfile:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         assert result.first_name == "Jordan"
@@ -242,6 +251,9 @@ class TestUpdateUserProfile:
                 city=None,
                 state=None,
                 postal_code=None,
+                visa_status=None,
+                linkedin_url=None,
+                other_professional_url=None,
             )
 
         assert exc_info.value.code == "NAME_REQUIRED"
@@ -266,6 +278,9 @@ class TestUpdateUserProfile:
                 city=None,
                 state=None,
                 postal_code=None,
+                visa_status=None,
+                linkedin_url=None,
+                other_professional_url=None,
             )
 
         assert exc_info.value.code == "NAME_REQUIRED"
@@ -289,6 +304,9 @@ class TestUpdateUserProfile:
                 city=None,
                 state=None,
                 postal_code=None,
+                visa_status=None,
+                linkedin_url=None,
+                other_professional_url=None,
             )
 
         assert exc_info.value.code == "USER_NOT_FOUND"
@@ -314,6 +332,9 @@ class TestUpdateUserProfile:
                 city=None,
                 state=None,
                 postal_code=None,
+                visa_status=None,
+                linkedin_url=None,
+                other_professional_url=None,
             )
 
 
@@ -338,6 +359,9 @@ class TestPhoneNumber:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         assert result.phone_number == "+1 (555) 123-4567"
@@ -360,6 +384,9 @@ class TestPhoneNumber:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         result = await svc.execute(
@@ -376,6 +403,9 @@ class TestPhoneNumber:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         assert result.phone_number is None
@@ -399,6 +429,9 @@ class TestPhoneNumber:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         assert result.phone_number == "+1 555 123 4567"
@@ -425,6 +458,9 @@ class TestCountryLanguage:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         assert result.country == "US"
@@ -448,6 +484,9 @@ class TestCountryLanguage:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         result = await svc.execute(
@@ -464,6 +503,9 @@ class TestCountryLanguage:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         assert result.country is None
@@ -488,6 +530,9 @@ class TestCountryLanguage:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         assert result.country == "GB"
@@ -512,6 +557,9 @@ class TestCountryLanguage:
                 city=None,
                 state=None,
                 postal_code=None,
+                visa_status=None,
+                linkedin_url=None,
+                other_professional_url=None,
             )
 
         assert exc_info.value.code == "INVALID_COUNTRY"
@@ -536,6 +584,9 @@ class TestCountryLanguage:
                 city=None,
                 state=None,
                 postal_code=None,
+                visa_status=None,
+                linkedin_url=None,
+                other_professional_url=None,
             )
 
         assert exc_info.value.code == "INVALID_COUNTRY"
@@ -562,6 +613,9 @@ class TestStructuredAddress:
             city="Springfield",
             state="IL",
             postal_code="62701",
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         assert result.address_line1 == "123 Main St"
@@ -588,6 +642,9 @@ class TestStructuredAddress:
             city="Springfield",
             state="IL",
             postal_code="62701",
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         result = await svc.execute(
@@ -604,6 +661,9 @@ class TestStructuredAddress:
             city="   ",
             state="   ",
             postal_code="   ",
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         assert result.address_line1 is None
@@ -631,6 +691,9 @@ class TestStructuredAddress:
             city="  Springfield  ",
             state=None,
             postal_code="  62701  ",
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         assert result.address_line1 == "123 Main St"
@@ -656,6 +719,9 @@ class TestStructuredAddress:
             city="Springfield",
             state=None,
             postal_code="62701",
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         assert result.address_line1 == "123 Main St"
@@ -701,6 +767,9 @@ class TestPersonalPhoneLoginLookup:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         assert await phone_logins.get_tenant_id("+14155552671") == tenant_id
@@ -724,6 +793,9 @@ class TestPersonalPhoneLoginLookup:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
         await svc.execute(phone_number="+1 415 555 2671", **common)
         await svc.execute(phone_number="+1 415 555 0100", **common)
@@ -750,6 +822,9 @@ class TestPersonalPhoneLoginLookup:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
         await svc.execute(phone_number="+1 415 555 2671", **common)
         await svc.execute(phone_number=None, **common)
@@ -776,6 +851,9 @@ class TestPersonalPhoneLoginLookup:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
 
         assert await phone_logins.get_tenant_id("+14155552671") is None
@@ -801,6 +879,9 @@ class TestPersonalPhoneLoginLookup:
             city=None,
             state=None,
             postal_code=None,
+            visa_status=None,
+            linkedin_url=None,
+            other_professional_url=None,
         )
         await svc.execute(user_id=user_a, **common)
 

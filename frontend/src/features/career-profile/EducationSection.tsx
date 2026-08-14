@@ -19,6 +19,7 @@ import { MoveButtons } from "@/components/ui/move-buttons";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
+import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
@@ -35,6 +36,7 @@ interface FormState {
   start_date: string;
   end_date: string;
   description: string;
+  include_in_resume: boolean;
 }
 
 const EMPTY_FORM: FormState = {
@@ -44,6 +46,7 @@ const EMPTY_FORM: FormState = {
   start_date: "",
   end_date: "",
   description: "",
+  include_in_resume: true,
 };
 
 function toFormState(education: Education): FormState {
@@ -54,6 +57,7 @@ function toFormState(education: Education): FormState {
     start_date: education.start_date ?? "",
     end_date: education.end_date ?? "",
     description: education.description ?? "",
+    include_in_resume: education.include_in_resume,
   };
 }
 
@@ -64,6 +68,9 @@ export function EducationSection({
   isLast,
   moveDisabled,
   cardBackground,
+  resumeIncluded,
+  onToggleResumeIncluded,
+  resumeToggleDisabled,
 }: SectionOrderProps) {
   const scope = useProfileScope();
   const { data: educations, isLoading } = useEducations(scope);
@@ -108,6 +115,7 @@ export function EducationSection({
       start_date: form.start_date || null,
       end_date: form.end_date || null,
       description: form.description || null,
+      include_in_resume: form.include_in_resume,
     };
 
     const mutation = editingId
@@ -122,6 +130,21 @@ export function EducationSection({
       .catch(() => {});
   }
 
+  function toggleItemResume(education: Education, include: boolean) {
+    updateEducation.mutate({
+      id: education.id,
+      body: {
+        institution: education.institution,
+        degree: education.degree,
+        field_of_study: education.field_of_study,
+        start_date: education.start_date,
+        end_date: education.end_date,
+        description: education.description,
+        include_in_resume: include,
+      },
+    });
+  }
+
   const isSaving = addEducation.isPending || updateEducation.isPending;
   const saveError = addEducation.error ?? updateEducation.error;
 
@@ -130,6 +153,12 @@ export function EducationSection({
       <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Education</CardTitle>
         <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
+          <ResumeIncludeToggle
+            checked={resumeIncluded}
+            onCheckedChange={onToggleResumeIncluded}
+            disabled={resumeToggleDisabled}
+            label="the Education section"
+          />
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
@@ -189,6 +218,12 @@ export function EducationSection({
               )}
             </div>
             <div className={cn("flex shrink-0", ACTION_BUTTON_ROW_GAP)}>
+              <ResumeIncludeToggle
+                checked={education.include_in_resume}
+                onCheckedChange={(checked) => toggleItemResume(education, checked)}
+                disabled={updateEducation.isPending}
+                label={`the "${education.institution}" education entry`}
+              />
               {isEditMode && (
                 <>
                   <Button variant="ghost" size="sm" onClick={() => openEditDialog(education)}>

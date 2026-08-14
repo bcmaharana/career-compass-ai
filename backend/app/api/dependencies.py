@@ -114,6 +114,7 @@ from app.application.career_profile.education_service import EducationService
 from app.application.career_profile.experience_service import ExperienceService
 from app.application.career_profile.key_achievement_service import KeyAchievementService
 from app.application.career_profile.peer_endorsement_service import PeerEndorsementService
+from app.application.career_profile.resume_export_service import ResumeExportService
 from app.application.career_profile.target_role_service import TargetRoleService
 from app.application.chat.chat_service import ChatService
 from app.application.identity.audit_service import AuditService
@@ -783,6 +784,38 @@ def get_peer_endorsement_repository(
     session: AsyncSession = Depends(get_tenant_scoped_session),
 ) -> SqlAlchemyPeerEndorsementRepository:
     return SqlAlchemyPeerEndorsementRepository(session)
+
+
+def get_resume_export_service(
+    profiles: SqlAlchemyCareerProfileRepository = Depends(get_career_profile_repository),
+    experiences: SqlAlchemyExperienceRepository = Depends(get_experience_repository),
+    educations: SqlAlchemyEducationRepository = Depends(get_education_repository),
+    certifications: SqlAlchemyCertificationRepository = Depends(get_certification_repository),
+    career_highlights: SqlAlchemyCareerHighlightRepository = Depends(
+        get_career_highlight_repository
+    ),
+    key_achievements: SqlAlchemyKeyAchievementRepository = Depends(get_key_achievement_repository),
+    career_goals: SqlAlchemyCareerGoalRepository = Depends(get_career_goal_repository),
+    peer_endorsements: SqlAlchemyPeerEndorsementRepository = Depends(
+        get_peer_endorsement_repository
+    ),
+    target_roles: SqlAlchemyTargetRoleRepository = Depends(get_target_role_repository),
+    users: SqlAlchemyUserRepository = Depends(get_user_repository_scoped),
+    storage: S3ObjectStorageRepository = Depends(get_object_storage),
+) -> ResumeExportService:
+    return ResumeExportService(
+        profiles=profiles,
+        experiences=experiences,
+        educations=educations,
+        certifications=certifications,
+        career_highlights=career_highlights,
+        key_achievements=key_achievements,
+        career_goals=career_goals,
+        peer_endorsements=peer_endorsements,
+        target_roles=target_roles,
+        users=users,
+        storage=storage,
+    )
 
 
 def get_career_highlight_service(

@@ -85,6 +85,7 @@ class KeyAchievementService:
         company: str | None,
         description: str | None,
         occurred_on: date | None,
+        include_in_resume: bool = True,
     ) -> KeyAchievement:
         achievement = await self._get_owned_or_raise(
             tenant_id=tenant_id, user_id=user_id, achievement_id=achievement_id
@@ -93,6 +94,7 @@ class KeyAchievementService:
         achievement.company = company
         achievement.description = description
         achievement.occurred_on = occurred_on
+        achievement.include_in_resume = include_in_resume
         return await self._achievements.update(achievement)
 
     async def delete(self, *, tenant_id: UUID, user_id: UUID, achievement_id: UUID) -> None:

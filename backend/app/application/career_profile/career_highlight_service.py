@@ -85,6 +85,7 @@ class CareerHighlightService:
         company: str | None,
         description: str | None,
         occurred_on: date | None,
+        include_in_resume: bool = True,
     ) -> CareerHighlight:
         highlight = await self._get_owned_or_raise(
             tenant_id=tenant_id, user_id=user_id, highlight_id=highlight_id
@@ -93,6 +94,7 @@ class CareerHighlightService:
         highlight.company = company
         highlight.description = description
         highlight.occurred_on = occurred_on
+        highlight.include_in_resume = include_in_resume
         return await self._highlights.update(highlight)
 
     async def delete(self, *, tenant_id: UUID, user_id: UUID, highlight_id: UUID) -> None:

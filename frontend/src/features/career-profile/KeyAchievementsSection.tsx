@@ -19,6 +19,7 @@ import { MoveButtons } from "@/components/ui/move-buttons";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
+import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
@@ -33,9 +34,16 @@ interface FormState {
   company: string;
   description: string;
   occurred_on: string;
+  include_in_resume: boolean;
 }
 
-const EMPTY_FORM: FormState = { title: "", company: "", description: "", occurred_on: "" };
+const EMPTY_FORM: FormState = {
+  title: "",
+  company: "",
+  description: "",
+  occurred_on: "",
+  include_in_resume: true,
+};
 
 function toFormState(achievement: KeyAchievement): FormState {
   return {
@@ -43,6 +51,7 @@ function toFormState(achievement: KeyAchievement): FormState {
     company: achievement.company ?? "",
     description: achievement.description ?? "",
     occurred_on: achievement.occurred_on ?? "",
+    include_in_resume: achievement.include_in_resume,
   };
 }
 
@@ -53,6 +62,9 @@ export function KeyAchievementsSection({
   isLast,
   moveDisabled,
   cardBackground,
+  resumeIncluded,
+  onToggleResumeIncluded,
+  resumeToggleDisabled,
 }: SectionOrderProps) {
   const scope = useProfileScope();
   const { data: achievements, isLoading } = useKeyAchievements(scope);
@@ -95,6 +107,7 @@ export function KeyAchievementsSection({
       company: form.company || null,
       description: form.description || null,
       occurred_on: form.occurred_on || null,
+      include_in_resume: form.include_in_resume,
     };
     const mutation = editingId
       ? updateAchievement.mutateAsync({ id: editingId, body })
@@ -107,6 +120,19 @@ export function KeyAchievementsSection({
       .catch(() => {});
   }
 
+  function toggleItemResume(achievement: KeyAchievement, include: boolean) {
+    updateAchievement.mutate({
+      id: achievement.id,
+      body: {
+        title: achievement.title,
+        company: achievement.company,
+        description: achievement.description,
+        occurred_on: achievement.occurred_on,
+        include_in_resume: include,
+      },
+    });
+  }
+
   const isSaving = addAchievement.isPending || updateAchievement.isPending;
   const saveError = addAchievement.error ?? updateAchievement.error;
 
@@ -115,6 +141,12 @@ export function KeyAchievementsSection({
       <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Key Achievements</CardTitle>
         <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
+          <ResumeIncludeToggle
+            checked={resumeIncluded}
+            onCheckedChange={onToggleResumeIncluded}
+            disabled={resumeToggleDisabled}
+            label="the Key Achievements section"
+          />
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
@@ -182,6 +214,12 @@ export function KeyAchievementsSection({
               )}
             </div>
             <div className={cn("flex shrink-0", ACTION_BUTTON_ROW_GAP)}>
+              <ResumeIncludeToggle
+                checked={achievement.include_in_resume}
+                onCheckedChange={(checked) => toggleItemResume(achievement, checked)}
+                disabled={updateAchievement.isPending}
+                label={`the "${achievement.title}" achievement entry`}
+              />
               {isEditMode && (
                 <>
                   <Button variant="ghost" size="sm" onClick={() => openEditDialog(achievement)}>

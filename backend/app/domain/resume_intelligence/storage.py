@@ -25,8 +25,22 @@ class PrivateObjectStorageRepository(Protocol):
         """
         ...
 
-    async def get_presigned_url(self, *, key: str, expires_in_seconds: int = 300) -> str:
-        """Return a time-limited URL for retrieving a private object."""
+    async def get_presigned_url(
+        self,
+        *,
+        key: str,
+        expires_in_seconds: int = 300,
+        download_filename: str | None = None,
+    ) -> str:
+        """Return a time-limited URL for retrieving a private object.
+
+        download_filename, when given, makes opening the URL download
+        with that name (via ResponseContentDisposition) instead of the
+        raw storage key — used by ResumeExportService
+        (app/application/career_profile/) so a link can carry a
+        human-readable filename computed fresh from current profile
+        data, without needing to re-upload just to change it.
+        """
         ...
 
     async def delete_private(self, *, key: str) -> None:

@@ -19,7 +19,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -64,6 +64,17 @@ class CareerProfileModel(Base):
     target_role_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("target_roles.id"), nullable=True
     )
+    # Storage keys in the private resumes bucket for the most recently
+    # generated resume document — one per format, overwritten (not
+    # accumulated) on regeneration. See ResumeExportService.
+    resume_docx_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    resume_pdf_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    resume_generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Whole-section resume-inclusion toggles — see CareerProfile.resume_section_toggles's
+    # docstring in app/domain/career_profile/entities.py.
+    resume_section_toggles: Mapped[dict[str, bool] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -116,6 +127,7 @@ class ExperienceModel(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    include_in_resume: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
 class EducationModel(Base):
@@ -142,6 +154,7 @@ class EducationModel(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    include_in_resume: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
 class CertificationModel(Base):
@@ -168,6 +181,7 @@ class CertificationModel(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    include_in_resume: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
 class CareerGoalModel(Base):
@@ -192,6 +206,7 @@ class CareerGoalModel(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    include_in_resume: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
 class CareerHighlightModel(Base):
@@ -216,6 +231,7 @@ class CareerHighlightModel(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    include_in_resume: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
 class KeyAchievementModel(Base):
@@ -240,6 +256,7 @@ class KeyAchievementModel(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    include_in_resume: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
 class PeerEndorsementModel(Base):
@@ -272,6 +289,7 @@ class PeerEndorsementModel(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    include_in_resume: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
 class TargetRoleModel(Base):

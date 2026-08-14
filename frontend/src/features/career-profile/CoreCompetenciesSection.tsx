@@ -10,6 +10,7 @@ import { MoveButtons } from "@/components/ui/move-buttons";
 import { RenameCategoryDialog } from "@/features/skill-intelligence/RenameCategoryDialog";
 import { RenameSkillDialog } from "@/features/skill-intelligence/RenameSkillDialog";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
+import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import type { SectionOrderProps } from "@/features/career-profile/section-order";
 import { getErrorMessage } from "@/lib/errors";
 import { groupCompetenciesByCategoryWithMoveIndex, moveCategoryGroup } from "@/lib/group-by-category";
@@ -55,6 +56,9 @@ export function CoreCompetenciesSection({
   isLast,
   moveDisabled,
   cardBackground,
+  resumeIncluded,
+  onToggleResumeIncluded,
+  resumeToggleDisabled,
 }: SectionOrderProps) {
   const scope = useProfileScope();
   const { data: profile } = useCareerProfile(scope);
@@ -92,6 +96,12 @@ export function CoreCompetenciesSection({
     });
   }
 
+  function toggleItemResume(item: CoreCompetency, include: boolean) {
+    persist(
+      competencies.map((c) => (c.name === item.name ? { ...c, include_in_resume: include } : c)),
+    );
+  }
+
   function openAddDialog() {
     setDialogTarget({ mode: "add", originalName: null });
     setFormName("");
@@ -116,7 +126,18 @@ export function CoreCompetenciesSection({
     );
     if (collides) return;
     const trimmedCategory = formCategory.trim();
-    const nextItem: CoreCompetency = { name: trimmed, category: trimmedCategory || null };
+    const nextItem: CoreCompetency = {
+      name: trimmed,
+      category: trimmedCategory || null,
+      // Preserve the existing item's toggle when editing (this dialog
+      // has no control for it — that lives on the chip itself, see
+      // toggleItemResume) rather than silently resetting it to on.
+      include_in_resume:
+        dialogTarget.mode === "edit"
+          ? (competencies.find((c) => c.name === dialogTarget.originalName)?.include_in_resume ??
+            true)
+          : true,
+    };
     if (dialogTarget.mode === "add") {
       persist([...competencies, nextItem]);
     } else {
@@ -148,6 +169,12 @@ export function CoreCompetenciesSection({
       <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Core Competencies</CardTitle>
         <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
+          <ResumeIncludeToggle
+            checked={resumeIncluded}
+            onCheckedChange={onToggleResumeIncluded}
+            disabled={resumeToggleDisabled}
+            label="the Core Competencies section"
+          />
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
@@ -217,6 +244,12 @@ export function CoreCompetenciesSection({
                         {c.name}
                         {isEditMode && (
                           <>
+                            <ResumeIncludeToggle
+                              checked={c.include_in_resume}
+                              onCheckedChange={(checked) => toggleItemResume(c, checked)}
+                              disabled={updateProfile.isPending}
+                              label={`the "${c.name}" competency`}
+                            />
                             <button
                               type="button"
                               onClick={() => openEditDialog(c)}

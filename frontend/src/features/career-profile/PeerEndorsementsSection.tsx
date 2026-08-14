@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
 import { Textarea } from "@/components/ui/textarea";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
+import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ interface FormState {
   recommender_title: string;
   relationship: string;
   content: string;
+  include_in_resume: boolean;
 }
 
 const EMPTY_FORM: FormState = {
@@ -39,6 +41,7 @@ const EMPTY_FORM: FormState = {
   recommender_title: "",
   relationship: "",
   content: "",
+  include_in_resume: true,
 };
 
 function toFormState(endorsement: PeerEndorsement): FormState {
@@ -47,6 +50,7 @@ function toFormState(endorsement: PeerEndorsement): FormState {
     recommender_title: endorsement.recommender_title ?? "",
     relationship: endorsement.relationship ?? "",
     content: endorsement.content,
+    include_in_resume: endorsement.include_in_resume,
   };
 }
 
@@ -64,6 +68,9 @@ export function PeerEndorsementsSection({
   isLast,
   moveDisabled,
   cardBackground,
+  resumeIncluded,
+  onToggleResumeIncluded,
+  resumeToggleDisabled,
 }: SectionOrderProps) {
   const { data: endorsements, isLoading } = usePeerEndorsements();
   const addEndorsement = useAddPeerEndorsement();
@@ -102,6 +109,7 @@ export function PeerEndorsementsSection({
       recommender_title: form.recommender_title || null,
       relationship: form.relationship || null,
       content: form.content,
+      include_in_resume: form.include_in_resume,
     };
     const mutation = editingId
       ? updateEndorsement.mutateAsync({ id: editingId, body })
@@ -112,6 +120,19 @@ export function PeerEndorsementsSection({
         if (!editingId) setIsOpen(true);
       })
       .catch(() => {});
+  }
+
+  function toggleItemResume(endorsement: PeerEndorsement, include: boolean) {
+    updateEndorsement.mutate({
+      id: endorsement.id,
+      body: {
+        recommender_name: endorsement.recommender_name,
+        recommender_title: endorsement.recommender_title,
+        relationship: endorsement.relationship,
+        content: endorsement.content,
+        include_in_resume: include,
+      },
+    });
   }
 
   const isSaving = addEndorsement.isPending || updateEndorsement.isPending;
@@ -128,6 +149,12 @@ export function PeerEndorsementsSection({
           <CardDescription>Testimonials from colleagues and managers</CardDescription>
         </div>
         <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
+          <ResumeIncludeToggle
+            checked={resumeIncluded}
+            onCheckedChange={onToggleResumeIncluded}
+            disabled={resumeToggleDisabled}
+            label="the Recommendations section"
+          />
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
@@ -194,6 +221,12 @@ export function PeerEndorsementsSection({
               </p>
             </div>
             <div className={cn("flex shrink-0", ACTION_BUTTON_ROW_GAP)}>
+              <ResumeIncludeToggle
+                checked={endorsement.include_in_resume}
+                onCheckedChange={(checked) => toggleItemResume(endorsement, checked)}
+                disabled={updateEndorsement.isPending}
+                label={`the recommendation from "${endorsement.recommender_name}"`}
+              />
               {isEditMode && (
                 <>
                   <Button variant="ghost" size="sm" onClick={() => openEditDialog(endorsement)}>

@@ -89,6 +89,14 @@ class User:
     #: VerifySignupService — see RegisterTenantService.execute_with_hashed_password.
     agreed_to_terms_at: datetime | None = None
     terms_version: str | None = None
+    #: A fixed set of standard US work-authorization values (see
+    #: frontend/src/lib/visa-status-options.ts) — stored as plain text
+    #: like language/country rather than a DB-level enum, matching this
+    #: codebase's existing "frontend dropdown constrains the value,
+    #: backend just stores the string" convention for country/language.
+    visa_status: str | None = None
+    linkedin_url: str | None = None
+    other_professional_url: str | None = None
 
     @property
     def is_active(self) -> bool:

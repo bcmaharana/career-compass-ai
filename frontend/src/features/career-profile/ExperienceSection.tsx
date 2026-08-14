@@ -19,6 +19,7 @@ import { MoveButtons } from "@/components/ui/move-buttons";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
+import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
@@ -36,6 +37,7 @@ interface FormState {
   end_date: string;
   isPresent: boolean;
   description: string;
+  include_in_resume: boolean;
 }
 
 const EMPTY_FORM: FormState = {
@@ -46,6 +48,7 @@ const EMPTY_FORM: FormState = {
   end_date: "",
   isPresent: false,
   description: "",
+  include_in_resume: true,
 };
 
 function toFormState(experience: Experience): FormState {
@@ -57,6 +60,7 @@ function toFormState(experience: Experience): FormState {
     end_date: experience.end_date ?? "",
     isPresent: experience.end_date === null,
     description: experience.description ?? "",
+    include_in_resume: experience.include_in_resume,
   };
 }
 
@@ -117,6 +121,9 @@ export function ExperienceSection({
   isLast,
   moveDisabled,
   cardBackground,
+  resumeIncluded,
+  onToggleResumeIncluded,
+  resumeToggleDisabled,
 }: SectionOrderProps) {
   const scope = useProfileScope();
   const { data: experiences, isLoading } = useExperiences(scope);
@@ -180,6 +187,7 @@ export function ExperienceSection({
       start_date: form.start_date,
       end_date: form.isPresent ? null : form.end_date || null,
       description: form.description || null,
+      include_in_resume: form.include_in_resume,
     };
 
     const mutation = editingId
@@ -198,6 +206,21 @@ export function ExperienceSection({
       .catch(() => {});
   }
 
+  function toggleItemResume(experience: Experience, include: boolean) {
+    updateExperience.mutate({
+      id: experience.id,
+      body: {
+        title: experience.title,
+        company: experience.company,
+        location: experience.location,
+        start_date: experience.start_date,
+        end_date: experience.end_date,
+        description: experience.description,
+        include_in_resume: include,
+      },
+    });
+  }
+
   const isSaving = addExperience.isPending || updateExperience.isPending;
   const saveError = addExperience.error ?? updateExperience.error;
   const canSubmit = form.isPresent || form.end_date !== "";
@@ -207,6 +230,12 @@ export function ExperienceSection({
       <CardHeader className="flex-row items-start justify-between space-y-0">
         <CardTitle>Professional Experience</CardTitle>
         <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
+          <ResumeIncludeToggle
+            checked={resumeIncluded}
+            onCheckedChange={onToggleResumeIncluded}
+            disabled={resumeToggleDisabled}
+            label="the Professional Experience section"
+          />
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-4 w-4" />
             Add
@@ -274,6 +303,12 @@ export function ExperienceSection({
               )}
             </div>
             <div className={cn("flex shrink-0", ACTION_BUTTON_ROW_GAP)}>
+              <ResumeIncludeToggle
+                checked={experience.include_in_resume}
+                onCheckedChange={(checked) => toggleItemResume(experience, checked)}
+                disabled={updateExperience.isPending}
+                label={`the "${experience.title}" experience entry`}
+              />
               <CollapseToggle
                 isOpen={!collapsedDescriptionIds.has(experience.id)}
                 onToggle={() => toggleDescription(experience.id)}

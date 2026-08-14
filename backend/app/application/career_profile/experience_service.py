@@ -101,6 +101,7 @@ class ExperienceService:
         start_date: date,
         end_date: date | None,
         description: str | None,
+        include_in_resume: bool = True,
     ) -> Experience:
         experience = await self._get_owned_or_raise(
             tenant_id=tenant_id, user_id=user_id, experience_id=experience_id
@@ -111,6 +112,7 @@ class ExperienceService:
         experience.start_date = start_date
         experience.end_date = end_date
         experience.description = description
+        experience.include_in_resume = include_in_resume
         return await self._experiences.update(experience)
 
     async def delete(self, *, tenant_id: UUID, user_id: UUID, experience_id: UUID) -> None:

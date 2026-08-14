@@ -108,6 +108,9 @@ class UserModel(Base):
         DateTime(timezone=True), nullable=True
     )
     terms_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    visa_status: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    linkedin_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    other_professional_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
 
 
 class PermissionModel(Base):

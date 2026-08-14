@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/errors";
 import { getCountryOptions, getLanguageOptions } from "@/lib/locale-options";
 import { formatPhoneForCountry } from "@/lib/phone-format";
+import { VISA_STATUS_OPTIONS } from "@/lib/visa-status-options";
 import { type FormEvent, useState } from "react";
 
 type CurrentUserResponse = components["schemas"]["CurrentUserResponse"];
@@ -63,6 +64,11 @@ function SettingsProfileForm({ user }: { user: CurrentUserResponse }) {
   const [city, setCity] = useState(user.city ?? "");
   const [state, setState] = useState(user.state ?? "");
   const [postalCode, setPostalCode] = useState(user.postal_code ?? "");
+  const [visaStatus, setVisaStatus] = useState(user.visa_status ?? "");
+  const [linkedinUrl, setLinkedinUrl] = useState(user.linkedin_url ?? "");
+  const [otherProfessionalUrl, setOtherProfessionalUrl] = useState(
+    user.other_professional_url ?? "",
+  );
   const [savedJustNow, setSavedJustNow] = useState(false);
 
   const isUS = country === "US";
@@ -88,6 +94,9 @@ function SettingsProfileForm({ user }: { user: CurrentUserResponse }) {
         city: city.trim() || null,
         state: state.trim() || null,
         postal_code: postalCode.trim() || null,
+        visa_status: visaStatus.trim() || null,
+        linkedin_url: linkedinUrl.trim() || null,
+        other_professional_url: otherProfessionalUrl.trim() || null,
       },
       { onSuccess: () => setSavedJustNow(true) },
     );
@@ -254,6 +263,46 @@ function SettingsProfileForm({ user }: { user: CurrentUserResponse }) {
           </div>
         </div>
       )}
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="settings-visa-status">Visa status</Label>
+        <Select
+          id="settings-visa-status"
+          value={visaStatus}
+          onChange={(e) => setVisaStatus(e.target.value)}
+        >
+          <option value="">Not set</option>
+          {VISA_STATUS_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="settings-linkedin-url">LinkedIn profile URL</Label>
+        <Input
+          id="settings-linkedin-url"
+          type="url"
+          placeholder="https://linkedin.com/in/yourname"
+          value={linkedinUrl}
+          onChange={(e) => setLinkedinUrl(e.target.value)}
+          maxLength={2048}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="settings-other-professional-url">Other professional URL</Label>
+        <Input
+          id="settings-other-professional-url"
+          type="url"
+          placeholder="e.g. a portfolio site or GitHub profile"
+          value={otherProfessionalUrl}
+          onChange={(e) => setOtherProfessionalUrl(e.target.value)}
+          maxLength={2048}
+        />
+      </div>
 
       <div className="flex items-center gap-3">
         <Button

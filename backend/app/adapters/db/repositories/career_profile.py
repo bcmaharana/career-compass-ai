@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.db.models import (
@@ -32,6 +33,7 @@ from app.adapters.db.models import (
     TargetRoleModel,
 )
 from app.adapters.db.reorder import Direction, move_item, next_display_order
+from app.core.exceptions import ConflictError
 from app.domain.career_profile.entities import (
     CareerGoal,
     CareerHighlight,
@@ -51,17 +53,25 @@ def _competencies_to_domain(raw: list[dict[str, object]]) -> list[CoreCompetency
     competencies = []
     for item in raw:
         category = item.get("category")
+        include_in_resume = item.get("include_in_resume")
         competencies.append(
             CoreCompetency(
                 name=str(item["name"]),
                 category=category if isinstance(category, str) and category else None,
+                # Missing key (data written before this field existed)
+                # defaults to True — "on" — same as every include_in_resume
+                # column's DB-level default for existing rows.
+                include_in_resume=include_in_resume if isinstance(include_in_resume, bool) else True,
             )
         )
     return competencies
 
 
 def _competencies_to_json(competencies: list[CoreCompetency]) -> list[dict[str, object]]:
-    return [{"name": c.name, "category": c.category} for c in competencies]
+    return [
+        {"name": c.name, "category": c.category, "include_in_resume": c.include_in_resume}
+        for c in competencies
+    ]
 
 
 def _profile_to_domain(model: CareerProfileModel) -> CareerProfile:
@@ -77,6 +87,12 @@ def _profile_to_domain(model: CareerProfileModel) -> CareerProfile:
         core_competencies=_competencies_to_domain(model.core_competencies),
         section_order=list(model.section_order) if model.section_order is not None else None,
         target_role_id=model.target_role_id,
+        resume_docx_key=model.resume_docx_key,
+        resume_pdf_key=model.resume_pdf_key,
+        resume_generated_at=model.resume_generated_at,
+        resume_section_toggles=(
+            dict(model.resume_section_toggles) if model.resume_section_toggles is not None else None
+        ),
         created_at=model.created_at,
         updated_at=model.updated_at,
         deleted_at=model.deleted_at,
@@ -109,6 +125,7 @@ def _experience_to_domain(model: ExperienceModel) -> Experience:
         created_at=model.created_at,
         updated_at=model.updated_at,
         deleted_at=model.deleted_at,
+        include_in_resume=model.include_in_resume,
     )
 
 
@@ -127,6 +144,7 @@ def _education_to_domain(model: EducationModel) -> Education:
         created_at=model.created_at,
         updated_at=model.updated_at,
         deleted_at=model.deleted_at,
+        include_in_resume=model.include_in_resume,
     )
 
 
@@ -145,6 +163,7 @@ def _certification_to_domain(model: CertificationModel) -> Certification:
         created_at=model.created_at,
         updated_at=model.updated_at,
         deleted_at=model.deleted_at,
+        include_in_resume=model.include_in_resume,
     )
 
 
@@ -161,6 +180,7 @@ def _goal_to_domain(model: CareerGoalModel) -> CareerGoal:
         created_at=model.created_at,
         updated_at=model.updated_at,
         deleted_at=model.deleted_at,
+        include_in_resume=model.include_in_resume,
     )
 
 
@@ -177,6 +197,7 @@ def _highlight_to_domain(model: CareerHighlightModel) -> CareerHighlight:
         created_at=model.created_at,
         updated_at=model.updated_at,
         deleted_at=model.deleted_at,
+        include_in_resume=model.include_in_resume,
     )
 
 
@@ -193,6 +214,7 @@ def _achievement_to_domain(model: KeyAchievementModel) -> KeyAchievement:
         created_at=model.created_at,
         updated_at=model.updated_at,
         deleted_at=model.deleted_at,
+        include_in_resume=model.include_in_resume,
     )
 
 
@@ -209,6 +231,7 @@ def _endorsement_to_domain(model: PeerEndorsementModel) -> PeerEndorsement:
         created_at=model.created_at,
         updated_at=model.updated_at,
         deleted_at=model.deleted_at,
+        include_in_resume=model.include_in_resume,
     )
 
 
@@ -230,8 +253,32 @@ class SqlAlchemyCareerProfileRepository:
             section_order=profile.section_order,
             target_role_id=profile.target_role_id,
         )
-        self._session.add(model)
-        await self._session.flush()
+        try:
+            # A SAVEPOINT (begin_nested), not a plain flush — the Career
+            # Profile page fires several section list requests in
+            # parallel on first load, each independently calling
+            # CareerProfileService.get_or_create for a user whose profile
+            # doesn't exist yet, so two requests can both see "no
+            # profile" and both attempt this INSERT. The loser hits
+            # uq_career_profiles_master_per_user/
+            # uq_career_profiles_target_role_per_user (see migration
+            # f1a4c9e6b3d2) and must recover without a full
+            # session.rollback() — that would also discard the RLS
+            # tenant-context GUC set once at session start via
+            # set_config(..., true) (transaction-local, same as SET
+            # LOCAL), silently breaking RLS for every later query this
+            # request makes. Rolling back only to the savepoint undoes
+            # just this failed INSERT.
+            async with self._session.begin_nested():
+                self._session.add(model)
+                await self._session.flush()
+        except IntegrityError as e:
+            if "uq_career_profiles" not in str(e.orig):
+                raise
+            raise ConflictError(
+                "A career profile for this user/scope already exists.",
+                code="CAREER_PROFILE_ALREADY_EXISTS",
+            ) from e
         await self._session.refresh(model)
         return _profile_to_domain(model)
 
@@ -279,6 +326,10 @@ class SqlAlchemyCareerProfileRepository:
         model.photo_url = profile.photo_url
         model.core_competencies = _competencies_to_json(profile.core_competencies)
         model.section_order = profile.section_order
+        model.resume_docx_key = profile.resume_docx_key
+        model.resume_pdf_key = profile.resume_pdf_key
+        model.resume_generated_at = profile.resume_generated_at
+        model.resume_section_toggles = profile.resume_section_toggles
         await self._session.flush()
         await self._session.refresh(model)
         return _profile_to_domain(model)
@@ -373,6 +424,7 @@ class SqlAlchemyExperienceRepository:
         model.start_date = experience.start_date
         model.end_date = experience.end_date
         model.description = experience.description
+        model.include_in_resume = experience.include_in_resume
         await self._session.flush()
         await self._session.refresh(model)
         return _experience_to_domain(model)
@@ -474,6 +526,7 @@ class SqlAlchemyEducationRepository:
         model.start_date = education.start_date
         model.end_date = education.end_date
         model.description = education.description
+        model.include_in_resume = education.include_in_resume
         await self._session.flush()
         await self._session.refresh(model)
         return _education_to_domain(model)
@@ -577,6 +630,7 @@ class SqlAlchemyCertificationRepository:
         model.expiration_date = certification.expiration_date
         model.credential_id = certification.credential_id
         model.credential_url = certification.credential_url
+        model.include_in_resume = certification.include_in_resume
         await self._session.flush()
         await self._session.refresh(model)
         return _certification_to_domain(model)
@@ -675,6 +729,7 @@ class SqlAlchemyCareerGoalRepository:
         model.target_date = goal.target_date
         model.status = goal.status
         model.description = goal.description
+        model.include_in_resume = goal.include_in_resume
         await self._session.flush()
         await self._session.refresh(model)
         return _goal_to_domain(model)
@@ -774,6 +829,7 @@ class SqlAlchemyCareerHighlightRepository:
         model.company = highlight.company
         model.description = highlight.description
         model.occurred_on = highlight.occurred_on
+        model.include_in_resume = highlight.include_in_resume
         await self._session.flush()
         await self._session.refresh(model)
         return _highlight_to_domain(model)
@@ -874,6 +930,7 @@ class SqlAlchemyKeyAchievementRepository:
         model.company = achievement.company
         model.description = achievement.description
         model.occurred_on = achievement.occurred_on
+        model.include_in_resume = achievement.include_in_resume
         await self._session.flush()
         await self._session.refresh(model)
         return _achievement_to_domain(model)
@@ -974,6 +1031,7 @@ class SqlAlchemyPeerEndorsementRepository:
         model.recommender_title = endorsement.recommender_title
         model.relationship = endorsement.relationship
         model.content = endorsement.content
+        model.include_in_resume = endorsement.include_in_resume
         await self._session.flush()
         await self._session.refresh(model)
         return _endorsement_to_domain(model)

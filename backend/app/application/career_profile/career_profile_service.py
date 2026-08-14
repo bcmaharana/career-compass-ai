@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from app.core.exceptions import CareerCompassError, ValidationError
+from app.core.exceptions import CareerCompassError, ConflictError, ValidationError
 from app.domain.career_profile.entities import CareerProfile, CareerProfileVersion, CoreCompetency
 from app.domain.career_profile.repositories import (
     CareerProfileRepository,
@@ -88,23 +88,34 @@ class CareerProfileService:
             return existing
 
         now = datetime.now(UTC)
-        return await self._profiles.create(
-            CareerProfile(
-                id=uuid.uuid4(),
-                tenant_id=tenant_id,
-                user_id=user_id,
-                current_version=1,
-                headline=None,
-                summary=None,
-                career_readiness_score=None,
-                photo_url=None,
-                core_competencies=[],
-                section_order=None,
-                target_role_id=target_role_id,
-                created_at=now,
-                updated_at=now,
+        try:
+            return await self._profiles.create(
+                CareerProfile(
+                    id=uuid.uuid4(),
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    current_version=1,
+                    headline=None,
+                    summary=None,
+                    career_readiness_score=None,
+                    photo_url=None,
+                    core_competencies=[],
+                    section_order=None,
+                    target_role_id=target_role_id,
+                    created_at=now,
+                    updated_at=now,
+                )
             )
-        )
+        except ConflictError:
+            # Lost a create-on-first-access race — several requests can
+            # independently call get_or_create for the same brand-new
+            # user's profile in parallel (e.g. every Career Profile page
+            # section fetching at once on first load); the concurrent
+            # winner's row exists now, so fetch and return that instead
+            # of surfacing the race as an error.
+            winner = await self._profiles.get_by_user_id(tenant_id, user_id, target_role_id)
+            assert winner is not None, "the concurrent winner's row must exist after a create race"
+            return winner
 
     async def _snapshot_and_bump(self, profile: CareerProfile, *, change_reason: str) -> None:
         """Shared by every update path: capture the profile's state
@@ -123,7 +134,11 @@ class CareerProfileService:
                     "career_readiness_score": profile.career_readiness_score,
                     "photo_url": profile.photo_url,
                     "core_competencies": [
-                        {"name": c.name, "category": c.category}
+                        {
+                            "name": c.name,
+                            "category": c.category,
+                            "include_in_resume": c.include_in_resume,
+                        }
                         for c in profile.core_competencies
                     ],
                 },
@@ -142,6 +157,7 @@ class CareerProfileService:
         summary: str | None,
         core_competencies: list[CoreCompetency] | None = None,
         section_order: list[str] | None = None,
+        resume_section_toggles: dict[str, bool] | None = None,
         target_role_id: UUID | None = None,
     ) -> CareerProfile:
         profile = await self.get_or_create(
@@ -155,6 +171,8 @@ class CareerProfileService:
             profile.core_competencies = core_competencies
         if section_order is not None:
             profile.section_order = section_order
+        if resume_section_toggles is not None:
+            profile.resume_section_toggles = resume_section_toggles
         return await self._profiles.update(profile)
 
     async def upload_photo(

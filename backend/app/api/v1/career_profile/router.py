@@ -29,6 +29,7 @@ from app.api.dependencies import (
     get_experience_service,
     get_key_achievement_service,
     get_peer_endorsement_service,
+    get_resume_export_service,
     get_target_role_service,
 )
 from app.api.v1.career_profile.schemas import (
@@ -47,6 +48,7 @@ from app.api.v1.career_profile.schemas import (
     EducationResponse,
     ExperienceRequest,
     ExperienceResponse,
+    GenerateResumeRequest,
     KeyAchievementRequest,
     KeyAchievementResponse,
     MoveRequest,
@@ -69,11 +71,16 @@ from app.application.career_profile.education_service import EducationService
 from app.application.career_profile.experience_service import ExperienceService
 from app.application.career_profile.key_achievement_service import KeyAchievementService
 from app.application.career_profile.peer_endorsement_service import PeerEndorsementService
+from app.application.career_profile.resume_export_service import (
+    ResumeDownloadUrls,
+    ResumeExportService,
+)
 from app.application.career_profile.target_role_service import TargetRoleService
 from app.core.identity_provider_interface import IdentityClaims
 from app.domain.career_profile.entities import (
     CareerGoal,
     CareerHighlight,
+    CareerProfile,
     Certification,
     CoreCompetency,
     Education,
@@ -85,7 +92,30 @@ from app.domain.career_profile.entities import (
 
 
 def _core_competency_response(competency: CoreCompetency) -> CoreCompetencyPayload:
-    return CoreCompetencyPayload(name=competency.name, category=competency.category)
+    return CoreCompetencyPayload(
+        name=competency.name,
+        category=competency.category,
+        include_in_resume=competency.include_in_resume,
+    )
+
+
+def _profile_response(
+    profile: CareerProfile, download_urls: ResumeDownloadUrls
+) -> CareerProfileResponse:
+    return CareerProfileResponse(
+        id=profile.id,
+        current_version=profile.current_version,
+        headline=profile.headline,
+        summary=profile.summary,
+        career_readiness_score=profile.career_readiness_score,
+        photo_url=profile.photo_url,
+        core_competencies=[_core_competency_response(c) for c in profile.core_competencies],
+        section_order=profile.section_order,
+        resume_docx_url=download_urls.docx_url,
+        resume_pdf_url=download_urls.pdf_url,
+        resume_generated_at=profile.resume_generated_at,
+        resume_section_toggles=profile.resume_section_toggles,
+    )
 
 router = APIRouter(tags=["career-profile"])
 
@@ -95,22 +125,17 @@ async def get_career_profile(
     target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: CareerProfileService = Depends(get_career_profile_service),
+    resume_export: ResumeExportService = Depends(get_resume_export_service),
 ) -> CareerProfileResponse:
     profile = await service.get_or_create(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         target_role_id=target_role_id,
     )
-    return CareerProfileResponse(
-        id=profile.id,
-        current_version=profile.current_version,
-        headline=profile.headline,
-        summary=profile.summary,
-        career_readiness_score=profile.career_readiness_score,
-        photo_url=profile.photo_url,
-        core_competencies=[_core_competency_response(c) for c in profile.core_competencies],
-        section_order=profile.section_order,
+    download_urls = await resume_export.get_download_urls(
+        tenant_id=UUID(identity.tenant_id), profile=profile
     )
+    return _profile_response(profile, download_urls)
 
 
 @router.patch("/career-profile", response_model=CareerProfileResponse)
@@ -119,6 +144,7 @@ async def update_career_profile(
     target_role_id: UUID | None = Query(default=None),
     identity: IdentityClaims = Depends(get_current_identity),
     service: CareerProfileService = Depends(get_career_profile_service),
+    resume_export: ResumeExportService = Depends(get_resume_export_service),
 ) -> CareerProfileResponse:
     profile = await service.update(
         tenant_id=UUID(identity.tenant_id),
@@ -126,23 +152,49 @@ async def update_career_profile(
         headline=request.headline,
         summary=request.summary,
         core_competencies=(
-            [CoreCompetency(name=c.name, category=c.category) for c in request.core_competencies]
+            [
+                CoreCompetency(
+                    name=c.name, category=c.category, include_in_resume=c.include_in_resume
+                )
+                for c in request.core_competencies
+            ]
             if request.core_competencies is not None
             else None
         ),
         section_order=request.section_order,
+        resume_section_toggles=request.resume_section_toggles,
         target_role_id=target_role_id,
     )
-    return CareerProfileResponse(
-        id=profile.id,
-        current_version=profile.current_version,
-        headline=profile.headline,
-        summary=profile.summary,
-        career_readiness_score=profile.career_readiness_score,
-        photo_url=profile.photo_url,
-        core_competencies=[_core_competency_response(c) for c in profile.core_competencies],
-        section_order=profile.section_order,
+    download_urls = await resume_export.get_download_urls(
+        tenant_id=UUID(identity.tenant_id), profile=profile
     )
+    return _profile_response(profile, download_urls)
+
+
+@router.post("/career-profile/resume-export", response_model=CareerProfileResponse)
+async def generate_resume(
+    request: GenerateResumeRequest,
+    target_role_id: UUID | None = Query(default=None),
+    identity: IdentityClaims = Depends(get_current_identity),
+    resume_export: ResumeExportService = Depends(get_resume_export_service),
+) -> CareerProfileResponse:
+    profile, _immediate_url = await resume_export.generate(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
+        format=request.format,
+    )
+    # A second presigned-URL round trip (get_download_urls, right after
+    # generate() already returned one) rather than reusing
+    # _immediate_url directly — keeps this response identical in shape
+    # to GET/PATCH's (both resume_docx_url and resume_pdf_url populated
+    # together, not just the one just-generated format), so the
+    # frontend has one response shape to reason about everywhere,
+    # not a special case for this endpoint.
+    download_urls = await resume_export.get_download_urls(
+        tenant_id=UUID(identity.tenant_id), profile=profile
+    )
+    return _profile_response(profile, download_urls)
 
 
 @router.delete("/career-profile", status_code=status.HTTP_204_NO_CONTENT)
@@ -217,6 +269,7 @@ def _experience_response(experience: Experience) -> ExperienceResponse:
         end_date=experience.end_date,
         description=experience.description,
         display_order=experience.display_order,
+        include_in_resume=experience.include_in_resume,
     )
 
 
@@ -276,6 +329,7 @@ async def update_experience(
         start_date=request.start_date,
         end_date=request.end_date,
         description=request.description,
+        include_in_resume=request.include_in_resume,
     )
     return _experience_response(experience)
 
@@ -345,6 +399,7 @@ def _education_response(education: Education) -> EducationResponse:
         end_date=education.end_date,
         description=education.description,
         display_order=education.display_order,
+        include_in_resume=education.include_in_resume,
     )
 
 
@@ -404,6 +459,7 @@ async def update_education(
         start_date=request.start_date,
         end_date=request.end_date,
         description=request.description,
+        include_in_resume=request.include_in_resume,
     )
     return _education_response(education)
 
@@ -468,6 +524,7 @@ def _certification_response(certification: Certification) -> CertificationRespon
         credential_id=certification.credential_id,
         credential_url=certification.credential_url,
         display_order=certification.display_order,
+        include_in_resume=certification.include_in_resume,
     )
 
 
@@ -529,6 +586,7 @@ async def update_certification(
         expiration_date=request.expiration_date,
         credential_id=request.credential_id,
         credential_url=request.credential_url,
+        include_in_resume=request.include_in_resume,
     )
     return _certification_response(certification)
 
@@ -594,6 +652,7 @@ def _highlight_response(highlight: CareerHighlight) -> CareerHighlightResponse:
         description=highlight.description,
         occurred_on=highlight.occurred_on,
         display_order=highlight.display_order,
+        include_in_resume=highlight.include_in_resume,
     )
 
 
@@ -649,6 +708,7 @@ async def update_career_highlight(
         company=request.company,
         description=request.description,
         occurred_on=request.occurred_on,
+        include_in_resume=request.include_in_resume,
     )
     return _highlight_response(highlight)
 
@@ -713,6 +773,7 @@ def _achievement_response(achievement: KeyAchievement) -> KeyAchievementResponse
         description=achievement.description,
         occurred_on=achievement.occurred_on,
         display_order=achievement.display_order,
+        include_in_resume=achievement.include_in_resume,
     )
 
 
@@ -770,6 +831,7 @@ async def update_key_achievement(
         company=request.company,
         description=request.description,
         occurred_on=request.occurred_on,
+        include_in_resume=request.include_in_resume,
     )
     return _achievement_response(achievement)
 
@@ -835,6 +897,7 @@ def _endorsement_response(endorsement: PeerEndorsement) -> PeerEndorsementRespon
         relationship=endorsement.relationship,
         content=endorsement.content,
         display_order=endorsement.display_order,
+        include_in_resume=endorsement.include_in_resume,
     )
 
 
@@ -887,6 +950,7 @@ async def update_peer_endorsement(
         recommender_title=request.recommender_title,
         relationship=request.relationship,
         content=request.content,
+        include_in_resume=request.include_in_resume,
     )
     return _endorsement_response(endorsement)
 
@@ -944,6 +1008,7 @@ def _goal_response(goal: CareerGoal) -> CareerGoalResponse:
         status=goal.status,
         description=goal.description,
         display_order=goal.display_order,
+        include_in_resume=goal.include_in_resume,
     )
 
 
@@ -991,6 +1056,7 @@ async def update_career_goal(
         target_date=request.target_date,
         status=request.status,
         description=request.description,
+        include_in_resume=request.include_in_resume,
     )
     return _goal_response(goal)
 

@@ -45,5 +45,8 @@ class GetCurrentUserService:
             city=user.city,
             state=user.state,
             postal_code=user.postal_code,
+            visa_status=user.visa_status,
+            linkedin_url=user.linkedin_url,
+            other_professional_url=user.other_professional_url,
             roles=tuple(role.name for role in roles),
         )

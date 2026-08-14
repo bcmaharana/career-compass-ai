@@ -1343,6 +1343,109 @@ async def _create_employee_user(tenant_id: str, subdomain: str) -> str:
     return password
 
 
+class TestVisaStatusAndProfessionalLinks:
+    """visa_status/linkedin_url/other_professional_url — added alongside
+    the resume-inclusion toggle feature. A real bug was caught live
+    while smoke-testing this feature end to end: SqlAlchemyUserRepository's
+    _user_to_domain()/update() never read/wrote these three columns at
+    all, so a PATCH appeared to succeed (200, correct echoed response)
+    but a follow-up GET silently showed None — unit tests never caught
+    it because FakeUserRepository (an in-memory dict) doesn't have a
+    separate ORM-mapping layer to forget a field in. Fixed in
+    app/adapters/db/repositories/identity.py; this test locks in the
+    real round trip through Postgres.
+    """
+
+    async def test_updates_and_persists_all_three_fields(self, client: AsyncClient) -> None:
+        subdomain = _unique_subdomain()
+        await _register_tenant(client, subdomain)
+        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        headers = {"Authorization": f"Bearer {login['access_token']}"}
+
+        response = await client.patch(
+            "/api/v1/identity/me",
+            headers=headers,
+            json={
+                "salutation": None,
+                "first_name": "Jordan",
+                "last_name": "Rivera",
+                "visa_status": "H-1B",
+                "linkedin_url": "https://linkedin.com/in/jordanrivera",
+                "other_professional_url": "https://github.com/jordanrivera",
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["visa_status"] == "H-1B"
+        assert body["linkedin_url"] == "https://linkedin.com/in/jordanrivera"
+        assert body["other_professional_url"] == "https://github.com/jordanrivera"
+
+        # Persisted, not just echoed back — this is exactly the check
+        # that would have caught the real bug described above.
+        follow_up = await client.get("/api/v1/identity/me", headers=headers)
+        follow_up_body = follow_up.json()
+        assert follow_up_body["visa_status"] == "H-1B"
+        assert follow_up_body["linkedin_url"] == "https://linkedin.com/in/jordanrivera"
+        assert follow_up_body["other_professional_url"] == "https://github.com/jordanrivera"
+
+    async def test_omitting_the_three_fields_is_allowed(self, client: AsyncClient) -> None:
+        subdomain = _unique_subdomain()
+        await _register_tenant(client, subdomain)
+        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        headers = {"Authorization": f"Bearer {login['access_token']}"}
+
+        response = await client.patch(
+            "/api/v1/identity/me",
+            headers=headers,
+            json={"salutation": None, "first_name": "Jordan", "last_name": "Rivera"},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["visa_status"] is None
+        assert body["linkedin_url"] is None
+        assert body["other_professional_url"] is None
+
+    async def test_blank_values_are_stored_as_none(self, client: AsyncClient) -> None:
+        subdomain = _unique_subdomain()
+        await _register_tenant(client, subdomain)
+        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        headers = {"Authorization": f"Bearer {login['access_token']}"}
+
+        await client.patch(
+            "/api/v1/identity/me",
+            headers=headers,
+            json={
+                "salutation": None,
+                "first_name": "Jordan",
+                "last_name": "Rivera",
+                "visa_status": "H-1B",
+                "linkedin_url": "https://linkedin.com/in/jordanrivera",
+                "other_professional_url": "https://github.com/jordanrivera",
+            },
+        )
+
+        response = await client.patch(
+            "/api/v1/identity/me",
+            headers=headers,
+            json={
+                "salutation": None,
+                "first_name": "Jordan",
+                "last_name": "Rivera",
+                "visa_status": "",
+                "linkedin_url": "",
+                "other_professional_url": "",
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["visa_status"] is None
+        assert body["linkedin_url"] is None
+        assert body["other_professional_url"] is None
+
+
 class TestRoleBasedAccessControl:
     async def test_org_admin_can_read_audit_events(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()

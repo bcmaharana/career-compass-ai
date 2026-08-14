@@ -92,6 +92,9 @@ def _user_to_domain(model: UserModel) -> User:
         preferred_model_version_id=model.preferred_model_version_id,
         agreed_to_terms_at=model.agreed_to_terms_at,
         terms_version=model.terms_version,
+        visa_status=model.visa_status,
+        linkedin_url=model.linkedin_url,
+        other_professional_url=model.other_professional_url,
     )
 
 
@@ -279,6 +282,9 @@ class SqlAlchemyUserRepository:
         model.state = user.state
         model.postal_code = user.postal_code
         model.preferred_model_version_id = user.preferred_model_version_id
+        model.visa_status = user.visa_status
+        model.linkedin_url = user.linkedin_url
+        model.other_professional_url = user.other_professional_url
         await self._session.flush()
         await self._session.refresh(model)
         return _user_to_domain(model)
