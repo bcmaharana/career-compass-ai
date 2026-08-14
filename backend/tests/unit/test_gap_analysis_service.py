@@ -148,3 +148,60 @@ class TestGapAnalysisService:
         result = await service.compute(tenant_id=tenant_id, user_id=user_id)
 
         assert result.target_role_gaps == []
+
+    async def test_skills_added_to_the_target_role_profile_itself_count_as_owned(
+        self, service: GapAnalysisService
+    ) -> None:
+        """Regression test for a real user report: skills added directly
+        under a specific Target Role Profile's own Core Competencies
+        section (not Master's) still showed as missing for that exact
+        role, since this service originally only ever read the Master
+        profile regardless of which role it was evaluating."""
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        target_role = await service._target_roles.add(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            role_name="Senior Scrum Master/Team Coach",
+            tag="SSM",
+        )
+        await service._target_roles.add_required_skill(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role.id, name="Facilitation"
+        )
+        # Added to the Target Role Profile's own Core Competencies, not Master's.
+        await service._career_profiles.update(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            headline=None,
+            summary=None,
+            core_competencies=[CoreCompetency(name="Facilitation")],
+            target_role_id=target_role.id,
+        )
+
+        result = await service.compute(tenant_id=tenant_id, user_id=user_id)
+
+        assert result.target_role_gaps == []
+
+    async def test_master_competencies_still_count_for_a_role_with_no_own_competencies(
+        self, service: GapAnalysisService
+    ) -> None:
+        """Backward-compatible union behavior: a target role nobody has
+        ever tailored competencies for should still match against
+        Master's competencies, same as before this fix."""
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        await service._career_profiles.update(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            headline=None,
+            summary=None,
+            core_competencies=[CoreCompetency(name="Python")],
+        )
+        target_role = await service._target_roles.add(
+            tenant_id=tenant_id, user_id=user_id, role_name="Staff Engineer", tag="SE"
+        )
+        await service._target_roles.add_required_skill(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role.id, name="Python"
+        )
+
+        result = await service.compute(tenant_id=tenant_id, user_id=user_id)
+
+        assert result.target_role_gaps == []
