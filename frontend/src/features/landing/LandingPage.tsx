@@ -10,22 +10,20 @@ import { Navigate, Link } from "react-router-dom";
 // 9 interlocking isoceles triangles (4 "Shiva" pointing up, 5 "Shakti"
 // pointing down, each with its apex on the vertical center axis — the
 // actual defining construction of a Sri Yantra), a central bindu point,
-// two boundary circles, and a ring of lotus petals. Not a ritually
-// exact reconstruction — real yantras follow empirical proportions with
-// no simple closed-form formula (see Kulaichev's geometric analysis of
-// the figure) — this is a decorative approximation tuned by eye at this
-// hero graphic's scale, deliberately kept to triangles/circles/petals
-// without the outer square gates (bhupura) to stay visually clean
-// rather than maximalist next to the animated background dots. Reuses
-// the page's own rainbow-accent gradient for every stroke, same as the
+// and two boundary circles (a lotus petal ring was tried and removed on
+// follow-up request). Not a ritually exact reconstruction — real
+// yantras follow empirical proportions with no simple closed-form
+// formula (see Kulaichev's geometric analysis of the figure) — this is
+// a decorative approximation tuned by eye at this hero graphic's scale,
+// deliberately kept to triangles/circles without the outer square gates
+// (bhupura) to stay visually clean rather than maximalist. Reuses the
+// page's own rainbow-accent gradient for every stroke, same as the
 // motif it replaced, so the rest of the page's visual language (dots,
 // buttons, headings) is untouched.
 const YANTRA_CX = 300;
-// The petal ring's farthest reach from center (YANTRA_PETAL_RING_R +
-// YANTRA_PETAL_LENGTH, ~131 for the proportions below) exceeded the
-// viewBox's old 260px height, silently clipping the bottom petal (SVG
-// clips to the viewBox by default) — CY/the viewBox height are sized
-// together so the full petal ring fits with margin on both sides.
+// Sized generously enough (both here and via the viewBox height below)
+// that even after the lotus petal ring was removed, nothing on the
+// figure clips against the SVG's edge — see YANTRA_CIRCLE_OUTER_R.
 const YANTRA_CY = 146;
 const YANTRA_R = 95;
 
@@ -90,23 +88,15 @@ const YANTRA_ACCENT_POINTS: { x: number; y: number; color: string }[] = [
   },
 ];
 
-const YANTRA_PETAL_COUNT = 12;
-const YANTRA_PETAL_RING_R = YANTRA_R * 1.22;
-const YANTRA_PETAL_LENGTH = YANTRA_R * 0.16;
-const YANTRA_PETAL_WIDTH = YANTRA_R * 0.05;
-// Classic 7-color rainbow (ROYGBIV), cycled across the 12 petals rather
-// than every petal sharing the single rainbow-gradient stroke used
-// everywhere else in the graphic — a deliberate one-off per explicit
-// request, so the lotus ring reads as individually colored petals.
-const YANTRA_PETAL_COLORS = [
-  "#ef4444", // red
-  "#f97316", // orange
-  "#eab308", // yellow
-  "#22c55e", // green
-  "#3b82f6", // blue
-  "#4338ca", // indigo
-  "#8b5cf6", // violet
-];
+// Two boundary circles around the triangle lattice — radii chosen so
+// neither touches any triangle vertex. The farthest any triangle vertex
+// reaches from center is the largest upward triangle's base corners,
+// at sqrt(base^2 + halfWidth^2) * YANTRA_R ≈ 1.212 * YANTRA_R (the
+// apex alone only reaches 1.0 * YANTRA_R along the vertical axis, but
+// the base corners extend further out diagonally) — both circles sit
+// clearly outside that.
+const YANTRA_CIRCLE_INNER_R = YANTRA_R * 1.3;
+const YANTRA_CIRCLE_OUTER_R = YANTRA_R * 1.42;
 
 /**
  * Public marketing/entry page at "/". Deliberately outside AppShell —
@@ -194,29 +184,13 @@ export function LandingPage() {
               filter="url(#hero-graph-glow)"
             />
 
-            {/* Lotus petal ring, just outside the boundary circles. */}
-            {Array.from({ length: YANTRA_PETAL_COUNT }, (_, i) => {
-              const angle = (360 / YANTRA_PETAL_COUNT) * i;
-              return (
-                <ellipse
-                  key={`petal-${i}`}
-                  cx={YANTRA_CX}
-                  cy={YANTRA_CY - YANTRA_PETAL_RING_R}
-                  rx={YANTRA_PETAL_WIDTH}
-                  ry={YANTRA_PETAL_LENGTH}
-                  fill={YANTRA_PETAL_COLORS[i % YANTRA_PETAL_COLORS.length]}
-                  stroke="none"
-                  opacity="0.6"
-                  transform={`rotate(${angle} ${YANTRA_CX} ${YANTRA_CY})`}
-                />
-              );
-            })}
-
-            {/* Two boundary circles enclosing the triangle lattice. */}
+            {/* Two boundary circles enclosing the triangle lattice —
+                radii picked so neither touches a triangle vertex (see
+                YANTRA_CIRCLE_INNER_R/OUTER_R above). */}
             <circle
               cx={YANTRA_CX}
               cy={YANTRA_CY}
-              r={YANTRA_R * 1.08}
+              r={YANTRA_CIRCLE_OUTER_R}
               fill="none"
               stroke="url(#rainbow-accent-gradient)"
               strokeWidth="1"
@@ -225,7 +199,7 @@ export function LandingPage() {
             <circle
               cx={YANTRA_CX}
               cy={YANTRA_CY}
-              r={YANTRA_R * 1.0}
+              r={YANTRA_CIRCLE_INNER_R}
               fill="none"
               stroke="url(#rainbow-accent-gradient)"
               strokeWidth="1"
