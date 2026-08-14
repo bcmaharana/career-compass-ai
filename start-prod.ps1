@@ -68,5 +68,34 @@ if ($LASTEXITCODE -ne 0) {
 Write-Step "Seeding platform defaults (permissions/roles - idempotent)"
 docker compose -f $composeFile exec backend python scripts/seed_platform_defaults.py
 
+# The Cloudflare Tunnel (a separate Windows service, not managed by this
+# script) points at http://localhost:8080 - the compass-frontend-prod
+# container's published port - and polls it independently of this
+# script's own lifecycle. If the tunnel comes up (or is already running,
+# e.g. after a machine reboot) before frontend finishes starting, it logs
+# "dial tcp [::1]:8080: connectex: ... actively refused" for every
+# request that arrives in that gap (seen live 2026-08-14). frontend has
+# no Docker healthcheck to poll instead, so this waits for a real TCP
+# accept on 8080 before declaring the script done, to keep that gap as
+# short as possible.
+Write-Step "Waiting for frontend to accept connections on 127.0.0.1:8080"
+$maxRetries = 30
+$attempt = 0
+$frontendUp = $false
+do {
+    $test = Test-NetConnection -ComputerName "127.0.0.1" -Port 8080 -WarningAction SilentlyContinue -InformationLevel Quiet
+    if ($test) {
+        $frontendUp = $true
+    } else {
+        Start-Sleep -Seconds 2
+        $attempt++
+    }
+} while (-not $frontendUp -and $attempt -lt $maxRetries)
+if (-not $frontendUp) {
+    Write-Host "frontend did not accept connections on 8080 within 1 minute - check 'docker compose -f infra\docker-compose.prod.yml logs frontend'. The Cloudflare Tunnel will keep logging connection-refused until this is resolved." -ForegroundColor Red
+    exit 1
+}
+Write-Host "frontend is accepting connections"
+
 Write-Step "Done"
 Write-Host "Frontend: http://127.0.0.1:8080 (and via the Cloudflare Tunnel's public URL)"
