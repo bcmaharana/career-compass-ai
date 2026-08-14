@@ -21,7 +21,12 @@ import { Navigate, Link } from "react-router-dom";
 // motif it replaced, so the rest of the page's visual language (dots,
 // buttons, headings) is untouched.
 const YANTRA_CX = 300;
-const YANTRA_CY = 140;
+// The petal ring's farthest reach from center (YANTRA_PETAL_RING_R +
+// YANTRA_PETAL_LENGTH, ~131 for the proportions below) exceeded the
+// viewBox's old 260px height, silently clipping the bottom petal (SVG
+// clips to the viewBox by default) — CY/the viewBox height are sized
+// together so the full petal ring fits with margin on both sides.
+const YANTRA_CY = 146;
 const YANTRA_R = 95;
 
 interface YantraTriangleSpec {
@@ -174,7 +179,7 @@ export function LandingPage() {
             image request, reusing the page's own rainbow-accent
             gradient def for the connecting edges. */}
         <div className="relative mx-auto mb-8 max-w-[403px]" aria-hidden="true">
-          <svg viewBox="0 0 600 260" className="relative h-auto w-full">
+          <svg viewBox="0 0 600 292" className="relative h-auto w-full">
             <defs>
               <filter id="hero-graph-glow" x="-50%" y="-50%" width="200%" height="200%">
                 <feGaussianBlur stdDeviation="14" />
@@ -199,9 +204,8 @@ export function LandingPage() {
                   cy={YANTRA_CY - YANTRA_PETAL_RING_R}
                   rx={YANTRA_PETAL_WIDTH}
                   ry={YANTRA_PETAL_LENGTH}
-                  fill="none"
-                  stroke={YANTRA_PETAL_COLORS[i % YANTRA_PETAL_COLORS.length]}
-                  strokeWidth="1.3"
+                  fill={YANTRA_PETAL_COLORS[i % YANTRA_PETAL_COLORS.length]}
+                  stroke="none"
                   opacity="0.6"
                   transform={`rotate(${angle} ${YANTRA_CX} ${YANTRA_CY})`}
                 />
