@@ -76,6 +76,9 @@ function resolveOrder(saved: string[] | null | undefined): string[] {
 export function CareerProfilePage() {
   const [searchParams] = useSearchParams();
   const targetRoleId = searchParams.get("role");
+  // Fed into every scope-dependent section's `key` below — see that
+  // Component's key comment for why.
+  const scopeKey = targetRoleId ?? "master";
   const { data: targetRoles } = useTargetRoles();
   const activeRole = targetRoleId ? targetRoles?.find((r) => r.id === targetRoleId) : null;
 
@@ -144,16 +147,31 @@ export function CareerProfilePage() {
             {activeRole ? "Clear This Target Role Profile" : "Clear Career Profile"}
           </Button>
         </div>
-        {profile && <ResumeDownloadBar profile={profile} scope={targetRoleId} />}
-        <ProfileHeader />
-        <ExecutiveSummarySection />
+        {profile && (
+          <ResumeDownloadBar key={`${scopeKey}-resume-download`} profile={profile} scope={targetRoleId} />
+        )}
+        <ProfileHeader key={`${scopeKey}-header`} />
+        <ExecutiveSummarySection key={`${scopeKey}-summary`} />
         {orderedKeys.map((key, index) => {
           const def = SECTION_DEFS.find((s) => s.key === key);
           if (!def) return null;
           const { Component } = def;
           return (
             <Component
-              key={key}
+              // Scoped into the key, not just the section key, so
+              // switching between the Master Profile and a Target Role
+              // Profile fully remounts every section instead of leaving
+              // in-progress local UI state (edit mode, open dialogs,
+              // delete/clear confirmations) from the profile you just
+              // left silently applied to the one you switched to — a
+              // real bug reported live: leaving Core Competencies in
+              // edit mode on a Target Role Profile and switching to
+              // Master showed Master's Core Competencies already in
+              // edit mode too, since nothing keyed these components by
+              // scope before now. Same "key change unmounts/remounts
+              // instead of clobbering state" pattern already used by
+              // Resume Intelligence's review screen (key={resume.id}).
+              key={`${scopeKey}-${key}`}
               onMoveUp={() => moveSection(key, "up")}
               onMoveDown={() => moveSection(key, "down")}
               isFirst={index === 0}
