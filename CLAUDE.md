@@ -256,18 +256,34 @@ Known environment gotchas already solved, don't reintroduce:
   whose only trigger was "at logon" — re-opening the lid and unlocking
   isn't a fresh logon, so if the tunnel process died during a
   sleep/resume cycle nothing brought it back until a real sign-out/
-  reboot. Fixed with two changes, both confirmed to survive a real lid
-  close/reopen afterward: (1) lid-close action on AC power set to "Do
-  nothing" (`powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS
-  LIDACTION 0`, only applies while plugged in — leave the laptop
-  plugged in for prod to stay up) so the suspend never happens in the
-  first place; (2) a 5-minute repeating watchdog trigger added to
+  reboot. Fixed with three changes, confirmed live (including a real
+  lid close/reopen test that kept the same cloudflared PID alive
+  throughout): (1) lid-close action set to "Do nothing" on **both** AC
+  and DC power (`powercfg /setacvalueindex` /
+  `/setdcvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0`) — closing
+  the lid never triggers suspend by itself now, on battery or plugged
+  in; (2) since DC lid action alone would let the battery run down
+  fully while "asleep-but-not-sleeping," the DC low-battery threshold
+  was lowered to 20% with its action set to Sleep
+  (`SUB_BATTERY BATLEVELLOW` / `BATACTIONLOW`, `/setdcvalueindex`) —
+  this triggers on battery percentage regardless of lid position, not
+  "lid closed AND ≤20%" specifically (Windows has no such compound
+  condition), which is the closest built-in equivalent to "stay up
+  unless battery is low." The existing critical-battery failsafe
+  (2% → Hibernate) was left untouched underneath as a second safety
+  net. (3) a 5-minute repeating watchdog trigger added to
   `CloudflaredTunnel` alongside its existing logon trigger — safe
   because the task's `MultipleInstancesPolicy` is `IgnoreNew`, so it
   only actually restarts cloudflared if the previous instance already
   died. The old, now-unused `Cloudflared` Windows Service was disabled
   (`Set-Service -Name Cloudflared -StartupType Disabled`) to stop it
   confusing future debugging — the Scheduled Task is what's real.
+  Note: `powercfg /q` reliably fails to print `LIDACTION`'s detail on
+  this machine for unknown reasons (just prints the scheme header,
+  exit code 0, no error) even though the setting exists and setting it
+  works fine — verify via the registry instead
+  (`HKLM:\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes\<active-scheme-guid>\4f971e89-eebd-4455-a8de-9e59040e7347\5ca83367-6e45-459f-a27b-476b1d01c936`,
+  `ACSettingIndex`/`DCSettingIndex`, `0` = Do nothing), not `powercfg /q`.
 
 ## Frontend conventions
 
