@@ -243,6 +243,31 @@ Known environment gotchas already solved, don't reintroduce:
   live against this actual dev stack first — it may well work fine
   behind a real reverse-proxy production deployment, but has been
   confirmed not to here.
+- **Prod runs on this laptop, and closing the lid used to take the
+  site down.** Verified live (2026-08-15): this machine only supports
+  Modern Standby (`powercfg /a` → `Standby (S0 Low Power Idle) Network
+  Connected`, no S1/S2/S3), so a lid close is a real suspend, not just
+  a screen-off. Docker's WSL2 networking and the Cloudflare Tunnel's
+  long-lived connection don't reliably survive that suspend/resume
+  cycle — Event Viewer showed the old `Cloudflared` Windows Service
+  crash-looping 1,118 times in ~2 minutes around a lid-close/reopen on
+  2026-08-11. The tunnel now actually runs via a Scheduled Task
+  (`CloudflaredTunnel`, `cloudflared.exe tunnel run career-compass`),
+  whose only trigger was "at logon" — re-opening the lid and unlocking
+  isn't a fresh logon, so if the tunnel process died during a
+  sleep/resume cycle nothing brought it back until a real sign-out/
+  reboot. Fixed with two changes, both confirmed to survive a real lid
+  close/reopen afterward: (1) lid-close action on AC power set to "Do
+  nothing" (`powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS
+  LIDACTION 0`, only applies while plugged in — leave the laptop
+  plugged in for prod to stay up) so the suspend never happens in the
+  first place; (2) a 5-minute repeating watchdog trigger added to
+  `CloudflaredTunnel` alongside its existing logon trigger — safe
+  because the task's `MultipleInstancesPolicy` is `IgnoreNew`, so it
+  only actually restarts cloudflared if the previous instance already
+  died. The old, now-unused `Cloudflared` Windows Service was disabled
+  (`Set-Service -Name Cloudflared -StartupType Disabled`) to stop it
+  confusing future debugging — the Scheduled Task is what's real.
 
 ## Frontend conventions
 
