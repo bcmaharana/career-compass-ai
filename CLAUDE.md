@@ -2863,6 +2863,25 @@ Known environment gotchas already solved, don't reintroduce:
   counts, and a separate row for the real target role name with its own
   independent counts — zero console errors. `typecheck`/`lint`/`build`
   all clean.
+- **Interview Preparation: committed and deployed to prod** (2026-08-16,
+  end of day) — the entire Interview Preparation feature built across
+  this session's many rounds above (Topics/Questions core, all UI
+  enhancement rounds, the rich-text editor and its two live-caught bugs,
+  Topic Reference Links, cross-section accordion mutual exclusivity,
+  the Dashboard card fix) was committed in one commit
+  (`54bdbb7`, "Add Interview Preparation feature") and pushed to
+  `origin/main`, then deployed to prod via `start-prod.ps1`: both
+  images rebuilt (the new `bleach` dependency baked in), migrations
+  `a7c2f4e918bd` (interview preparation) and `b3f6a1c9d824` (topic
+  reference links) applied cleanly against the real prod database
+  (confirmed `alembic current` → `b3f6a1c9d824 (head)` afterward),
+  `interview_answer_generation` prompt version seeded. Verified live
+  against the real prod stack (not just health checks): a throwaway
+  Enterprise account created via the low-level `/tenants` primitive
+  confirmed a real topic create → PATCH round trip through the actual
+  running prod backend, including the XSS-sanitization path (`<script>`
+  stripped, `<b>` preserved) — then deleted via `DELETE /identity/me`,
+  same cleanup discipline used throughout dev verification all day.
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in
