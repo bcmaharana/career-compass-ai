@@ -1,0 +1,531 @@
+import {
+  useCreateInterviewQuestion,
+  useDeleteInterviewQuestion,
+  useGenerateInterviewAnswer,
+  useInterviewQuestions,
+  useMoveInterviewQuestion,
+  useUpdateInterviewQuestion,
+} from "@/api/queries/interview-prep";
+import type { components } from "@/api/schema.gen";
+import { Button } from "@/components/ui/button";
+import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapseToggle } from "@/components/ui/collapse-toggle";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Dialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { MoveButtons } from "@/components/ui/move-buttons";
+import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { getErrorMessage } from "@/lib/errors";
+import { cn } from "@/lib/utils";
+import { Pencil, Plus, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
+import { type Dispatch, type FormEvent, type SetStateAction, useState } from "react";
+
+type InterviewTopic = components["schemas"]["InterviewTopicResponse"];
+type InterviewQuestion = components["schemas"]["InterviewQuestionResponse"];
+type ReferenceLink = components["schemas"]["ReferenceLinkPayload"];
+
+interface FormState {
+  question: string;
+  topic_id: string;
+}
+
+export function InterviewQuestionsSection({
+  scope,
+  topics,
+  expandedId,
+  setExpandedId,
+}: {
+  scope: string | null;
+  topics: InterviewTopic[];
+  // Accordion state, lifted up to InterviewPrepPage — see the matching
+  // comment in InterviewTopicsSection.tsx for why.
+  expandedId: string | null;
+  setExpandedId: Dispatch<SetStateAction<string | null>>;
+}) {
+  const { data: questions, isLoading } = useInterviewQuestions(scope);
+  const addQuestion = useCreateInterviewQuestion(scope);
+  const updateQuestion = useUpdateInterviewQuestion(scope);
+  const deleteQuestion = useDeleteInterviewQuestion(scope);
+  const moveQuestion = useMoveInterviewQuestion(scope);
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState>({ question: "", topic_id: "" });
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<InterviewQuestion | null>(null);
+
+  function toggleExpanded(id: string) {
+    setExpandedId((prev) => (prev === id ? null : id));
+  }
+
+  function openAddDialog() {
+    setEditingId(null);
+    setForm({ question: "", topic_id: "" });
+    setDialogOpen(true);
+  }
+
+  function openEditDialog(question: InterviewQuestion) {
+    setEditingId(question.id);
+    setForm({ question: question.question, topic_id: question.topic_id ?? "" });
+    setDialogOpen(true);
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const topicId = form.topic_id || null;
+    if (editingId) {
+      const existing = questions?.find((q) => q.id === editingId);
+      updateQuestion
+        .mutateAsync({
+          id: editingId,
+          body: {
+            question: form.question,
+            topic_id: topicId,
+            manual_answer: existing?.manual_answer ?? null,
+            reference_links: existing?.reference_links ?? [],
+          },
+        })
+        .then(() => setDialogOpen(false))
+        .catch(() => {});
+    } else {
+      addQuestion
+        .mutateAsync({ target_role_id: scope, topic_id: topicId, question: form.question })
+        .then((created) => {
+          setDialogOpen(false);
+          setExpandedId(created.id);
+        })
+        .catch(() => {});
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between space-y-0">
+        <CardTitle>Interview Questions</CardTitle>
+        <div className={cn("flex items-center", ACTION_BUTTON_ROW_GAP)}>
+          <Button variant="ghost" size="sm" onClick={openAddDialog}>
+            <Plus className="h-4 w-4" />
+            Add
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
+            {isEditMode ? "Done" : "Edit"}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+        {questions?.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            No interview questions yet — add one to start practicing.
+          </p>
+        )}
+        {questions?.map((question, index) => (
+          <QuestionCard
+            key={question.id}
+            question={question}
+            topics={topics}
+            index={index}
+            total={questions.length}
+            isEditMode={isEditMode}
+            onMove={(direction) => moveQuestion.mutate({ id: question.id, direction })}
+            moveDisabled={moveQuestion.isPending}
+            onEdit={() => openEditDialog(question)}
+            onDelete={() => setDeleteTarget(question)}
+            scope={scope}
+            isOpen={expandedId === question.id}
+            onToggleOpen={() => toggleExpanded(question.id)}
+          />
+        ))}
+      </CardContent>
+
+      <Dialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        title={editingId ? "Edit question" : "Add question"}
+      >
+        <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="question-text">Question</Label>
+            <Textarea
+              id="question-text"
+              required
+              value={form.question}
+              onChange={(e) => setForm({ ...form, question: e.target.value })}
+              rows={3}
+            />
+          </div>
+          {topics.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="question-topic">Related topic (optional)</Label>
+              <Select
+                id="question-topic"
+                value={form.topic_id}
+                onChange={(e) => setForm({ ...form, topic_id: e.target.value })}
+              >
+                <option value="">None</option>
+                {topics.map((topic) => (
+                  <option key={topic.id} value={topic.id}>
+                    {topic.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+          <Button type="submit" disabled={addQuestion.isPending || updateQuestion.isPending}>
+            {addQuestion.isPending || updateQuestion.isPending
+              ? "Saving..."
+              : editingId
+                ? "Save changes"
+                : "Add question"}
+          </Button>
+          {(addQuestion.error ?? updateQuestion.error) && (
+            <p role="alert" className="text-sm text-destructive">
+              {getErrorMessage(addQuestion.error ?? updateQuestion.error)}
+            </p>
+          )}
+        </form>
+      </Dialog>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) deleteQuestion.mutate(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+        title="Delete question?"
+        description="Remove this question, its answers, and its reference links? This can't be undone."
+        isPending={deleteQuestion.isPending}
+      />
+    </Card>
+  );
+}
+
+function QuestionCard({
+  question,
+  topics,
+  index,
+  total,
+  isEditMode,
+  onMove,
+  moveDisabled,
+  onEdit,
+  onDelete,
+  scope,
+  isOpen,
+  onToggleOpen,
+}: {
+  question: InterviewQuestion;
+  topics: InterviewTopic[];
+  index: number;
+  total: number;
+  isEditMode: boolean;
+  onMove: (direction: "up" | "down") => void;
+  moveDisabled: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  scope: string | null;
+  isOpen: boolean;
+  onToggleOpen: () => void;
+}) {
+  const updateQuestion = useUpdateInterviewQuestion(scope);
+  const generateAnswer = useGenerateInterviewAnswer(scope);
+
+  // Readonly-by-default: the saved answer displays as plain text with an
+  // Edit button; the Textarea + Save button only appear while actively
+  // editing. Draft is seeded fresh each time editing starts (not kept in
+  // sync reactively), same "initialize once at the moment edit opens"
+  // convention every other edit form in this app already follows.
+  const [isEditingAnswer, setIsEditingAnswer] = useState(false);
+  const [manualAnswerDraft, setManualAnswerDraft] = useState(question.manual_answer ?? "");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkLabel, setLinkLabel] = useState("");
+  // Confirm-before-delete for reference links, same standing convention
+  // every other delete action in this app follows — a real user report
+  // caught this list's "x" button deleting immediately with no
+  // confirmation, unlike everything else here.
+  const [deleteLinkIndex, setDeleteLinkIndex] = useState<number | null>(null);
+  // AI-Suggested Answer starts hidden — it's the model's text, not the
+  // user's own, and can be long/distracting until deliberately wanted.
+  // Generating/regenerating auto-reveals it, same "show the thing you
+  // just asked for" convention this app already uses elsewhere (e.g.
+  // auto-expanding a newly-added item).
+  const [isAiAnswerVisible, setIsAiAnswerVisible] = useState(false);
+
+  const linkedTopic = topics.find((t) => t.id === question.topic_id);
+
+  function startEditingAnswer() {
+    setManualAnswerDraft(question.manual_answer ?? "");
+    setIsEditingAnswer(true);
+  }
+
+  function saveManualAnswer() {
+    updateQuestion.mutate(
+      {
+        id: question.id,
+        body: {
+          question: question.question,
+          topic_id: question.topic_id,
+          manual_answer: manualAnswerDraft || null,
+          reference_links: question.reference_links,
+        },
+      },
+      { onSuccess: () => setIsEditingAnswer(false) },
+    );
+  }
+
+  function addLink(event: FormEvent) {
+    event.preventDefault();
+    if (!linkUrl.trim() || !linkLabel.trim()) return;
+    const nextLinks: ReferenceLink[] = [
+      ...question.reference_links,
+      { url: linkUrl.trim(), label: linkLabel.trim() },
+    ];
+    updateQuestion.mutate({
+      id: question.id,
+      body: {
+        question: question.question,
+        topic_id: question.topic_id,
+        manual_answer: question.manual_answer,
+        reference_links: nextLinks,
+      },
+    });
+    setLinkUrl("");
+    setLinkLabel("");
+  }
+
+  function confirmRemoveLink() {
+    if (deleteLinkIndex === null) return;
+    const nextLinks = question.reference_links.filter((_, i) => i !== deleteLinkIndex);
+    updateQuestion.mutate({
+      id: question.id,
+      body: {
+        question: question.question,
+        topic_id: question.topic_id,
+        manual_answer: question.manual_answer,
+        reference_links: nextLinks,
+      },
+    });
+    setDeleteLinkIndex(null);
+  }
+
+  return (
+    <div
+      id={`interview-question-${question.id}`}
+      className={cn(
+        "flex flex-col gap-3 rounded-md border border-border p-4",
+        index % 2 === 0 ? "bg-card" : "bg-muted",
+      )}
+    >
+      <div
+        className="flex cursor-pointer items-start justify-between gap-3"
+        onClick={onToggleOpen}
+      >
+        <div className="flex items-start gap-2">
+          {isEditMode && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <MoveButtons
+                onMoveUp={() => onMove("up")}
+                onMoveDown={() => onMove("down")}
+                isFirst={index === 0}
+                isLast={index === total - 1}
+                disabled={moveDisabled}
+              />
+            </div>
+          )}
+          <div>
+            <p className="text-sm font-medium md:text-base">
+              <span className="font-normal text-muted-foreground">Question: </span>
+              {question.question}
+            </p>
+            {isOpen && linkedTopic && (
+              <p className="text-xs text-muted-foreground">Related topic: {linkedTopic.name}</p>
+            )}
+          </div>
+        </div>
+        <div
+          className={cn("flex shrink-0 items-center", ACTION_BUTTON_ROW_GAP)}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {isEditMode && (
+            <>
+              <Button variant="ghost" size="sm" onClick={onEdit}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onDelete}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+          <CollapseToggle isOpen={isOpen} onToggle={onToggleOpen} label={question.question} />
+        </div>
+      </div>
+
+      {isOpen && (
+      <>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Answer:
+            </p>
+            {!isEditingAnswer && (
+              <Button variant="ghost" size="sm" onClick={startEditingAnswer}>
+                <Pencil className="h-4 w-4" />
+                Edit
+              </Button>
+            )}
+          </div>
+          {isEditingAnswer ? (
+            <>
+              <RichTextEditor
+                defaultValue={manualAnswerDraft}
+                onChange={setManualAnswerDraft}
+                placeholder="Write your own answer..."
+                autoFocus
+              />
+              <div className={cn("flex", ACTION_BUTTON_ROW_GAP)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={saveManualAnswer}
+                  disabled={updateQuestion.isPending}
+                >
+                  {updateQuestion.isPending ? "Saving..." : "Save answer"}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setIsEditingAnswer(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </>
+          ) : question.manual_answer ? (
+            <RichTextDisplay
+              html={question.manual_answer}
+              className="max-h-48 overflow-y-auto scrollbar-hide"
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">No answer yet — click Edit to add one.</p>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              AI-Suggested Answer
+            </p>
+            <CollapseToggle
+              isOpen={isAiAnswerVisible}
+              onToggle={() => setIsAiAnswerVisible((v) => !v)}
+              label="AI-Suggested Answer"
+            />
+          </div>
+          {isAiAnswerVisible && (
+            <>
+              {question.ai_answer_status === "generated" && (
+                <div className="max-h-48 overflow-y-auto whitespace-pre-line text-sm scrollbar-hide">
+                  {question.ai_answer}
+                </div>
+              )}
+              {question.ai_answer_status === "failed" && (
+                <p role="alert" className="text-sm text-destructive">
+                  {question.ai_answer_error ?? "Something went wrong generating an answer."}
+                </p>
+              )}
+              {!question.ai_answer_status && (
+                <p className="text-sm text-muted-foreground">No AI answer generated yet.</p>
+              )}
+            </>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              generateAnswer.mutate(question.id, { onSuccess: () => setIsAiAnswerVisible(true) })
+            }
+            disabled={generateAnswer.isPending}
+            className="self-start"
+          >
+            {question.ai_answer_status ? (
+              <RefreshCw className="h-4 w-4" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            {generateAnswer.isPending
+              ? "Generating..."
+              : question.ai_answer_status
+                ? "Regenerate"
+                : "Generate"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Reference Links
+        </p>
+        {question.reference_links.length > 0 && (
+          <ul className="flex flex-col gap-1">
+            {question.reference_links.map((link, i) => (
+              <li key={`${link.url}-${i}`} className="flex items-center gap-2">
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm font-medium text-accent underline underline-offset-2 hover:text-accent/80"
+                >
+                  {link.label}
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setDeleteLinkIndex(i)}
+                  aria-label={`Remove link "${link.label}"`}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form className="flex flex-wrap items-center gap-2" onSubmit={addLink}>
+          <Input
+            value={linkLabel}
+            onChange={(e) => setLinkLabel(e.target.value)}
+            placeholder="Label"
+            className="w-40"
+          />
+          <Input
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            placeholder="https://..."
+            type="url"
+            className="w-64"
+          />
+          <Button type="submit" variant="ghost" size="sm" disabled={updateQuestion.isPending}>
+            <Plus className="h-4 w-4" />
+            Add link
+          </Button>
+        </form>
+      </div>
+      </>
+      )}
+
+      <ConfirmDialog
+        open={deleteLinkIndex !== null}
+        onCancel={() => setDeleteLinkIndex(null)}
+        onConfirm={confirmRemoveLink}
+        title="Remove reference link?"
+        description={
+          deleteLinkIndex !== null
+            ? `Remove "${question.reference_links[deleteLinkIndex]?.label}"? This can't be undone.`
+            : ""
+        }
+        isPending={updateQuestion.isPending}
+      />
+    </div>
+  );
+}

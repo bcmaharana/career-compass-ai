@@ -48,6 +48,7 @@ from app.adapters.db.models.identity import (
     UserModel,
     UserRoleModel,
 )
+from app.adapters.db.models.interview_prep import InterviewQuestionModel, InterviewTopicModel
 from app.adapters.db.models.learning_intelligence import (
     LearningItemModel,
     LearningRecommendationSetModel,
@@ -81,6 +82,19 @@ class SqlAlchemyAccountDeletionRepository:
             )
         )
         profile_photos = [(row.id, row.photo_url) for row in photo_result]
+
+        # Collect Interview Topic image keys before deleting the rows —
+        # same best-effort "DB is the source of truth" convention as
+        # profile_photos/resume_file_keys above.
+        topic_image_result = await self._session.execute(
+            select(InterviewTopicModel.image_key).where(
+                InterviewTopicModel.tenant_id == tenant_id,
+                InterviewTopicModel.image_key.is_not(None),
+            )
+        )
+        interview_topic_image_keys = [
+            key for key in topic_image_result.scalars().all() if key is not None
+        ]
 
         # 1. Career-profile sub-entities (-> career_profiles.id)
         for model in (
@@ -130,6 +144,14 @@ class SqlAlchemyAccountDeletionRepository:
             # would otherwise block it, same as CareerProfile/Resume above).
             LearningItemModel,
             LearningRecommendationSetModel,
+            # Both reference target_role_id and (InterviewQuestionModel
+            # only) topic_id — both FKs are ON DELETE SET NULL, so order
+            # relative to target_roles/interview_topics isn't a hard
+            # requirement the way LearningRecommendationSet's NOT NULL FK
+            # is, but they're still real rows for this tenant that need
+            # deleting like everything else here.
+            InterviewQuestionModel,
+            InterviewTopicModel,
             UserRoleModel,
             PlatformAdminModel,
         ):
@@ -182,5 +204,7 @@ class SqlAlchemyAccountDeletionRepository:
 
         await self._session.flush()
         return TenantDeletionArtifacts(
-            resume_file_keys=resume_file_keys, profile_photos=profile_photos
+            resume_file_keys=resume_file_keys,
+            profile_photos=profile_photos,
+            interview_topic_image_keys=interview_topic_image_keys,
         )

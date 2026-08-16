@@ -7,7 +7,7 @@ import { formatLastLogin } from "@/lib/format-last-login";
 import { NAV_ITEMS, matchNavItem } from "@/lib/nav-items";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import { Clock, Compass, Menu } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock, Compass, Menu } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CSSProperties, RefObject } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
@@ -99,6 +99,48 @@ export function DesktopShell({ mainRef, onLogout }: DesktopShellProps) {
     setRightNavCollapsed(!rightNavCollapsed);
   }
 
+  // Which top-level items with children (e.g. Learning Intelligence,
+  // holding Interview Prep) currently show their nested pages —
+  // collapsed by default, matching every other collapsible affordance
+  // in this app. Driven by the current route on every navigation: a
+  // branch auto-expands the moment its parent or a child becomes the
+  // active page (so landing directly on /interview-prep — a bookmark, a
+  // link from elsewhere — doesn't leave it hidden inside a collapsed
+  // branch), and just as importantly auto-*collapses* the moment the
+  // active page leaves that branch for anything else, even if it was
+  // manually toggled open — clicking any other Left Nav item always
+  // closes it back up.
+  const [expandedBranches, setExpandedBranches] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    const activeTo = matchNavItem(location.pathname).to;
+    setExpandedBranches((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const item of NAV_ITEMS) {
+        if (!item.children) continue;
+        const isActiveBranch =
+          activeTo === item.to || item.children.some((child) => child.to === activeTo);
+        if (isActiveBranch && !next.has(item.to)) {
+          next.add(item.to);
+          changed = true;
+        } else if (!isActiveBranch && next.has(item.to)) {
+          next.delete(item.to);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [location.pathname]);
+
+  function toggleBranch(to: string) {
+    setExpandedBranches((prev) => {
+      const next = new Set(prev);
+      if (next.has(to)) next.delete(to);
+      else next.add(to);
+      return next;
+    });
+  }
+
   // Both rails' actual current widths — the single source every fixed
   // region below reads via var(--current-left-nav-w)/
   // var(--current-right-nav-w), same "one variable, nothing can drift"
@@ -163,10 +205,9 @@ export function DesktopShell({ mainRef, onLogout }: DesktopShellProps) {
         <div className="h-px bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)]" />
 
         <nav className="mt-4 flex flex-1 flex-col gap-1 overflow-y-auto px-3">
-          {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => {
+          {NAV_ITEMS.map(({ to, label, icon: Icon, end, children }) => {
             const link = (
               <NavLink
-                key={to}
                 to={to}
                 end={end}
                 aria-label={label}
@@ -185,12 +226,61 @@ export function DesktopShell({ mainRef, onLogout }: DesktopShellProps) {
               </NavLink>
             );
 
-            if (!leftNavCollapsed) return link;
+            // No nested pages, or the rail is collapsed to icon-only
+            // (no room for a tree affordance, same reason labels are
+            // already hidden then) — render exactly as a plain item.
+            if (!children || leftNavCollapsed) {
+              if (!leftNavCollapsed) return <div key={to}>{link}</div>;
+              return (
+                <Tooltip key={to} content={label} placement="right" className="flex w-full">
+                  {link}
+                </Tooltip>
+              );
+            }
 
+            const isExpanded = expandedBranches.has(to);
             return (
-              <Tooltip key={to} content={label} placement="right" className="flex w-full">
-                {link}
-              </Tooltip>
+              <div key={to} className="flex flex-col gap-1">
+                <div className="flex items-center gap-1">
+                  <div className="min-w-0 flex-1">{link}</div>
+                  <button
+                    type="button"
+                    onClick={() => toggleBranch(to)}
+                    aria-label={isExpanded ? `Collapse ${label}` : `Expand ${label}`}
+                    aria-expanded={isExpanded}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-primary-foreground/60 hover:bg-white/5 hover:text-primary-foreground"
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+                {isExpanded && (
+                  <div className="ml-4 flex flex-col gap-1 border-l border-white/10 pl-2">
+                    {children.map((child) => (
+                      <NavLink
+                        key={child.to}
+                        to={child.to}
+                        end={child.end}
+                        aria-label={child.label}
+                        className={({ isActive }) =>
+                          cn(
+                            "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                            isActive
+                              ? "bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] text-primary"
+                              : "text-primary-foreground/80 hover:bg-white/5 hover:text-primary-foreground",
+                          )
+                        }
+                      >
+                        <child.icon className="h-4 w-4 shrink-0" />
+                        {child.label}
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>

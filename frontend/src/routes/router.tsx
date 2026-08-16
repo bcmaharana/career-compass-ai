@@ -19,6 +19,7 @@ import { SettingsProfilePage } from "@/features/settings/SettingsProfilePage";
 import { ResumeIntelligencePage } from "@/features/resume-intelligence/ResumeIntelligencePage";
 import { OpportunityIntelligencePage } from "@/features/opportunity-intelligence/OpportunityIntelligencePage";
 import { LearningIntelligencePage } from "@/features/learning-intelligence/LearningIntelligencePage";
+import { InterviewPrepPage } from "@/features/interview-prep/InterviewPrepPage";
 import { NotFoundPage } from "@/routes/NotFound";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 import { SkillIntelligencePage } from "@/features/skill-intelligence/SkillIntelligencePage";
@@ -81,6 +82,7 @@ export const router = createBrowserRouter([
           { path: "resumes", element: <ResumeIntelligencePage /> },
           { path: "opportunities", element: <OpportunityIntelligencePage /> },
           { path: "learning", element: <LearningIntelligencePage /> },
+          { path: "interview-prep", element: <InterviewPrepPage /> },
           { path: "skills", element: <SkillIntelligencePage /> },
           { path: "coach", element: <CoachPage /> },
           { path: "settings", element: <SettingsLandingPage /> },

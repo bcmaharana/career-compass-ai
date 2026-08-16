@@ -68,25 +68,52 @@ export function MobileNavMenu() {
               visible ? "scale-100 opacity-100" : "scale-95 opacity-0",
             )}
           >
-            {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => {
+            {NAV_ITEMS.map(({ to, label, icon: Icon, end, children }) => {
               const isActive = activeTo === to;
               return (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={end}
-                  role="menuitem"
-                  onClick={() => closeDropdown()}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-2.5 text-sm font-medium",
-                    isActive
-                      ? "bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] text-primary"
-                      : "text-primary-foreground/80 hover:bg-white/5 hover:text-primary-foreground",
-                  )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {label}
-                </NavLink>
+                <div key={to}>
+                  <NavLink
+                    to={to}
+                    end={end}
+                    role="menuitem"
+                    onClick={() => closeDropdown()}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-2.5 text-sm font-medium",
+                      isActive
+                        ? "bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] text-primary"
+                        : "text-primary-foreground/80 hover:bg-white/5 hover:text-primary-foreground",
+                    )}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    {label}
+                  </NavLink>
+                  {/* Nested pages (e.g. Interview Prep under Learning
+                      Intelligence) always show indented here — this is
+                      already a transient, full-list overlay, so there's
+                      no separate expand/collapse affordance the way the
+                      persistent desktop rail needs one. */}
+                  {children?.map((child) => {
+                    const isChildActive = activeTo === child.to;
+                    return (
+                      <NavLink
+                        key={child.to}
+                        to={child.to}
+                        end={child.end}
+                        role="menuitem"
+                        onClick={() => closeDropdown()}
+                        className={cn(
+                          "flex items-center gap-3 py-2 pl-10 pr-4 text-sm font-medium",
+                          isChildActive
+                            ? "bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] text-primary"
+                            : "text-primary-foreground/80 hover:bg-white/5 hover:text-primary-foreground",
+                        )}
+                      >
+                        <child.icon className="h-4 w-4 shrink-0" />
+                        {child.label}
+                      </NavLink>
+                    );
+                  })}
+                </div>
               );
             })}
           </div>

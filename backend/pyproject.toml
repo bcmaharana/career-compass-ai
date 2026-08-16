@@ -32,6 +32,10 @@ dependencies = [
     # (unlike weasyprint's Pango/cairo/gdk-pixbuf), so it doesn't grow the
     # Docker image the way a full HTML-to-PDF renderer would.
     "reportlab>=4.2,<5.0",
+    # Server-side HTML sanitization for Interview Prep's rich-text fields
+    # (see app/core/rich_text.py) — sanitizing hand-rolled HTML is exactly
+    # the kind of security-critical code this app doesn't reinvent.
+    "bleach[css]>=6.1,<7.0",
 ]
 
 [project.optional-dependencies]
@@ -42,6 +46,7 @@ dev = [
     "ruff>=0.5,<1.0",
     "mypy>=1.10,<2.0",
     "pip-audit>=2.7,<3.0",
+    "types-bleach>=6.1,<7.0",
 ]
 
 [build-system]

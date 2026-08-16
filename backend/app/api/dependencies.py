@@ -76,6 +76,10 @@ from app.adapters.db.repositories.governance import (
     SqlAlchemyContentHistoryRepository,
     SqlAlchemyContentRevisionRepository,
 )
+from app.adapters.db.repositories.interview_prep import (
+    SqlAlchemyInterviewQuestionRepository,
+    SqlAlchemyInterviewTopicRepository,
+)
 from app.adapters.db.repositories.learning_intelligence import (
     SqlAlchemyLearningItemRepository,
     SqlAlchemyLearningRecommendationRepository,
@@ -141,6 +145,12 @@ from app.application.identity.request_personal_signup import RequestPersonalSign
 from app.application.identity.reset_password import ResetPasswordService
 from app.application.identity.update_user_profile import UpdateUserProfileService
 from app.application.identity.verify_signup import VerifySignupService
+from app.application.interview_prep.interview_answer_service import InterviewAnswerService
+from app.application.interview_prep.interview_prep_summary_service import (
+    InterviewPrepSummaryService,
+)
+from app.application.interview_prep.interview_question_service import InterviewQuestionService
+from app.application.interview_prep.interview_topic_service import InterviewTopicService
 from app.application.learning_intelligence.learning_item_service import LearningItemService
 from app.application.learning_intelligence.learning_recommendation_service import (
     LearningRecommendationService,
@@ -1195,6 +1205,60 @@ def get_learning_recommendation_service(
     target_roles: TargetRoleService = Depends(get_target_role_service),
 ) -> LearningRecommendationService:
     return LearningRecommendationService(recommendations, gap_analysis, llm, target_roles)
+
+
+# --- Interview Preparation wiring ---
+# S3ObjectStorageRepository satisfies PrivateObjectStorageRepository
+# structurally (same instance get_object_storage already returns for
+# ResumeExtractionService/ResumeExportService) — no new storage wiring
+# needed, just injecting the existing get_object_storage dependency.
+
+
+def get_interview_topic_repository(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyInterviewTopicRepository:
+    return SqlAlchemyInterviewTopicRepository(session)
+
+
+def get_interview_topic_service(
+    topics: SqlAlchemyInterviewTopicRepository = Depends(get_interview_topic_repository),
+    storage: S3ObjectStorageRepository = Depends(get_object_storage),
+) -> InterviewTopicService:
+    return InterviewTopicService(topics, storage)
+
+
+def get_interview_question_repository(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyInterviewQuestionRepository:
+    return SqlAlchemyInterviewQuestionRepository(session)
+
+
+def get_interview_question_service(
+    questions: SqlAlchemyInterviewQuestionRepository = Depends(get_interview_question_repository),
+    topics: SqlAlchemyInterviewTopicRepository = Depends(get_interview_topic_repository),
+) -> InterviewQuestionService:
+    return InterviewQuestionService(questions, topics)
+
+
+def get_interview_answer_service(
+    questions: SqlAlchemyInterviewQuestionRepository = Depends(get_interview_question_repository),
+    topics: SqlAlchemyInterviewTopicRepository = Depends(get_interview_topic_repository),
+    career_profile: CareerProfileService = Depends(get_career_profile_service),
+    target_roles: TargetRoleService = Depends(get_target_role_service),
+    llm: LLMService = Depends(get_llm_service),
+) -> InterviewAnswerService:
+    return InterviewAnswerService(questions, topics, career_profile, target_roles, llm)
+
+
+# get_interview_prep_summary_service depends on get_target_role_service,
+# defined above — must come after it, same Depends()-resolves-at-
+# definition-time constraint noted elsewhere in this file.
+def get_interview_prep_summary_service(
+    topics: SqlAlchemyInterviewTopicRepository = Depends(get_interview_topic_repository),
+    questions: SqlAlchemyInterviewQuestionRepository = Depends(get_interview_question_repository),
+    target_roles: TargetRoleService = Depends(get_target_role_service),
+) -> InterviewPrepSummaryService:
+    return InterviewPrepSummaryService(topics, questions, target_roles)
 
 
 # --- Career Intelligence Knowledge Graph wiring (Phase 4.5.1 / MVP 1) ---

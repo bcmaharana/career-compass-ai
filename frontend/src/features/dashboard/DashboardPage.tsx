@@ -3,6 +3,7 @@ import {
   useCareerProfileSummary,
   useTargetRoles,
 } from "@/api/queries/career-profile";
+import { useInterviewPrepSummary } from "@/api/queries/interview-prep";
 import { useLearningItems } from "@/api/queries/learning-intelligence";
 import { useCareerPath, useJobListings } from "@/api/queries/opportunity-intelligence";
 import { useResumeList } from "@/api/queries/resume-intelligence";
@@ -45,6 +46,7 @@ export function DashboardPage() {
       <ResumeIntelligenceCard />
       <OpportunityIntelligenceCard />
       <LearningIntelligenceCard />
+      <InterviewPrepCard />
     </div>
   );
 }
@@ -345,6 +347,52 @@ function LearningIntelligenceCard() {
         )}
         <InlineLink to="/learning" className="text-xs">
           Go to Learning Intelligence
+        </InlineLink>
+      </CardContent>
+    </Card>
+  );
+}
+
+function InterviewPrepCard() {
+  const { data: summary, isLoading } = useInterviewPrepSummary();
+  const scopeCount = summary?.length ?? 0;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Interview Prep</CardTitle>
+        <CardDescription>
+          {scopeCount > 0
+            ? `Across ${scopeCount} scope${scopeCount === 1 ? "" : "s"}`
+            : "Master + every target role"}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+        {!isLoading && scopeCount === 0 && (
+          <p className="text-sm text-muted-foreground">
+            No topics or questions yet — start building your interview prep.
+          </p>
+        )}
+        {!isLoading &&
+          summary?.map((s) => (
+            <div
+              key={s.target_role_id ?? "master"}
+              className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0 last:pb-0"
+            >
+              <span className="truncate text-sm font-medium">{s.role_name}</span>
+              <div className="flex items-center gap-2">
+                <Badge variant="default">
+                  {s.topic_count} {s.topic_count === 1 ? "topic" : "topics"}
+                </Badge>
+                <Badge variant="default">
+                  {s.question_count} {s.question_count === 1 ? "question" : "questions"}
+                </Badge>
+              </div>
+            </div>
+          ))}
+        <InlineLink to="/interview-prep" className="text-xs">
+          Go to Interview Prep
         </InlineLink>
       </CardContent>
     </Card>

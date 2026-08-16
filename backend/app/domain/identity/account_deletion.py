@@ -27,6 +27,9 @@ class TenantDeletionArtifacts:
     #: (career_profile_id, photo_url) for every profile row (Master and
     #: any Target Role Profiles) that had a photo set.
     profile_photos: list[tuple[UUID, str]]
+    #: Private-bucket storage keys for every Interview Topic that had an
+    #: image set — same bucket/adapter as resume_file_keys.
+    interview_topic_image_keys: list[str]
 
 
 class AccountDeletionRepository(Protocol):

@@ -2275,6 +2275,594 @@ Known environment gotchas already solved, don't reintroduce:
   sending the message confirmed the box drops straight back to its
   original single-line height. Zero console errors throughout, both
   viewports. `typecheck`/`lint`/`build` all clean.
+- **Interview Preparation** (2026-08-16) — done, verified live in dev;
+  prod migration/rebuild not yet done. A new permanent Left Nav item
+  (`/interview-prep`, 7th entry) for building interview-readiness
+  content, scoped either to the Master profile (generic) or a specific
+  Target Role — the exact same nullable `target_role_id` split
+  CareerProfile itself uses, implemented as a page-local `?role=`
+  search param (not the full `ProfileScopeProvider` Context built for
+  Career Profile's ~8 section components — this page only has two).
+  Two new domains, both genuinely new tables (not a filter/view over an
+  existing one): **`InterviewTopic`** (name, an optional free-text
+  `section` grouping label — same "just a string on each item, no
+  separate entity" pattern `CoreCompetency.category` already
+  established — discussion notes, an optional image) and
+  **`InterviewQuestion`** (question text, the user's own manual answer,
+  an AI-generated answer, labeled `{url, label}` reference links stored
+  as a JSON column — same nested-value-in-JSON-blob pattern
+  `CareerProfile.core_competencies` uses — and an optional link to one
+  of the scope's topics). Both reorderable via the existing
+  `app/adapters/db/reorder.py` (`move_item`/`next_display_order`)
+  every other orderable entity in this app already shares — no new
+  reordering mechanism. `target_role_id` on both, and `topic_id` on
+  `InterviewQuestion`, are all `ON DELETE SET NULL` (same precedent as
+  `LearningItem.target_role_id`) — deleting a target role or a topic
+  un-links rather than destroys dependent content.
+  **AI answer generation** (`InterviewAnswerService`, a new
+  `interview_answer_generation` AI Platform use-case seeded the same
+  idempotent-if-unchanged way `learning_recommendations` already is):
+  read-only/regenerate-only by design (confirmed with the user before
+  building) — never auto-editable, never auto-regenerated, only ever
+  fires on an explicit Generate/Regenerate click. Grounded in whatever
+  real context exists: the target role's name (if scoped), the
+  relevant profile's headline/core competencies (Master's, or that
+  specific Target Role Profile's if scoped — reuses
+  `CareerProfileService.get_or_create` exactly as every other caller
+  does), and — a genuinely new grounding source, not used anywhere else
+  in this app — the linked Topic's own `discussion` notes, if the
+  question has one. A failed regenerate persists `ai_answer_status="failed"`
+  with the real error message but deliberately does **not** erase a
+  previously-good `ai_answer` — same "canned/synthetic fallback would
+  actively mislead" reasoning as Learning Recommendations, applied in
+  the other direction here (a bad retry shouldn't destroy a good prior
+  answer). Editing a question's text clears its stale AI answer back to
+  "never generated," since old wording's answer no longer necessarily
+  fits.
+  **Topic images** go in the **private** object storage bucket (the
+  user's own explicit choice over the simpler public-profile-photo
+  pattern) — reuses `PrivateObjectStorageRepository`/`S3ObjectStorageRepository`
+  exactly as Resume Intelligence already does, no new storage adapter or
+  bucket. Verified live: the presigned URL a topic response returns
+  resolves `200`, the same object's raw un-signed URL `403`s.
+  **Table of Contents**: a page-local grouping helper
+  (`lib/group-interview-topics-by-section.ts`) mirrors
+  `groupCompetenciesByCategory`'s exact section-ordering logic
+  (first-appearance order, a trailing "Ungrouped" bucket for topics with
+  no section) rather than reusing that helper directly, since it's typed
+  specifically to Core Competencies. Every Topic/Question card gets a
+  stable DOM id; clicking a Table of Contents entry calls
+  `scrollIntoView({ behavior: "smooth" })` — pure frontend, no new
+  endpoint. **A genuinely new UI pattern for this app**: each Topic is
+  individually collapsible (not just the whole section, which every
+  existing `CollapseToggle` usage in this codebase was — see
+  `TargetRoleSkillsSection.tsx`) — tracked as an inverted `collapsedIds`
+  `Set<string>` in local state (a topic is expanded unless its id is in
+  the set), so a newly-added topic is expanded by default with no
+  seeding step needed, and no reactive-resync risk since the set only
+  ever grows/shrinks from explicit user clicks.
+  Account deletion: `InterviewTopicModel`/`InterviewQuestionModel`
+  added to the existing tenant-scoped delete loop; `TenantDeletionArtifacts`
+  gained `interview_topic_image_keys`, cleaned up from the private
+  bucket the same best-effort way `resume_file_keys` already is.
+  27 new backend unit tests (fake repositories/storage/LLM, no database,
+  no real object storage or LLM calls — same fake-repository standard
+  every other domain's tests already meet), full 375-test suite passing,
+  mypy clean across all 233 backend source files. Frontend
+  `typecheck`/`lint`/`build` all clean. Verified live end-to-end via a
+  real headless-Chromium Playwright session against a throwaway
+  Enterprise account (created via the low-level `/tenants` primitive,
+  deleted via `DELETE /identity/me` afterward): added three topics (two
+  sharing a section, one ungrouped) and confirmed the section-grouped
+  rendering, uploaded a real image and confirmed it renders via a real
+  presigned URL, added a question linked to a topic, saved a real manual
+  answer, generated a real AI answer via Ollama grounded in the
+  candidate's actual background (content differed meaningfully between
+  a role-scoped and a generic question, confirmed by inspecting the
+  actual output text), added a labeled reference link and confirmed it
+  renders as a real external link, reordered questions and confirmed the
+  order swap persisted, clicked a Table of Contents entry and confirmed
+  the page actually scrolled, switched scope between Master and a Target
+  Role and confirmed the topic lists are genuinely independent in both
+  directions, zero console errors throughout. Separately verified via
+  direct HTTP calls: a second throwaway tenant's `GET` for topics/
+  questions returns empty (RLS isolation) and a cross-tenant `PATCH`
+  attempt against a real topic id from the first tenant correctly 404s
+  (not-found-not-forbidden, this app's standing convention) rather than
+  leaking a 403 that would confirm the row's existence.
+- **Interview Preparation enhancements** (2026-08-16, same day) — done,
+  verified live in dev; prod not yet deployed. Several rounds of direct
+  user feedback after using the feature above for real, landed together:
+  **(1) True single-open accordions, not independent per-item toggles**:
+  both Topics and Questions changed from an inverted `collapsedIds:
+  Set<string>` (expanded-by-default) to `expandedId: string | null`
+  (collapsed-by-default, only one open at a time — opening one now
+  closes whatever else was open). **(2) Answer UX**: "Your Answer"/"AI-
+  Suggested Answer" sub-cards changed from a side-by-side `md:grid-cols-2`
+  to a vertical stack; the manual-answer Textarea+Save-button-always-
+  visible pattern became readonly-by-default (`max-h-48 overflow-y-auto
+  scrollbar-hide` display) with an Edit button that swaps in the Textarea
+  + Save/Cancel, saved answer text also gained the same bounded-scroll
+  treatment; labels changed to "Question:"/"Answer:" (prefixed directly
+  on the line, not a separate heading). **(3) Primary interaction moved
+  to the whole card header**, not just the Hide/Show icon — the header
+  row (title text plus the surrounding flex container) is now itself
+  `cursor-pointer` with an `onClick` toggle, while nested interactive
+  elements (`MoveButtons`, Edit/Delete, the `CollapseToggle` itself)
+  each wrap their own `onClick` in `e.stopPropagation()` so a click on
+  those doesn't also fire the card toggle underneath. `CollapseToggle`
+  itself stayed as a secondary, always-available affordance next to the
+  primary click-anywhere-on-header behavior, not removed.
+  **(4) Nested under Learning Intelligence, not a top-level Left Nav
+  item** — `/interview-prep` was pulled out of the top-level `NAV_ITEMS`
+  and nested as `children` on the Learning Intelligence entry
+  (`nav-items.ts`'s `NavItem` interface gained `children?: NavItem[]`,
+  one level deep only). `DesktopShell.tsx` renders a chevron
+  expand/collapse toggle per item with children (`expandedBranches:
+  Set<string>`); `MobileNavMenu.tsx` renders children indented,
+  always-visible under an open dropdown (no separate expand state
+  needed there — the whole dropdown is already the "expanded" state).
+  A single `useEffect` keyed on `location.pathname` drives both
+  directions of branch expand/collapse together: auto-expands the
+  parent when the active route is it or one of its children, and
+  auto-collapses any branch that *isn't* the active one — landing
+  directly on `/interview-prep` (a bookmark, a page refresh) correctly
+  shows it already expanded, and navigating to any unrelated page
+  correctly collapses it back. **(5) Last-visited-scope persistence**:
+  `localStorage` (this app's first real use of it — previously only
+  referenced in a comment about the auth token *deliberately not* using
+  it) under `"interview-prep-last-scope"`, storing the literal string
+  `"master"` as an explicit sentinel value (not just an absent key) so a
+  bare landing can tell "Master was the last scope, deliberately" apart
+  from "no preference recorded yet" — both render identically (no `role`
+  URL param) but only the former should ever override some other stale
+  stored value. An explicit `?role=` already in the URL (a shared link,
+  a bookmark to a specific Target Role's prep page) always wins over the
+  stored preference; only a *bare* `/interview-prep` landing (the nav
+  link itself always points there with no param) falls back to storage.
+  Both reads/writes verified live via real headless-Chromium Playwright
+  sessions across all five enhancement rounds — accordion single-open
+  behavior, the click-anywhere-on-header toggle (including confirming
+  nested buttons don't double-fire it), the nav branch auto-expanding on
+  direct landing and auto-collapsing on navigation away, and the scope
+  restoring correctly after a fresh page load. `typecheck`/`lint`/`build`
+  all clean throughout; no backend changes were needed for any of these
+  five (frontend-only).
+- **Interview Preparation: scope label, per-scope counts, TOC force-open**
+  (2026-08-16, same day) — done, verified live in dev; prod not yet
+  deployed. Three more rounds of direct feedback. **(1)** The scope
+  picker's label changed from "Scope" to "Current Scope," restyled to
+  match the Table of Contents section label exactly
+  (`text-xs font-semibold uppercase tracking-wide text-muted-foreground`,
+  overriding `Label`'s own default `text-sm font-medium` via `cn`'s
+  `twMerge` conflict resolution) after the user asked for the same
+  visual treatment as that other section header. **(2) Per-scope
+  topic/question counts**: a new backend
+  `InterviewPrepSummaryService` (`app/application/interview_prep/interview_prep_summary_service.py`)
+  computes, live per request (no batch job — same "reasonable at this
+  app's per-user data volumes" precedent as CIKG's
+  `knowledge_quality_score`), topic/question counts across Master +
+  every Target Role, returning only scopes with at least one artifact —
+  an empty scope is deliberately excluded as noise, not shown as
+  "0 topics, 0 questions." New `GET /interview-prep/summary` endpoint,
+  wired the same thin-router way as every other endpoint in this
+  domain; every topic/question create and delete mutation
+  (`api/queries/interview-prep.ts`) now also invalidates the summary
+  query so the counts stay live without a manual refresh. Rendered as a
+  small text row directly below the scope `<Select>` on
+  `InterviewPrepPage.tsx` (e.g. "Master: 2 topics, 1 question"),
+  visually distinct from — but formatted the same "Role: N topics, M
+  questions" shape for — every scope that has content. **(3) Table of
+  Contents entries now actually open the corresponding card, not just
+  scroll to its (collapsed) location**: the accordion state
+  (`expandedId`/`setExpandedId` for both Topics and Questions) was
+  lifted out of `InterviewTopicsSection.tsx`/`InterviewQuestionsSection.tsx`
+  and up into `InterviewPrepPage.tsx`, passed down as props (`Dispatch<SetStateAction<string
+  | null>>`) so the page's own TOC click handlers can drive the same
+  state the section components toggle internally — a TOC click calls
+  `setExpandedId(id)` directly (force-open) rather than going through
+  each section's own toggle-if-already-open logic, so clicking a TOC
+  entry for an already-open card correctly leaves it open instead of
+  closing it, verified live as its own explicit check. Scrolling happens
+  via a `scrollToAfterPaint()` helper (`InterviewPrepPage.tsx`) using a
+  double `requestAnimationFrame` after the state update, since a single
+  frame can still fire before the browser has actually painted the
+  newly-expanded card's layout. `typecheck`/`lint`/`build` clean;
+  backend: 4 new unit tests (`test_interview_prep_summary_service.py`,
+  fake repositories, no database) plus the full 383-test backend suite
+  passing, mypy clean across all 234 source files. Verified live via a
+  real headless-Chromium Playwright session against a throwaway
+  Enterprise account: confirmed the relabeled/restyled scope picker,
+  confirmed no summary row renders with zero content, added two topics
+  sharing a section plus one question and confirmed the summary
+  correctly read "Master: 2 topics, 1 question," clicked three different
+  TOC entries in sequence and confirmed each force-opened its own card
+  while the single-open accordion still correctly closed whichever else
+  was open, and confirmed re-clicking an already-open entry's TOC link
+  didn't close it — zero console errors throughout.
+- **Interview Preparation: rich text editing** (2026-08-16, same day) —
+  done, verified live in dev; prod not yet deployed. The last of the
+  day's four Interview Prep rounds — explicitly flagged as a real
+  architectural fork before building (new dependency vs. this app's
+  "no heavy UI kit" convention, storage-format change from plain text
+  to HTML, XSS/sanitization implications, which fields) rather than
+  assumed; the user chose a hand-rolled contenteditable toolbar (not a
+  library like Tiptap) applied to both `InterviewQuestion.manual_answer`
+  and `InterviewTopic.discussion`.
+  **Frontend**: new `RichTextEditor`/`RichTextDisplay`
+  (`frontend/src/components/ui/rich-text-editor.tsx`) — a Bold/Italic/
+  5-swatch-color toolbar driving a plain `contentEditable` div via the
+  deprecated-but-universally-supported `document.execCommand`, matching
+  Dialog's own "no Radix, no heavy UI kit" precedent rather than adding
+  a real editor library. Wired into both the topic Add/Edit dialog's
+  Discussion field and the question's inline Answer edit, replacing the
+  plain `Textarea`/`whitespace-pre-line` display each previously used.
+  **Backend**: every write is re-sanitized server-side regardless of
+  what the client sends — a contenteditable div can hold arbitrary HTML
+  via paste or a modified client, so the raw HTML is never itself the
+  security boundary. New `app/core/rich_text.py`
+  (`sanitize_rich_text()`) uses `bleach` (new dependency,
+  `bleach[css]>=6.1,<7.0` + `types-bleach` for mypy strict) with a
+  narrow allowlist (`b`/`strong`/`i`/`em`/`u`/`span`/`div`/`p`/`br`
+  tags, `style` only on span/div/p, `color` the only allowed CSS
+  property via `CSSSanitizer`) — called from
+  `InterviewQuestionService.update()` and both
+  `InterviewTopicService.add()`/`update()` before persisting. A new pip
+  dependency meant a real Docker image rebuild
+  (`sync-dependencies.ps1`, not just a code edit) for the dev backend
+  container to actually have `bleach` installed — confirmed via a
+  direct `curl` PATCH with a `<script>`/`<img onerror>`/
+  `javascript:`-href payload against the rebuilt container returning
+  the correctly-stripped-but-`<b>`-preserved result.
+  **Two real bugs found live, not by review, both against the actual
+  UI (not just the sanitizer in isolation)**:
+  (1) **Reversed-text cursor-reset bug**: `RichTextEditor` was
+  originally wired via `dangerouslySetInnerHTML={{ __html: defaultValue
+  ?? "" }}`, and both call sites naturally passed their own
+  onChange-updated state straight back in as `defaultValue` (e.g.
+  `defaultValue={form.discussion} onChange={(html) => setForm({
+  ...form, discussion: html })}`) — exactly the reactive-resync
+  anti-pattern this file already documents elsewhere for other
+  components, just not one anyone had connected to a contenteditable
+  before. Since `dangerouslySetInnerHTML`'s `__html` string differs on
+  every keystroke, React reassigns the div's `innerHTML` on every
+  keystroke too, which resets the browser's caret to position 0 — so
+  each subsequent character typed at the (reset) start instead of the
+  actual cursor position, silently reversing the whole string. Caught
+  live via a real headless-Chromium Playwright session, not assumed:
+  typing "Bold discussion text" round-tripped through the real API as
+  `"txet noissucsid dloB"`. Fixed by seeding the DOM exactly once via a
+  mount-only `useEffect` (`el.innerHTML = initialValueRef.current`)
+  instead of a reactive JSX prop — later `defaultValue` prop changes
+  are now simply never looked at again, same "must remount via `key`
+  to pick up a different value" contract this app's other
+  initialize-once components already follow. Two regression checks
+  (confirming the specific reversed strings do NOT appear) were added
+  to the live verification and kept passing on every subsequent rerun.
+  (2) **Color formatting silently disappearing on save**: Chromium's
+  default `execCommand('foreColor', ...)` wraps the selection in a
+  legacy `<font color="...">` tag, not a `<span style="color:...">` —
+  and `<font>` isn't in the sanitizer's allowlist, so `bleach.clean()`
+  correctly-per-its-allowlist stripped the tag entirely (keeping the
+  text, losing all color), meaning a user's color formatting vanished
+  completely and silently on save, with no error anywhere. Caught live
+  via the real save-then-refetch round trip showing plain text where
+  colored text was expected. Fixed by calling
+  `document.execCommand('styleWithCSS', false, 'true')` once before
+  every toolbar command in `RichTextEditor`'s `exec()`, which makes
+  Chromium emit `<span style="color:...">` instead — verified live
+  afterward via the real toolbar button (not a bypassed direct
+  `execCommand` call in the test script) producing a `<span
+  style="color: rgb(220, 38, 38)">` that survives the full save/fetch
+  round trip.
+  6 new backend unit tests (2 in `test_interview_question_service.py`,
+  3 in `test_interview_topic_service.py`, confirming `<script>`/
+  `<img onerror>` get stripped and disallowed CSS properties like
+  `background` get dropped while `color` survives — exact bleach output
+  strings verified by actually running the sanitizer, not guessed),
+  full 382-test backend suite passing, mypy clean across all 235
+  backend source files (`bleach`'s type stubs made this a genuine
+  `--strict` pass, not a suppressed import). Frontend
+  `typecheck`/`lint`/`build` clean. Verified live end-to-end via a real
+  headless-Chromium Playwright session against a throwaway Enterprise
+  account (created via the low-level `/tenants` primitive, deleted via
+  `DELETE /identity/me` afterward, four full create/verify/delete
+  cycles across this round alone as bugs were found and fixed):
+  confirmed the Bold toolbar button exists and produces real `<b>`
+  markup that survives the save/fetch round trip, confirmed the color
+  swatch produces a real `style="color:..."` span that survives the
+  same round trip, confirmed neither the topic discussion nor the
+  question's manual answer come back reversed, confirmed the answer
+  editor correctly returns to readonly display (no stray Save/Cancel
+  buttons) after saving, and separately confirmed via direct `curl`
+  that a real XSS payload (`<script>`, `<img onerror>`, a
+  `javascript:` href) sent straight to the API is stripped down to
+  `"<b>Bold</b>alert(document.cookie)click"` — zero console errors
+  throughout every run.
+- **Interview Preparation: rich text order-dependence fix + Bullet
+  list / Indent / Outdent** (2026-08-16, same day) — done, verified
+  live in dev; prod not yet deployed. Reported directly by the user
+  after using the rich-text editor for real: "Bold is working fine...
+  but color and italics doesn't have the effect after I save."
+  **Root cause, confirmed live via a bare-Chromium `execCommand` probe
+  before touching any code** (not guessed): `document.execCommand
+  ('styleWithCSS', false, 'true')` — added earlier the same day to fix
+  color silently disappearing (see the previous status entry) — sets a
+  **global, persistent mode for the whole document**, not a per-command
+  flag. Once *any* click enabled it, *every later command in that same
+  page session* (bold, italic — even on a different question's editor
+  entirely) also started emitting `<span style="font-weight:...">` /
+  `<span style="font-style:...">` instead of semantic `<b>`/`<i>` tags —
+  and since the sanitizer's CSS allowlist only permitted `color`/
+  `margin` (see the previous entry), those got silently stripped. Which
+  formats "worked" was purely a function of **click order within a
+  session**, not which button was clicked — exactly matching the user's
+  confusing, seemingly-inconsistent report, and confirmed reproducible
+  via a direct Playwright probe against the real component before any
+  fix was applied. **Fix**: `RichTextEditor`'s `exec()`
+  (`frontend/src/components/ui/rich-text-editor.tsx`) now sets
+  `styleWithCSS` explicitly on every call — `true` only for `foreColor`
+  (no semantic tag exists for arbitrary color), `false` for everything
+  else — making the produced markup deterministic regardless of click
+  order. A related wrinkle caught by the same probe: combining two
+  formats on one selection (e.g. select bold text, then apply color)
+  produces a *single* tag carrying both — `<b style="color:...">`, not
+  nested tags — which the sanitizer's `_ALLOWED_ATTRIBUTES` (previously
+  `style` allowed only on `span`/`div`/`p`/`blockquote`) was silently
+  stripping the `style` off of, since `<b>` wasn't in that dict; bold
+  survived, color quietly vanished. Fixed by allowing `style` on every
+  inline formatting tag (`b`/`strong`/`i`/`em`/`u`/`span`/`div`/`p`/
+  `blockquote`), not just the block-level ones.
+  **Same round, requested together**: Bullet list / Indent / Outdent
+  toolbar buttons (`List`/`IndentIncrease`/`IndentDecrease` from
+  lucide-react), backed by `execCommand('insertUnorderedList'/'indent'/
+  'outdent')`. The sanitizer allowlist
+  (`backend/app/core/rich_text.py`) was extended to match Chromium's
+  *actual* probed output, not a general-purpose HTML allowlist:
+  `insertUnorderedList` emits plain `<ul><li>`; `indent` while already
+  inside a list nests another bare `<ul>` directly (no intervening
+  `<li>` — unusual but real, kept as-is); `indent` outside a list wraps
+  in `<blockquote style="margin: 0 0 0 40px; border: none; padding:
+  0px;">` — only `margin` was added to the CSS allowlist (not
+  `border`/`padding`), since a bare `<blockquote>`'s UA-default
+  border/padding is already harmless and those two properties weren't
+  load-bearing for the indent effect itself, confirmed by checking the
+  sanitized output actually still renders indented. Tailwind's
+  Preflight reset strips `<ul>`/`<li>`'s default `list-style`/padding,
+  so bullets wouldn't otherwise render at all — restored via a shared
+  `RICH_TEXT_CONTENT_CLASSES` constant (`[&_ul]:list-disc [&_ul]:pl-5
+  [&_li]:my-0.5`, plus a subtle left border on `<blockquote>` for visual
+  indent clarity) applied identically to both the live editor and
+  `RichTextDisplay`'s readonly rendering, so what's typed matches what's
+  shown after save.
+  14 new backend unit tests (`tests/unit/test_rich_text.py`, testing
+  `sanitize_rich_text()` directly as a pure function rather than through
+  a service — covering every toolbar action's real HTML shape: bold,
+  italic, color, the bold+color combined-tag case, bullet lists, nested
+  lists, indent's blockquote-with-margin-only, and the existing XSS
+  cases) plus the full 396-test backend suite passing, mypy clean
+  across all 235 backend source files. Frontend
+  `typecheck`/`lint`/`build` all clean. Verified live end-to-end via a
+  real headless-Chromium Playwright session against a throwaway
+  Enterprise account (created via the low-level `/tenants` primitive,
+  deleted via `DELETE /identity/me` afterward): reproduced the exact
+  reported bug shape first (color-then-bold-then-italic in one session,
+  confirming all three previously wouldn't have survived together),
+  confirmed all three now survive a real save/refetch round trip
+  together in the same answer, confirmed a real bullet list renders
+  with visible markers and survives the round trip, and confirmed
+  indent produces a real `<blockquote>` with its margin intact — zero
+  console errors throughout. No new backend dependency this round (pure
+  code change to `app/core/rich_text.py`, already bind-mounted into the
+  dev backend container — no Docker rebuild needed, unlike the earlier
+  `bleach` addition itself).
+- **Interview Preparation: topic image sizing** (2026-08-16, same day)
+  — done, verified live in dev; prod not yet deployed. Reported
+  directly by the user: a Topic's uploaded image rendered far too small
+  to be useful. `InterviewTopicsSection.tsx`'s image display was a
+  fixed `h-24 w-24 object-cover` square thumbnail (96×96px, always
+  center-cropped to a square regardless of the source image's real
+  shape) — replaced with a responsive `max-w-2xl max-h-[75vh]
+  object-contain` image (capped by both width and height so a very
+  large or very tall image still fits on screen, `object-contain`
+  instead of `object-cover` so the full image is shown at its real
+  aspect ratio rather than cropped) and the surrounding layout switched
+  from a horizontal `flex` (small thumbnail + a column of buttons beside
+  it) to a vertical stack (large image on top, the Add/Replace/Remove
+  image buttons in a row underneath) — a wide layout stopped making
+  sense once the image itself could span the card's full width.
+  Frontend-only, no backend change (the private-bucket presigned-URL
+  serving path is unchanged). Verified live via a real headless-Chromium
+  Playwright session against a throwaway Enterprise account: uploaded a
+  real 1200×800 JPEG and measured its actual rendered bounding box —
+  672×448px (vs. the old fixed 96×96), respecting both the max-width
+  and max-height caps, with the exact 1.5 source aspect ratio preserved
+  (not cropped) — `typecheck`/`lint`/`build` all clean, zero console
+  errors.
+- **Interview Preparation: Topic sub-cards** (2026-08-16, same day) —
+  done, verified live in dev; prod not yet deployed. Reported directly
+  by the user: "We [have an] Edit button for main card for Topic, but
+  we need to have the edit button for each sub-card... Similar to
+  question and answer." `InterviewTopicsSection.tsx` was restructured
+  to mirror `InterviewQuestionsSection.tsx`'s exact Answer/AI-Suggested-
+  Answer sub-card pattern: a new bordered **Discussion sub-card** (its
+  own header row + Edit button, swapping to a `RichTextEditor` +
+  Save/Cancel only while actively editing, readonly `RichTextDisplay`
+  or "No discussion yet — click Edit to add one." otherwise) and a
+  bordered, now explicitly-labeled **Image sub-card** (same
+  upload/replace/remove controls as before, just visually matching the
+  new sub-card convention). The header-level pencil-icon Edit button on
+  the Topic card itself is now scoped to **just Name/Section** — the
+  Add/Edit dialog dropped its Discussion textarea entirely, matching
+  how Questions' own Add dialog has never included the Answer field: a
+  new Topic starts with no discussion, added afterward via the
+  sub-card's own Edit action, not the creation form. Required
+  extracting a new `TopicCard` subcomponent (previously the topic list
+  was rendered inline in a `.map()`), holding its own local
+  `isEditingDiscussion`/`discussionDraft` state — the same
+  per-component-instance local-state shape `QuestionCard` already
+  established, not new state architecture. No backend change needed —
+  the sub-card's Save action reuses the existing
+  `PATCH /interview-prep/topics/{id}` endpoint exactly as the header
+  dialog's Save always did, just sending `discussion` alone alongside
+  the topic's existing `name`/`section` rather than all three from one
+  form. Frontend `typecheck`/`lint`/`build` all clean. Verified live via
+  a real headless-Chromium Playwright session against a throwaway
+  Enterprise account: confirmed the Add dialog no longer shows a
+  Discussion field, confirmed a freshly-created topic's Discussion
+  sub-card shows its own Edit button and correct empty-state text,
+  edited and saved real discussion text through the sub-card and
+  confirmed it displays readonly afterward with no stray Save/Cancel
+  buttons, confirmed the Image sub-card now has its own "Image" label,
+  and confirmed the header-level pencil-icon Edit dialog still opens
+  correctly (pre-filled Name) and still has no Discussion field — zero
+  console errors throughout.
+- **Interview Preparation: alternating backgrounds, summary format,
+  Table of Contents polish** (2026-08-16, same day) — done, verified
+  live in dev; prod not yet deployed. Four rounds of direct feedback,
+  landed together. **(1) Alternating card backgrounds**: the user's
+  first request ("The background color pattern doesn't match with
+  Interview Questions") was initially misread as "remove Topics'
+  alternation to match Questions' plain look" — the user then clarified
+  directly: **both** sections need distinguishable alternating
+  backgrounds, not neither. Fixed properly: Questions gained the
+  alternation it never had (Topics originally had it, Questions didn't
+  — that mismatch was the real complaint), and the color pair for both
+  changed from the original `bg-background`/`bg-card` to `bg-card`
+  (pure white) / `bg-muted` (light gray) — the original pairing put
+  half the rows at `bg-background` (`#F4F6F9`) sitting directly on a
+  parent `<Card>` whose own background is already `bg-card` (`#FFFFFF`)
+  *and* the other half at that same `bg-card` white, so alternating
+  rows were only distinguishable in one direction, not a clean zebra
+  stripe; white/`bg-muted` alternation is unambiguous in both
+  directions, and both stay visually distinct from the sub-cards'
+  existing fixed `bg-background` tone (Discussion/Answer/Image/
+  AI-Suggested-Answer), which was intentionally left unchanged.
+  **(2) Per-scope summary line reformatted**: from a wrapping row of
+  separate chips to one line, pipe-separated —
+  `"Master: 3 topics, 2 questions | Senior Agile Coach: 1 topic, 2
+  questions"` — exact format requested, verified live against real
+  seeded multi-scope data. **(3) Table of Contents section/"Questions"
+  headers gained a trailing colon** (`"Business Agility:"`,
+  `"Questions:"` — previously no colon). **(4) TOC entries are now real
+  bulleted `<ul>`/`<li>` lists** (`list-disc pl-5`, restoring Tailwind
+  Preflight's stripped default list styling — same
+  `RICH_TEXT_CONTENT_CLASSES` gotcha the rich-text editor's own bullet
+  lists already hit earlier the same day) instead of `flex flex-wrap`
+  buttons with no visual list marker. Frontend-only, no backend change.
+  Verified live via a real headless-Chromium Playwright session against
+  a throwaway Enterprise account seeded with real multi-scope,
+  multi-section data (a target role, 3 Master topics — 2 sharing a
+  "Business Agility" section, 1 ungrouped — 2 Master questions, 1
+  role-scoped topic + 2 role-scoped questions): confirmed the exact
+  pipe-separated summary string, confirmed both colon-suffixed headers
+  render, confirmed both TOC lists are genuine `<ul class="list-disc">`
+  elements, and confirmed adjacent Topic *and* Question cards now both
+  alternate between `bg-card`/`bg-muted` with no two adjacent cards
+  sharing a background — zero console errors. `typecheck`/`lint`/
+  `build` all clean.
+- **Interview Preparation: mutual-exclusive accordions, AI answer
+  hide/show, Topic Reference Links, confirm-before-delete on links**
+  (2026-08-16, same day) — done, verified live in dev; prod not yet
+  deployed. Four more rounds of direct feedback.
+  **(1) Cross-section accordion mutual exclusivity**: opening a Topic
+  now closes any open Question, and vice versa — previously
+  `expandedTopicId`/`expandedQuestionId` were two fully independent
+  pieces of state, so both a Topic and a Question could be open
+  simultaneously. Replaced with one shared
+  `expandedItem: { type: "topic" | "question"; id: string } | null` in
+  `InterviewPrepPage.tsx`, with two small adapter functions
+  (`setExpandedTopicId`/`setExpandedQuestionId`) presenting it back to
+  each section as the exact `string | null` +
+  `Dispatch<SetStateAction<string | null>>` shape
+  `InterviewTopicsSection.tsx`/`InterviewQuestionsSection.tsx` already
+  expected — neither section's own internal toggle logic needed to
+  change at all, only the state's *source* moved. **(2) AI-Suggested
+  Answer hidden by default**: the generated/failed/empty-state content
+  block is now behind its own `CollapseToggle` (Show/Hide), starting
+  collapsed — the model's text can be long and wasn't something the
+  user necessarily wanted visible immediately, unlike their own Answer.
+  Generating or regenerating auto-reveals it afterward (same "show the
+  thing you just asked for" convention as auto-expanding a newly-added
+  item elsewhere in this app) — verified live through a real Ollama
+  generation, not just the toggle mechanics. **(3) Reference Links
+  added to `InterviewTopic`** — previously Questions-only. Full stack:
+  new `reference_links` JSON column on `interview_topics` (migration
+  `b3f6a1c9d824`, same `list[{url, label}]` shape
+  `interview_questions.reference_links` already uses — the
+  `_links_to_domain`/`_links_to_json` mapping helpers in
+  `app/adapters/db/repositories/interview_prep.py` were hoisted above
+  both entities' mapping functions since they're now shared), entity/
+  service/schema/router updated to match, and a new Reference Links
+  sub-card in `InterviewTopicsSection.tsx`'s `TopicCard` — same inline
+  add-link-without-a-dialog form and `<ul>` list Questions' own
+  sub-card already uses, not a new UI pattern. `add()` deliberately
+  does **not** take `reference_links` (a new Topic starts with none,
+  added afterward via the sub-card) — same "content-heavy fields are
+  added post-creation" precedent Discussion and Questions' own Answer
+  field already established earlier the same day. **(4)
+  Confirm-before-delete on reference-link removal, both sections** —
+  reported directly by the user after testing: the "x" button on a
+  reference link deleted it immediately with zero confirmation,
+  breaking this app's own standing "every delete action confirms
+  first" convention. Retrofitted onto Questions' existing list (its
+  `removeLink` became `confirmRemoveLink`, gated behind a new
+  `deleteLinkIndex: number | null` + `ConfirmDialog`, mirroring exactly
+  how every other delete action in this app already works) and built
+  the same way into Topics' brand-new list from the start, so neither
+  section ever shipped the unconfirmed-delete behavior for real users.
+  New backend test: `test_update_saves_reference_links` (plus the two
+  pre-existing `TestUpdateAndDelete` tests updated for the new
+  `reference_links` parameter). 397 backend unit tests passing, mypy
+  clean across all 235 `app/` source files (note: running mypy against
+  the full `tests/` tree surfaces a large pre-existing backlog of
+  unrelated debt in test files this session never touched — this
+  codebase's mypy convention has always been `mypy app` plus
+  individually checking whichever specific test files were actually
+  edited, not a bulk `tests/` sweep, consistent with every other
+  `mypy` invocation logged in this file). Frontend
+  `typecheck`/`lint`/`build` all clean. Verified live end-to-end via
+  real headless-Chromium Playwright sessions against throwaway
+  Enterprise accounts: confirmed a Topic and a Question can never both
+  be open at once in either click direction, confirmed a real
+  AI-generated answer stays hidden until Shown and auto-reveals on
+  Generate, confirmed real reference links round-trip correctly through
+  both the API directly and the new Topic sub-card's UI, and confirmed
+  clicking "x" on a reference link (Topic or Question) shows a real
+  confirm dialog naming the specific link — Cancel keeps it, confirming
+  deletes only that one link and leaves the others untouched.
+- **Dashboard: Interview Prep card now shows every scope, not just
+  Master** (2026-08-16, same day) — done, verified live in dev; prod
+  not yet deployed. Reported directly by the user: "Interview Prep card
+  under Dashboard needs to be updated with stats from different
+  roles." The card (`DashboardPage.tsx`'s `InterviewPrepCard`) had
+  never been touched since its original build and only ever called
+  `useInterviewTopics()`/`useInterviewQuestions()` with no scope
+  argument (Master-only), with a `CardDescription` that literally read
+  "Master profile" — every Target Role Profile's own prep content was
+  invisible here despite being fully supported everywhere else in this
+  feature. Fixed by switching the card to the same
+  `useInterviewPrepSummary()` hook (`GET /interview-prep/summary`,
+  already built earlier the same day) the Interview Prep page's own
+  scope picker uses — one row per scope with real topic/question
+  counts, rendered in the same label-left/badges-right row style
+  `ProfileCompletenessCard`/`SkillIntelligenceCard` already established
+  on this same page, rather than inventing a new visual pattern. No new
+  backend work — purely a frontend switch from two Master-only,
+  N+1-per-scope-if-extended queries to the one endpoint that already
+  aggregates every scope in a single request. The old "N answered"
+  badge was dropped (it required per-question answer-status detail the
+  summary endpoint doesn't carry, and would have meant re-adding the
+  N+1 query shape the fix was specifically avoiding) — topic/question
+  counts per scope is the same granularity `useInterviewPrepSummary()`
+  already exposes on the Interview Prep page itself. Verified live via
+  a real headless-Chromium Playwright session against a throwaway
+  Enterprise account seeded with a real target role and both
+  Master-scoped and role-scoped topics/questions: confirmed the card
+  now shows "Across 2 scopes," a Master row with correct topic/question
+  counts, and a separate row for the real target role name with its own
+  independent counts — zero console errors. `typecheck`/`lint`/`build`
+  all clean.
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in

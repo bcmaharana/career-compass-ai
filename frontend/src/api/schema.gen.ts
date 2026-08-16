@@ -1475,6 +1475,164 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/interview-prep/topics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Interview Topics */
+        get: operations["list_interview_topics_api_v1_interview_prep_topics_get"];
+        put?: never;
+        /** Add Interview Topic */
+        post: operations["add_interview_topic_api_v1_interview_prep_topics_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interview-prep/topics/{topic_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Interview Topic */
+        delete: operations["delete_interview_topic_api_v1_interview_prep_topics__topic_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Interview Topic */
+        patch: operations["update_interview_topic_api_v1_interview_prep_topics__topic_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/interview-prep/topics/{topic_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move Interview Topic */
+        post: operations["move_interview_topic_api_v1_interview_prep_topics__topic_id__move_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interview-prep/topics/{topic_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Interview Topic Image */
+        post: operations["upload_interview_topic_image_api_v1_interview_prep_topics__topic_id__image_post"];
+        /** Delete Interview Topic Image */
+        delete: operations["delete_interview_topic_image_api_v1_interview_prep_topics__topic_id__image_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interview-prep/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Interview Questions */
+        get: operations["list_interview_questions_api_v1_interview_prep_questions_get"];
+        put?: never;
+        /** Add Interview Question */
+        post: operations["add_interview_question_api_v1_interview_prep_questions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interview-prep/questions/{question_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Interview Question */
+        delete: operations["delete_interview_question_api_v1_interview_prep_questions__question_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Interview Question */
+        patch: operations["update_interview_question_api_v1_interview_prep_questions__question_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/interview-prep/questions/{question_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move Interview Question */
+        post: operations["move_interview_question_api_v1_interview_prep_questions__question_id__move_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interview-prep/questions/{question_id}/generate-answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Interview Answer */
+        post: operations["generate_interview_answer_api_v1_interview_prep_questions__question_id__generate_answer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interview-prep/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Interview Prep Summary */
+        get: operations["get_interview_prep_summary_api_v1_interview_prep_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1518,6 +1676,11 @@ export interface components {
              * Format: uuid
              */
             import_batch_id: string;
+        };
+        /** Body_upload_interview_topic_image_api_v1_interview_prep_topics__topic_id__image_post */
+        Body_upload_interview_topic_image_api_v1_interview_prep_topics__topic_id__image_post: {
+            /** File */
+            file: string;
         };
         /** Body_upload_profile_photo_api_v1_career_profile_photo_post */
         Body_upload_profile_photo_api_v1_career_profile_photo_post: {
@@ -2165,6 +2328,121 @@ export interface components {
             /** App Env */
             app_env: string;
         };
+        /** InterviewPrepScopeSummaryResponse */
+        InterviewPrepScopeSummaryResponse: {
+            /** Target Role Id */
+            target_role_id: string | null;
+            /** Role Name */
+            role_name: string;
+            /** Topic Count */
+            topic_count: number;
+            /** Question Count */
+            question_count: number;
+        };
+        /** InterviewQuestionRequest */
+        InterviewQuestionRequest: {
+            /** Target Role Id */
+            target_role_id?: string | null;
+            /** Topic Id */
+            topic_id?: string | null;
+            /** Question */
+            question: string;
+        };
+        /** InterviewQuestionResponse */
+        InterviewQuestionResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Target Role Id */
+            target_role_id: string | null;
+            /** Topic Id */
+            topic_id: string | null;
+            /** Question */
+            question: string;
+            /** Manual Answer */
+            manual_answer: string | null;
+            /** Ai Answer */
+            ai_answer: string | null;
+            /** Ai Answer Status */
+            ai_answer_status: string | null;
+            /** Ai Answer Error */
+            ai_answer_error: string | null;
+            /** Ai Answer Generated At */
+            ai_answer_generated_at: string | null;
+            /** Reference Links */
+            reference_links: components["schemas"]["ReferenceLinkPayload"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** InterviewQuestionUpdateRequest */
+        InterviewQuestionUpdateRequest: {
+            /** Topic Id */
+            topic_id?: string | null;
+            /** Question */
+            question: string;
+            /** Manual Answer */
+            manual_answer?: string | null;
+            /**
+             * Reference Links
+             * @default []
+             */
+            reference_links: components["schemas"]["ReferenceLinkPayload"][];
+        };
+        /** InterviewTopicRequest */
+        InterviewTopicRequest: {
+            /** Target Role Id */
+            target_role_id?: string | null;
+            /** Name */
+            name: string;
+            /** Section */
+            section?: string | null;
+            /** Discussion */
+            discussion?: string | null;
+        };
+        /** InterviewTopicResponse */
+        InterviewTopicResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Target Role Id */
+            target_role_id: string | null;
+            /** Name */
+            name: string;
+            /** Section */
+            section: string | null;
+            /** Discussion */
+            discussion: string | null;
+            /** Image Url */
+            image_url: string | null;
+            /** Reference Links */
+            reference_links: components["schemas"]["ReferenceLinkPayload"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** InterviewTopicUpdateRequest */
+        InterviewTopicUpdateRequest: {
+            /** Name */
+            name: string;
+            /** Section */
+            section?: string | null;
+            /** Discussion */
+            discussion?: string | null;
+            /**
+             * Reference Links
+             * @default []
+             */
+            reference_links: components["schemas"]["ReferenceLinkPayload"][];
+        };
         /** JobListingResponse */
         JobListingResponse: {
             /** Provider Id */
@@ -2644,6 +2922,13 @@ export interface components {
              * Format: date-time
              */
             observed_at: string;
+        };
+        /** ReferenceLinkPayload */
+        ReferenceLinkPayload: {
+            /** Url */
+            url: string;
+            /** Label */
+            label: string;
         };
         /** RegisterTenantRequest */
         RegisterTenantRequest: {
@@ -6654,6 +6939,449 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_interview_topics_api_v1_interview_prep_topics_get: {
+        parameters: {
+            query?: {
+                target_role_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewTopicResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_interview_topic_api_v1_interview_prep_topics_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewTopicRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewTopicResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_interview_topic_api_v1_interview_prep_topics__topic_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_interview_topic_api_v1_interview_prep_topics__topic_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewTopicUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewTopicResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_interview_topic_api_v1_interview_prep_topics__topic_id__move_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewTopicResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_interview_topic_image_api_v1_interview_prep_topics__topic_id__image_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_interview_topic_image_api_v1_interview_prep_topics__topic_id__image_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewTopicResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_interview_topic_image_api_v1_interview_prep_topics__topic_id__image_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewTopicResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_interview_questions_api_v1_interview_prep_questions_get: {
+        parameters: {
+            query?: {
+                target_role_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewQuestionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_interview_question_api_v1_interview_prep_questions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewQuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewQuestionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_interview_question_api_v1_interview_prep_questions__question_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_interview_question_api_v1_interview_prep_questions__question_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewQuestionUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewQuestionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_interview_question_api_v1_interview_prep_questions__question_id__move_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewQuestionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_interview_answer_api_v1_interview_prep_questions__question_id__generate_answer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewQuestionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_interview_prep_summary_api_v1_interview_prep_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewPrepScopeSummaryResponse"][];
                 };
             };
         };

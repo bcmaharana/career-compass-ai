@@ -5,6 +5,7 @@ import {
   Gauge,
   GraduationCap,
   LineChart,
+  MessageCircleQuestion,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
@@ -23,6 +24,12 @@ export interface NavItem {
   purpose: string;
   /** Exact-match only (mirrors NavLink's `end` prop) — otherwise prefix match. */
   end?: boolean;
+  /** Nested pages that live under this item in the rail (a "+" toggle
+   * reveals them — see DesktopShell.tsx) rather than sitting as their
+   * own top-level entry. Only ever one level deep — this app has no
+   * need for a deeper tree yet, so the type/rendering don't try to
+   * support one. */
+  children?: NavItem[];
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -68,6 +75,14 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Learning Intelligence",
     icon: GraduationCap,
     purpose: "Track your learning log and get AI-recommended resources for your skill gaps.",
+    children: [
+      {
+        to: "/interview-prep",
+        label: "Interview Prep",
+        icon: MessageCircleQuestion,
+        purpose: "Build study notes and practice interview questions, with AI-suggested answers.",
+      },
+    ],
   },
 ];
 
@@ -149,11 +164,20 @@ export function isSettingsRoute(pathname: string): boolean {
   return pathname.startsWith("/settings");
 }
 
+/** Parents plus their children, flattened one level — everywhere that
+ * needs to *match* a pathname against the nav tree (rather than render
+ * it) doesn't care about the parent/child structure, just the full set
+ * of real destinations. */
+function flattenNavItems(items: NavItem[]): NavItem[] {
+  return items.flatMap((item) => [item, ...(item.children ?? [])]);
+}
+
 function matchAgainst(items: NavItem[], pathname: string): NavItem | undefined {
-  return [...items]
+  return [...flattenNavItems(items)]
     .sort((a, b) => b.to.length - a.to.length)
     .find((item) => (item.end ? pathname === item.to : pathname.startsWith(item.to)));
 }
+
 
 /**
  * Which nav item a given pathname belongs to — the longest matching `to`

@@ -51,6 +51,7 @@ class TestDeleteAccount:
         artifacts = TenantDeletionArtifacts(
             resume_file_keys=["resumes/t/u/r1.pdf"],
             profile_photos=[(profile_id, f"https://cdn.example.com/profile-photos/{tenant_id}/{profile_id}.jpg?v=1")],
+            interview_topic_image_keys=["interview-topics/t/topic1.jpg"],
         )
         repo = FakeAccountDeletionRepository(artifacts)
         storage = FakeObjectStorage()
@@ -61,7 +62,7 @@ class TestDeleteAccount:
         await service.execute(tenant_id=tenant_id)
 
         assert repo.deleted_tenant_ids == [tenant_id]
-        assert storage.deleted_resume_keys == ["resumes/t/u/r1.pdf"]
+        assert storage.deleted_resume_keys == ["resumes/t/u/r1.pdf", "interview-topics/t/topic1.jpg"]
         assert storage.deleted_photo_keys == [f"profile-photos/{tenant_id}/{profile_id}.jpg"]
 
     async def test_storage_failure_does_not_raise(self) -> None:
@@ -70,6 +71,7 @@ class TestDeleteAccount:
         artifacts = TenantDeletionArtifacts(
             resume_file_keys=["resumes/t/u/r1.pdf"],
             profile_photos=[(profile_id, f"https://cdn.example.com/profile-photos/{tenant_id}/{profile_id}.jpg")],
+            interview_topic_image_keys=["interview-topics/t/topic1.jpg"],
         )
         repo = FakeAccountDeletionRepository(artifacts)
         storage = FakeObjectStorage(fail_photo_delete=True, fail_resume_delete=True)
@@ -86,7 +88,9 @@ class TestDeleteAccount:
 
     async def test_no_photos_or_resumes_is_a_no_op_for_storage(self) -> None:
         tenant_id = uuid.uuid4()
-        artifacts = TenantDeletionArtifacts(resume_file_keys=[], profile_photos=[])
+        artifacts = TenantDeletionArtifacts(
+            resume_file_keys=[], profile_photos=[], interview_topic_image_keys=[]
+        )
         repo = FakeAccountDeletionRepository(artifacts)
         storage = FakeObjectStorage()
         service = DeleteAccountService(

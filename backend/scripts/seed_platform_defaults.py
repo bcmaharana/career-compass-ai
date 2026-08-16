@@ -362,6 +362,28 @@ character must be "{{" and the very last character must be "}}".
 }}
 """
 
+# {question}/{role_context}/{profile_context}/{topic_context} are filled
+# in by InterviewAnswerService via str.format() — role_context/
+# profile_context/topic_context are each either a real sentence/block or
+# an empty string, so the template reads naturally either way without
+# needing separate templates for the grounded-vs-generic case. Plain-text
+# output only (no markdown), matching every other free-text field in
+# this app.
+INTERVIEW_ANSWER_GENERATION_USE_CASE = "interview_answer_generation"
+INTERVIEW_ANSWER_GENERATION_PROMPT_TEMPLATE = """You are an interview coach inside \
+Career Compass AI, helping a candidate prepare for a real job interview{role_context}.
+
+Interview question: "{question}"
+
+{profile_context}{topic_context}
+Write a strong, concise, first-person sample answer to this interview question — aim \
+for 3-6 sentences, or a structured format like STAR if the question calls for it (e.g. \
+a behavioral "tell me about a time" question). Ground your answer in the candidate \
+background above where it gives you something concrete to draw on; otherwise, give \
+solid general guidance for answering this kind of question well. Respond with the \
+answer text only — no preamble, no meta-commentary, no markdown headers.
+"""
+
 # Catalog of selectable models (Settings > AI Model lets a user pick
 # among "active" rows). Adding a non-Anthropic/non-Ollama entry also
 # means registering its provider adapter in app/api/dependencies.py's
@@ -536,6 +558,11 @@ async def _seed_ai_platform_defaults(session: AsyncSession) -> None:
         session,
         use_case=LEARNING_RECOMMENDATIONS_USE_CASE,
         template=LEARNING_RECOMMENDATIONS_PROMPT_TEMPLATE,
+    )
+    await _seed_prompt_version(
+        session,
+        use_case=INTERVIEW_ANSWER_GENERATION_USE_CASE,
+        template=INTERVIEW_ANSWER_GENERATION_PROMPT_TEMPLATE,
     )
 
     result = await session.execute(select(ModelVersionModel))
