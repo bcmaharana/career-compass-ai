@@ -19,6 +19,9 @@ import { MoveButtons } from "@/components/ui/move-buttons";
 import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { DeleteScopeChoiceDialog } from "@/features/interview-prep/DeleteScopeChoiceDialog";
+import { ScopeTagSelector, type ScopeOption } from "@/features/interview-prep/ScopeTagSelector";
+import { groupInterviewQuestionsByCategory } from "@/lib/group-interview-questions-by-category";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { Pencil, Plus, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
@@ -27,20 +30,32 @@ import { type Dispatch, type FormEvent, type SetStateAction, useState } from "re
 type InterviewTopic = components["schemas"]["InterviewTopicResponse"];
 type InterviewQuestion = components["schemas"]["InterviewQuestionResponse"];
 type ReferenceLink = components["schemas"]["ReferenceLinkPayload"];
+type TargetRole = components["schemas"]["TargetRoleResponse"];
 
 interface FormState {
   question: string;
   topic_id: string;
+  category: string;
+  scopeTargetRoleIds: (string | null)[];
+}
+
+/** Scope label for a delete-choice dialog's "Remove from X only" —
+ * "Master" for null, the role's name otherwise. */
+function scopeLabelFor(targetRoleId: string | null, targetRoles: TargetRole[]): string {
+  if (targetRoleId === null) return "Master";
+  return targetRoles.find((r) => r.id === targetRoleId)?.role_name ?? "this role";
 }
 
 export function InterviewQuestionsSection({
   scope,
   topics,
+  targetRoles,
   expandedId,
   setExpandedId,
 }: {
   scope: string | null;
   topics: InterviewTopic[];
+  targetRoles: TargetRole[];
   // Accordion state, lifted up to InterviewPrepPage — see the matching
   // comment in InterviewTopicsSection.tsx for why.
   expandedId: string | null;
@@ -54,9 +69,19 @@ export function InterviewQuestionsSection({
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>({ question: "", topic_id: "" });
+  const [form, setForm] = useState<FormState>({
+    question: "",
+    topic_id: "",
+    category: "",
+    scopeTargetRoleIds: [scope],
+  });
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<InterviewQuestion | null>(null);
+
+  const scopeOptions: ScopeOption[] = [
+    { id: null, label: "Master (generic)" },
+    ...targetRoles.map((r) => ({ id: r.id, label: r.role_name })),
+  ];
 
   function toggleExpanded(id: string) {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -64,19 +89,25 @@ export function InterviewQuestionsSection({
 
   function openAddDialog() {
     setEditingId(null);
-    setForm({ question: "", topic_id: "" });
+    setForm({ question: "", topic_id: "", category: "", scopeTargetRoleIds: [scope] });
     setDialogOpen(true);
   }
 
   function openEditDialog(question: InterviewQuestion) {
     setEditingId(question.id);
-    setForm({ question: question.question, topic_id: question.topic_id ?? "" });
+    setForm({
+      question: question.question,
+      topic_id: question.topic_id ?? "",
+      category: question.category ?? "",
+      scopeTargetRoleIds: question.scope_target_role_ids,
+    });
     setDialogOpen(true);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const topicId = form.topic_id || null;
+    const category = form.category.trim() || null;
     if (editingId) {
       const existing = questions?.find((q) => q.id === editingId);
       updateQuestion
@@ -85,15 +116,22 @@ export function InterviewQuestionsSection({
           body: {
             question: form.question,
             topic_id: topicId,
+            category,
             manual_answer: existing?.manual_answer ?? null,
             reference_links: existing?.reference_links ?? [],
+            scope_target_role_ids: form.scopeTargetRoleIds,
           },
         })
         .then(() => setDialogOpen(false))
         .catch(() => {});
     } else {
       addQuestion
-        .mutateAsync({ target_role_id: scope, topic_id: topicId, question: form.question })
+        .mutateAsync({
+          topic_id: topicId,
+          question: form.question,
+          category,
+          scope_target_role_ids: form.scopeTargetRoleIds,
+        })
         .then((created) => {
           setDialogOpen(false);
           setExpandedId(created.id);
@@ -101,6 +139,11 @@ export function InterviewQuestionsSection({
         .catch(() => {});
     }
   }
+
+  const categoryOptions = Array.from(
+    new Set((questions ?? []).map((q) => q.category?.trim()).filter((c): c is string => !!c)),
+  );
+  const questionGroups = groupInterviewQuestionsByCategory(questions ?? []);
 
   return (
     <Card>
@@ -123,22 +166,35 @@ export function InterviewQuestionsSection({
             No interview questions yet — add one to start practicing.
           </p>
         )}
-        {questions?.map((question, index) => (
-          <QuestionCard
-            key={question.id}
-            question={question}
-            topics={topics}
-            index={index}
-            total={questions.length}
-            isEditMode={isEditMode}
-            onMove={(direction) => moveQuestion.mutate({ id: question.id, direction })}
-            moveDisabled={moveQuestion.isPending}
-            onEdit={() => openEditDialog(question)}
-            onDelete={() => setDeleteTarget(question)}
-            scope={scope}
-            isOpen={expandedId === question.id}
-            onToggleOpen={() => toggleExpanded(question.id)}
-          />
+        {questionGroups.map((group) => (
+          <div key={group.category ?? "__uncategorized"} className="flex flex-col gap-2">
+            {group.category && (
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {group.category}
+              </p>
+            )}
+            {group.questions.map((question) => {
+              const allInScope = questions ?? [];
+              const scopeIndex = allInScope.findIndex((q) => q.id === question.id);
+              return (
+                <QuestionCard
+                  key={question.id}
+                  question={question}
+                  topics={topics}
+                  index={scopeIndex}
+                  total={allInScope.length}
+                  isEditMode={isEditMode}
+                  onMove={(direction) => moveQuestion.mutate({ id: question.id, direction })}
+                  moveDisabled={moveQuestion.isPending}
+                  onEdit={() => openEditDialog(question)}
+                  onDelete={() => setDeleteTarget(question)}
+                  scope={scope}
+                  isOpen={expandedId === question.id}
+                  onToggleOpen={() => toggleExpanded(question.id)}
+                />
+              );
+            })}
+          </div>
         ))}
       </CardContent>
 
@@ -158,6 +214,21 @@ export function InterviewQuestionsSection({
               rows={3}
             />
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="question-category">Category (optional)</Label>
+            <Input
+              id="question-category"
+              list="interview-question-categories"
+              value={form.category}
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
+              placeholder="e.g. Behavioral, Technical"
+            />
+            <datalist id="interview-question-categories">
+              {categoryOptions.map((option) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
+          </div>
           {topics.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="question-topic">Related topic (optional)</Label>
@@ -175,7 +246,23 @@ export function InterviewQuestionsSection({
               </Select>
             </div>
           )}
-          <Button type="submit" disabled={addQuestion.isPending || updateQuestion.isPending}>
+          <ScopeTagSelector
+            id="question-scopes"
+            options={scopeOptions}
+            selected={form.scopeTargetRoleIds}
+            onChange={(next) => setForm({ ...form, scopeTargetRoleIds: next })}
+          />
+          {form.scopeTargetRoleIds.length === 0 && (
+            <p role="alert" className="text-sm text-destructive">
+              Select at least one scope.
+            </p>
+          )}
+          <Button
+            type="submit"
+            disabled={
+              addQuestion.isPending || updateQuestion.isPending || form.scopeTargetRoleIds.length === 0
+            }
+          >
             {addQuestion.isPending || updateQuestion.isPending
               ? "Saving..."
               : editingId
@@ -190,17 +277,35 @@ export function InterviewQuestionsSection({
         </form>
       </Dialog>
 
-      <ConfirmDialog
-        open={deleteTarget !== null}
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={() => {
-          if (deleteTarget) deleteQuestion.mutate(deleteTarget.id);
-          setDeleteTarget(null);
-        }}
-        title="Delete question?"
-        description="Remove this question, its answers, and its reference links? This can't be undone."
-        isPending={deleteQuestion.isPending}
-      />
+      {deleteTarget && deleteTarget.scope_target_role_ids.length > 1 ? (
+        <DeleteScopeChoiceDialog
+          open={deleteTarget !== null}
+          onCancel={() => setDeleteTarget(null)}
+          onRemoveFromScope={() => {
+            deleteQuestion.mutate({ id: deleteTarget.id, deleteEverywhere: false });
+            setDeleteTarget(null);
+          }}
+          onDeleteEverywhere={() => {
+            deleteQuestion.mutate({ id: deleteTarget.id, deleteEverywhere: true });
+            setDeleteTarget(null);
+          }}
+          itemLabel={deleteTarget.question}
+          scopeLabel={scopeLabelFor(scope, targetRoles)}
+          isPending={deleteQuestion.isPending}
+        />
+      ) : (
+        <ConfirmDialog
+          open={deleteTarget !== null}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => {
+            if (deleteTarget) deleteQuestion.mutate({ id: deleteTarget.id, deleteEverywhere: true });
+            setDeleteTarget(null);
+          }}
+          title="Delete question?"
+          description="Remove this question, its answers, and its reference links? This can't be undone."
+          isPending={deleteQuestion.isPending}
+        />
+      )}
     </Card>
   );
 }
@@ -270,8 +375,10 @@ function QuestionCard({
         body: {
           question: question.question,
           topic_id: question.topic_id,
+          category: question.category,
           manual_answer: manualAnswerDraft || null,
           reference_links: question.reference_links,
+          scope_target_role_ids: question.scope_target_role_ids,
         },
       },
       { onSuccess: () => setIsEditingAnswer(false) },
@@ -290,8 +397,10 @@ function QuestionCard({
       body: {
         question: question.question,
         topic_id: question.topic_id,
+        category: question.category,
         manual_answer: question.manual_answer,
         reference_links: nextLinks,
+        scope_target_role_ids: question.scope_target_role_ids,
       },
     });
     setLinkUrl("");
@@ -306,8 +415,10 @@ function QuestionCard({
       body: {
         question: question.question,
         topic_id: question.topic_id,
+        category: question.category,
         manual_answer: question.manual_answer,
         reference_links: nextLinks,
+        scope_target_role_ids: question.scope_target_role_ids,
       },
     });
     setDeleteLinkIndex(null);

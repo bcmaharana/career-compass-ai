@@ -19,8 +19,8 @@ from app.api.dependencies import (
     get_interview_question_service,
     get_interview_topic_service,
 )
-from app.api.v1.career_profile.schemas import MoveRequest
 from app.api.v1.interview_prep.schemas import (
+    InterviewPrepMoveRequest,
     InterviewPrepScopeSummaryResponse,
     InterviewQuestionRequest,
     InterviewQuestionResponse,
@@ -48,7 +48,6 @@ async def _topic_response(
     image_url = await service.get_presigned_image_url(topic)
     return InterviewTopicResponse(
         id=topic.id,
-        target_role_id=topic.target_role_id,
         name=topic.name,
         section=topic.section,
         discussion=topic.discussion,
@@ -56,6 +55,7 @@ async def _topic_response(
         reference_links=[
             ReferenceLinkPayload(url=link.url, label=link.label) for link in topic.reference_links
         ],
+        scope_target_role_ids=topic.scope_target_role_ids,
         created_at=topic.created_at,
     )
 
@@ -63,9 +63,9 @@ async def _topic_response(
 def _question_response(question: InterviewQuestion) -> InterviewQuestionResponse:
     return InterviewQuestionResponse(
         id=question.id,
-        target_role_id=question.target_role_id,
         topic_id=question.topic_id,
         question=question.question,
+        category=question.category,
         manual_answer=question.manual_answer,
         ai_answer=question.ai_answer,
         ai_answer_status=question.ai_answer_status,
@@ -74,6 +74,7 @@ def _question_response(question: InterviewQuestion) -> InterviewQuestionResponse
         reference_links=[
             ReferenceLinkPayload(url=link.url, label=link.label) for link in question.reference_links
         ],
+        scope_target_role_ids=question.scope_target_role_ids,
         created_at=question.created_at,
     )
 
@@ -103,10 +104,10 @@ async def add_interview_topic(
     topic = await service.add(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
-        target_role_id=request.target_role_id,
         name=request.name,
         section=request.section,
         discussion=request.discussion,
+        scope_target_role_ids=request.scope_target_role_ids,
     )
     return await _topic_response(service, topic)
 
@@ -126,6 +127,7 @@ async def update_interview_topic(
         section=request.section,
         discussion=request.discussion,
         reference_links=[ReferenceLink(url=link.url, label=link.label) for link in request.reference_links],
+        scope_target_role_ids=request.scope_target_role_ids,
     )
     return await _topic_response(service, topic)
 
@@ -133,32 +135,38 @@ async def update_interview_topic(
 @router.delete("/interview-prep/topics/{topic_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_interview_topic(
     topic_id: UUID,
+    target_role_id: UUID | None = None,
+    delete_everywhere: bool = False,
     identity: IdentityClaims = Depends(get_current_identity),
     service: InterviewTopicService = Depends(get_interview_topic_service),
 ) -> None:
     await service.delete(
-        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id), topic_id=topic_id
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        topic_id=topic_id,
+        target_role_id=target_role_id,
+        delete_everywhere=delete_everywhere,
     )
 
 
 @router.post("/interview-prep/topics/{topic_id}/move", response_model=list[InterviewTopicResponse])
 async def move_interview_topic(
     topic_id: UUID,
-    request: MoveRequest,
+    request: InterviewPrepMoveRequest,
     identity: IdentityClaims = Depends(get_current_identity),
     service: InterviewTopicService = Depends(get_interview_topic_service),
 ) -> list[InterviewTopicResponse]:
     tenant_id = UUID(identity.tenant_id)
     user_id = UUID(identity.user_id)
-    topic = await service.get_owned_or_raise(tenant_id=tenant_id, user_id=user_id, topic_id=topic_id)
     await service.move(
         tenant_id=tenant_id,
         user_id=user_id,
         topic_id=topic_id,
+        target_role_id=request.target_role_id,
         direction=request.direction,  # type: ignore[arg-type]
     )
     topics = await service.list_for_scope(
-        tenant_id=tenant_id, user_id=user_id, target_role_id=topic.target_role_id
+        tenant_id=tenant_id, user_id=user_id, target_role_id=request.target_role_id
     )
     return [await _topic_response(service, t) for t in topics]
 
@@ -220,9 +228,10 @@ async def add_interview_question(
     question = await service.add(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
-        target_role_id=request.target_role_id,
         topic_id=request.topic_id,
         question=request.question,
+        category=request.category,
+        scope_target_role_ids=request.scope_target_role_ids,
     )
     return _question_response(question)
 
@@ -240,8 +249,10 @@ async def update_interview_question(
         question_id=question_id,
         topic_id=request.topic_id,
         question=request.question,
+        category=request.category,
         manual_answer=request.manual_answer,
         reference_links=[ReferenceLink(url=link.url, label=link.label) for link in request.reference_links],
+        scope_target_role_ids=request.scope_target_role_ids,
     )
     return _question_response(question)
 
@@ -249,11 +260,17 @@ async def update_interview_question(
 @router.delete("/interview-prep/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_interview_question(
     question_id: UUID,
+    target_role_id: UUID | None = None,
+    delete_everywhere: bool = False,
     identity: IdentityClaims = Depends(get_current_identity),
     service: InterviewQuestionService = Depends(get_interview_question_service),
 ) -> None:
     await service.delete(
-        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id), question_id=question_id
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        question_id=question_id,
+        target_role_id=target_role_id,
+        delete_everywhere=delete_everywhere,
     )
 
 
@@ -262,23 +279,21 @@ async def delete_interview_question(
 )
 async def move_interview_question(
     question_id: UUID,
-    request: MoveRequest,
+    request: InterviewPrepMoveRequest,
     identity: IdentityClaims = Depends(get_current_identity),
     service: InterviewQuestionService = Depends(get_interview_question_service),
 ) -> list[InterviewQuestionResponse]:
     tenant_id = UUID(identity.tenant_id)
     user_id = UUID(identity.user_id)
-    question = await service.get_owned_or_raise(
-        tenant_id=tenant_id, user_id=user_id, question_id=question_id
-    )
     await service.move(
         tenant_id=tenant_id,
         user_id=user_id,
         question_id=question_id,
+        target_role_id=request.target_role_id,
         direction=request.direction,  # type: ignore[arg-type]
     )
     questions = await service.list_for_scope(
-        tenant_id=tenant_id, user_id=user_id, target_role_id=question.target_role_id
+        tenant_id=tenant_id, user_id=user_id, target_role_id=request.target_role_id
     )
     return [_question_response(q) for q in questions]
 

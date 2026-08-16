@@ -76,11 +76,21 @@ export function useUpdateInterviewTopic(scope: Scope = null) {
   });
 }
 
+/** `targetRoleId`/`deleteEverywhere` map straight to the DELETE
+ * endpoint's query params — `deleteEverywhere` only matters when the
+ * item is tagged to more than one scope (a single-scope item is always
+ * fully deleted regardless of this flag, per InterviewTopicService's
+ * own delete() semantics), but is always sent for clarity at the call
+ * site rather than left implicit. */
 export function useDeleteInterviewTopic(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiClient.delete(`/api/v1/interview-prep/topics/${id}`),
-    onSuccess: (_data, id) => {
+    mutationFn: ({ id, deleteEverywhere }: { id: string; deleteEverywhere: boolean }) => {
+      const params = new URLSearchParams({ delete_everywhere: String(deleteEverywhere) });
+      if (scope) params.set("target_role_id", scope);
+      return apiClient.delete(`/api/v1/interview-prep/topics/${id}?${params.toString()}`);
+    },
+    onSuccess: (_data, { id }) => {
       queryClient.setQueryData(
         KEYS.topics(scope),
         (old: InterviewTopicResponse[] | undefined) => old?.filter((t) => t.id !== id) ?? [],
@@ -100,6 +110,7 @@ export function useMoveInterviewTopic(scope: Scope = null) {
     mutationFn: ({ id, direction }: { id: string; direction: MoveDirection }) =>
       apiClient.post<InterviewTopicResponse[]>(`/api/v1/interview-prep/topics/${id}/move`, {
         direction,
+        target_role_id: scope,
       }),
     onSuccess: (data) => queryClient.setQueryData(KEYS.topics(scope), data),
   });
@@ -181,8 +192,12 @@ export function useUpdateInterviewQuestion(scope: Scope = null) {
 export function useDeleteInterviewQuestion(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiClient.delete(`/api/v1/interview-prep/questions/${id}`),
-    onSuccess: (_data, id) => {
+    mutationFn: ({ id, deleteEverywhere }: { id: string; deleteEverywhere: boolean }) => {
+      const params = new URLSearchParams({ delete_everywhere: String(deleteEverywhere) });
+      if (scope) params.set("target_role_id", scope);
+      return apiClient.delete(`/api/v1/interview-prep/questions/${id}?${params.toString()}`);
+    },
+    onSuccess: (_data, { id }) => {
       queryClient.setQueryData(
         KEYS.questions(scope),
         (old: InterviewQuestionResponse[] | undefined) => old?.filter((q) => q.id !== id) ?? [],
@@ -198,6 +213,7 @@ export function useMoveInterviewQuestion(scope: Scope = null) {
     mutationFn: ({ id, direction }: { id: string; direction: MoveDirection }) =>
       apiClient.post<InterviewQuestionResponse[]>(`/api/v1/interview-prep/questions/${id}/move`, {
         direction,
+        target_role_id: scope,
       }),
     onSuccess: (data) => queryClient.setQueryData(KEYS.questions(scope), data),
   });

@@ -2328,6 +2328,21 @@ export interface components {
             /** App Env */
             app_env: string;
         };
+        /**
+         * InterviewPrepMoveRequest
+         * @description Move endpoints need the scope currently being viewed, not just a
+         *     direction — reordering is independent per scope (the same item can
+         *     sit at a different position in each scope's own list), so there's
+         *     no longer a single implicit scope to derive from the item itself.
+         *     Not the shared career_profile.schemas.MoveRequest, since that extra
+         *     field is specific to this domain's multi-scope model.
+         */
+        InterviewPrepMoveRequest: {
+            /** Direction */
+            direction: string;
+            /** Target Role Id */
+            target_role_id?: string | null;
+        };
         /** InterviewPrepScopeSummaryResponse */
         InterviewPrepScopeSummaryResponse: {
             /** Target Role Id */
@@ -2341,12 +2356,14 @@ export interface components {
         };
         /** InterviewQuestionRequest */
         InterviewQuestionRequest: {
-            /** Target Role Id */
-            target_role_id?: string | null;
             /** Topic Id */
             topic_id?: string | null;
             /** Question */
             question: string;
+            /** Category */
+            category?: string | null;
+            /** Scope Target Role Ids */
+            scope_target_role_ids: (string | null)[];
         };
         /** InterviewQuestionResponse */
         InterviewQuestionResponse: {
@@ -2355,12 +2372,12 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Target Role Id */
-            target_role_id: string | null;
             /** Topic Id */
             topic_id: string | null;
             /** Question */
             question: string;
+            /** Category */
+            category: string | null;
             /** Manual Answer */
             manual_answer: string | null;
             /** Ai Answer */
@@ -2373,6 +2390,8 @@ export interface components {
             ai_answer_generated_at: string | null;
             /** Reference Links */
             reference_links: components["schemas"]["ReferenceLinkPayload"][];
+            /** Scope Target Role Ids */
+            scope_target_role_ids: (string | null)[];
             /**
              * Created At
              * Format: date-time
@@ -2385,6 +2404,8 @@ export interface components {
             topic_id?: string | null;
             /** Question */
             question: string;
+            /** Category */
+            category?: string | null;
             /** Manual Answer */
             manual_answer?: string | null;
             /**
@@ -2392,17 +2413,19 @@ export interface components {
              * @default []
              */
             reference_links: components["schemas"]["ReferenceLinkPayload"][];
+            /** Scope Target Role Ids */
+            scope_target_role_ids: (string | null)[];
         };
         /** InterviewTopicRequest */
         InterviewTopicRequest: {
-            /** Target Role Id */
-            target_role_id?: string | null;
             /** Name */
             name: string;
             /** Section */
             section?: string | null;
             /** Discussion */
             discussion?: string | null;
+            /** Scope Target Role Ids */
+            scope_target_role_ids: (string | null)[];
         };
         /** InterviewTopicResponse */
         InterviewTopicResponse: {
@@ -2411,8 +2434,6 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Target Role Id */
-            target_role_id: string | null;
             /** Name */
             name: string;
             /** Section */
@@ -2423,6 +2444,8 @@ export interface components {
             image_url: string | null;
             /** Reference Links */
             reference_links: components["schemas"]["ReferenceLinkPayload"][];
+            /** Scope Target Role Ids */
+            scope_target_role_ids: (string | null)[];
             /**
              * Created At
              * Format: date-time
@@ -2442,6 +2465,8 @@ export interface components {
              * @default []
              */
             reference_links: components["schemas"]["ReferenceLinkPayload"][];
+            /** Scope Target Role Ids */
+            scope_target_role_ids: (string | null)[];
         };
         /** JobListingResponse */
         JobListingResponse: {
@@ -7009,7 +7034,10 @@ export interface operations {
     };
     delete_interview_topic_api_v1_interview_prep_topics__topic_id__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+                delete_everywhere?: boolean;
+            };
             header?: never;
             path: {
                 topic_id: string;
@@ -7082,7 +7110,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MoveRequest"];
+                "application/json": components["schemas"]["InterviewPrepMoveRequest"];
             };
         };
         responses: {
@@ -7238,7 +7266,10 @@ export interface operations {
     };
     delete_interview_question_api_v1_interview_prep_questions__question_id__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                target_role_id?: string | null;
+                delete_everywhere?: boolean;
+            };
             header?: never;
             path: {
                 question_id: string;
@@ -7311,7 +7342,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MoveRequest"];
+                "application/json": components["schemas"]["InterviewPrepMoveRequest"];
             };
         };
         responses: {

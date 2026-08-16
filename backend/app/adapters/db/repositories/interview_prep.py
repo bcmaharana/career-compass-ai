@@ -1,21 +1,30 @@
 """SQLAlchemy repository implementations for the Interview Preparation
 domain. Mirrors the mapping-function pattern established in
-app/adapters/db/repositories/learning_intelligence.py —
-InterviewTopicRepository/InterviewQuestionRepository both mirror
-SqlAlchemyLearningItemRepository almost exactly (same user_id-scoped,
-reorderable shape).
+app/adapters/db/repositories/learning_intelligence.py for the base
+create/get/update/soft_delete shape — the scoping half is genuinely
+different, since InterviewTopic/InterviewQuestion are now tagged into
+zero-or-more scopes via InterviewTopicScopeTagModel/
+InterviewQuestionScopeTagModel rather than owning a single exclusive
+target_role_id column. See app/domain/interview_prep/entities.py's
+module docstring for the full "why".
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.db.models import InterviewQuestionModel, InterviewTopicModel
-from app.adapters.db.reorder import Direction, move_item, next_display_order
+from app.adapters.db.models import (
+    InterviewQuestionModel,
+    InterviewQuestionScopeTagModel,
+    InterviewTopicModel,
+    InterviewTopicScopeTagModel,
+)
+from app.adapters.db.reorder import Direction, next_display_order
 from app.domain.interview_prep.entities import InterviewQuestion, InterviewTopic, ReferenceLink
 
 
@@ -27,18 +36,30 @@ def _links_to_json(links: list[ReferenceLink]) -> list[dict[str, str]]:
     return [{"url": link.url, "label": link.label} for link in links]
 
 
-def _topic_to_domain(model: InterviewTopicModel) -> InterviewTopic:
+def _scope_condition(model_cls: type[Any], target_role_id: UUID | None) -> Any:
+    """`target_role_id IS NULL` needs `.is_(None)`, not `== None` —
+    shared by every scope-tag query in this module (topics and
+    questions alike). `type[Any]`/`Any` here mirror
+    app/adapters/db/reorder.py's own documented `type[Any]` trade-off
+    for the same SQLAlchemy declarative-class-typing friction."""
+    return (
+        model_cls.target_role_id == target_role_id
+        if target_role_id is not None
+        else model_cls.target_role_id.is_(None)
+    )
+
+
+def _topic_to_domain(model: InterviewTopicModel, scope_target_role_ids: list[UUID | None]) -> InterviewTopic:
     return InterviewTopic(
         id=model.id,
         tenant_id=model.tenant_id,
         user_id=model.user_id,
-        target_role_id=model.target_role_id,
         name=model.name,
         section=model.section,
         discussion=model.discussion,
         image_key=model.image_key,
         reference_links=_links_to_domain(model.reference_links),
-        display_order=model.display_order,
+        scope_target_role_ids=scope_target_role_ids,
         created_at=model.created_at,
         updated_at=model.updated_at,
         deleted_at=model.deleted_at,
@@ -49,34 +70,61 @@ class SqlAlchemyInterviewTopicRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def _tags_for(self, topic_id: UUID) -> list[UUID | None]:
+        result = await self._session.execute(
+            select(InterviewTopicScopeTagModel.target_role_id).where(
+                InterviewTopicScopeTagModel.topic_id == topic_id
+            )
+        )
+        return list(result.scalars().all())
+
+    async def _tags_for_many(self, topic_ids: list[UUID]) -> dict[UUID, list[UUID | None]]:
+        if not topic_ids:
+            return {}
+        result = await self._session.execute(
+            select(InterviewTopicScopeTagModel.topic_id, InterviewTopicScopeTagModel.target_role_id).where(
+                InterviewTopicScopeTagModel.topic_id.in_(topic_ids)
+            )
+        )
+        by_topic: dict[UUID, list[UUID | None]] = {tid: [] for tid in topic_ids}
+        for topic_id, target_role_id in result.all():
+            by_topic[topic_id].append(target_role_id)
+        return by_topic
+
     async def create(self, topic: InterviewTopic) -> InterviewTopic:
-        scope_condition = (
-            InterviewTopicModel.target_role_id == topic.target_role_id
-            if topic.target_role_id is not None
-            else InterviewTopicModel.target_role_id.is_(None)
-        )
-        order = await next_display_order(
-            self._session,
-            InterviewTopicModel,
-            tenant_id=topic.tenant_id,
-            scope_filter=(InterviewTopicModel.user_id == topic.user_id) & scope_condition,
-        )
         model = InterviewTopicModel(
             id=topic.id,
             tenant_id=topic.tenant_id,
             user_id=topic.user_id,
-            target_role_id=topic.target_role_id,
             name=topic.name,
             section=topic.section,
             discussion=topic.discussion,
             image_key=topic.image_key,
             reference_links=_links_to_json(topic.reference_links),
-            display_order=order,
         )
         self._session.add(model)
         await self._session.flush()
+
+        for target_role_id in topic.scope_target_role_ids:
+            order = await next_display_order(
+                self._session,
+                InterviewTopicScopeTagModel,
+                tenant_id=topic.tenant_id,
+                scope_filter=(InterviewTopicScopeTagModel.user_id == topic.user_id)
+                & _scope_condition(InterviewTopicScopeTagModel, target_role_id),
+            )
+            self._session.add(
+                InterviewTopicScopeTagModel(
+                    tenant_id=topic.tenant_id,
+                    user_id=topic.user_id,
+                    topic_id=topic.id,
+                    target_role_id=target_role_id,
+                    display_order=order,
+                )
+            )
+        await self._session.flush()
         await self._session.refresh(model)
-        return _topic_to_domain(model)
+        return _topic_to_domain(model, list(topic.scope_target_role_ids))
 
     async def get_by_id(self, tenant_id: UUID, topic_id: UUID) -> InterviewTopic | None:
         result = await self._session.execute(
@@ -87,27 +135,27 @@ class SqlAlchemyInterviewTopicRepository:
             )
         )
         model = result.scalar_one_or_none()
-        return _topic_to_domain(model) if model else None
+        if model is None:
+            return None
+        return _topic_to_domain(model, await self._tags_for(topic_id))
 
     async def list_for_scope(
         self, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None
     ) -> list[InterviewTopic]:
-        scope_condition = (
-            InterviewTopicModel.target_role_id == target_role_id
-            if target_role_id is not None
-            else InterviewTopicModel.target_role_id.is_(None)
-        )
         result = await self._session.execute(
             select(InterviewTopicModel)
+            .join(InterviewTopicScopeTagModel, InterviewTopicScopeTagModel.topic_id == InterviewTopicModel.id)
             .where(
                 InterviewTopicModel.tenant_id == tenant_id,
-                InterviewTopicModel.user_id == user_id,
-                scope_condition,
                 InterviewTopicModel.deleted_at.is_(None),
+                InterviewTopicScopeTagModel.user_id == user_id,
+                _scope_condition(InterviewTopicScopeTagModel, target_role_id),
             )
-            .order_by(InterviewTopicModel.display_order.asc())
+            .order_by(InterviewTopicScopeTagModel.display_order.asc())
         )
-        return [_topic_to_domain(model) for model in result.scalars().all()]
+        models = list(result.scalars().all())
+        tags_by_topic = await self._tags_for_many([m.id for m in models])
+        return [_topic_to_domain(m, tags_by_topic[m.id]) for m in models]
 
     async def update(self, topic: InterviewTopic) -> InterviewTopic:
         model = await self._session.get(InterviewTopicModel, topic.id)
@@ -117,9 +165,39 @@ class SqlAlchemyInterviewTopicRepository:
         model.discussion = topic.discussion
         model.image_key = topic.image_key
         model.reference_links = _links_to_json(topic.reference_links)
+
+        current = await self._session.execute(
+            select(InterviewTopicScopeTagModel).where(InterviewTopicScopeTagModel.topic_id == topic.id)
+        )
+        current_tags = list(current.scalars().all())
+        current_role_ids = {t.target_role_id for t in current_tags}
+        desired_role_ids = set(topic.scope_target_role_ids)
+
+        for tag in current_tags:
+            if tag.target_role_id not in desired_role_ids:
+                await self._session.delete(tag)
+
+        for target_role_id in desired_role_ids - current_role_ids:
+            order = await next_display_order(
+                self._session,
+                InterviewTopicScopeTagModel,
+                tenant_id=topic.tenant_id,
+                scope_filter=(InterviewTopicScopeTagModel.user_id == topic.user_id)
+                & _scope_condition(InterviewTopicScopeTagModel, target_role_id),
+            )
+            self._session.add(
+                InterviewTopicScopeTagModel(
+                    tenant_id=topic.tenant_id,
+                    user_id=topic.user_id,
+                    topic_id=topic.id,
+                    target_role_id=target_role_id,
+                    display_order=order,
+                )
+            )
+
         await self._session.flush()
         await self._session.refresh(model)
-        return _topic_to_domain(model)
+        return _topic_to_domain(model, list(topic.scope_target_role_ids))
 
     async def soft_delete(self, tenant_id: UUID, topic_id: UUID) -> None:
         result = await self._session.execute(
@@ -132,40 +210,70 @@ class SqlAlchemyInterviewTopicRepository:
             model.deleted_at = datetime.now(UTC)
             await self._session.flush()
 
-    async def move(self, tenant_id: UUID, topic_id: UUID, direction: Direction) -> None:
+    async def remove_scope(
+        self, tenant_id: UUID, topic_id: UUID, target_role_id: UUID | None
+    ) -> None:
+        result = await self._session.execute(
+            select(InterviewTopicScopeTagModel).where(
+                InterviewTopicScopeTagModel.tenant_id == tenant_id,
+                InterviewTopicScopeTagModel.topic_id == topic_id,
+                _scope_condition(InterviewTopicScopeTagModel, target_role_id),
+            )
+        )
+        tag = result.scalar_one_or_none()
+        if tag is not None:
+            await self._session.delete(tag)
+            await self._session.flush()
+
+    async def move(
+        self, tenant_id: UUID, topic_id: UUID, target_role_id: UUID | None, direction: Direction
+    ) -> None:
         model = await self._session.get(InterviewTopicModel, topic_id)
-        if model is None:
+        if model is None or model.deleted_at is not None:
             return
-        scope_condition = (
-            InterviewTopicModel.target_role_id == model.target_role_id
-            if model.target_role_id is not None
-            else InterviewTopicModel.target_role_id.is_(None)
+        result = await self._session.execute(
+            select(InterviewTopicScopeTagModel)
+            .join(InterviewTopicModel, InterviewTopicScopeTagModel.topic_id == InterviewTopicModel.id)
+            .where(
+                InterviewTopicScopeTagModel.tenant_id == tenant_id,
+                InterviewTopicScopeTagModel.user_id == model.user_id,
+                _scope_condition(InterviewTopicScopeTagModel, target_role_id),
+                InterviewTopicModel.deleted_at.is_(None),
+            )
+            .order_by(InterviewTopicScopeTagModel.display_order.asc())
         )
-        await move_item(
-            self._session,
-            InterviewTopicModel,
-            tenant_id=tenant_id,
-            scope_filter=(InterviewTopicModel.user_id == model.user_id) & scope_condition,
-            item_id=topic_id,
-            direction=direction,
+        tags = list(result.scalars().all())
+        index = next((i for i, t in enumerate(tags) if t.topic_id == topic_id), None)
+        if index is None:
+            return
+        neighbor_index = index - 1 if direction == "up" else index + 1
+        if neighbor_index < 0 or neighbor_index >= len(tags):
+            return
+        current_tag, neighbor_tag = tags[index], tags[neighbor_index]
+        current_tag.display_order, neighbor_tag.display_order = (
+            neighbor_tag.display_order,
+            current_tag.display_order,
         )
+        await self._session.flush()
 
 
-def _question_to_domain(model: InterviewQuestionModel) -> InterviewQuestion:
+def _question_to_domain(
+    model: InterviewQuestionModel, scope_target_role_ids: list[UUID | None]
+) -> InterviewQuestion:
     return InterviewQuestion(
         id=model.id,
         tenant_id=model.tenant_id,
         user_id=model.user_id,
-        target_role_id=model.target_role_id,
         topic_id=model.topic_id,
         question=model.question,
+        category=model.category,
         manual_answer=model.manual_answer,
         ai_answer=model.ai_answer,
         ai_answer_status=model.ai_answer_status,
         ai_answer_error=model.ai_answer_error,
         ai_answer_generated_at=model.ai_answer_generated_at,
         reference_links=_links_to_domain(model.reference_links),
-        display_order=model.display_order,
+        scope_target_role_ids=scope_target_role_ids,
         created_at=model.created_at,
         updated_at=model.updated_at,
         deleted_at=model.deleted_at,
@@ -176,37 +284,65 @@ class SqlAlchemyInterviewQuestionRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def _tags_for(self, question_id: UUID) -> list[UUID | None]:
+        result = await self._session.execute(
+            select(InterviewQuestionScopeTagModel.target_role_id).where(
+                InterviewQuestionScopeTagModel.question_id == question_id
+            )
+        )
+        return list(result.scalars().all())
+
+    async def _tags_for_many(self, question_ids: list[UUID]) -> dict[UUID, list[UUID | None]]:
+        if not question_ids:
+            return {}
+        result = await self._session.execute(
+            select(
+                InterviewQuestionScopeTagModel.question_id, InterviewQuestionScopeTagModel.target_role_id
+            ).where(InterviewQuestionScopeTagModel.question_id.in_(question_ids))
+        )
+        by_question: dict[UUID, list[UUID | None]] = {qid: [] for qid in question_ids}
+        for question_id, target_role_id in result.all():
+            by_question[question_id].append(target_role_id)
+        return by_question
+
     async def create(self, question: InterviewQuestion) -> InterviewQuestion:
-        scope_condition = (
-            InterviewQuestionModel.target_role_id == question.target_role_id
-            if question.target_role_id is not None
-            else InterviewQuestionModel.target_role_id.is_(None)
-        )
-        order = await next_display_order(
-            self._session,
-            InterviewQuestionModel,
-            tenant_id=question.tenant_id,
-            scope_filter=(InterviewQuestionModel.user_id == question.user_id) & scope_condition,
-        )
         model = InterviewQuestionModel(
             id=question.id,
             tenant_id=question.tenant_id,
             user_id=question.user_id,
-            target_role_id=question.target_role_id,
             topic_id=question.topic_id,
             question=question.question,
+            category=question.category,
             manual_answer=question.manual_answer,
             ai_answer=question.ai_answer,
             ai_answer_status=question.ai_answer_status,
             ai_answer_error=question.ai_answer_error,
             ai_answer_generated_at=question.ai_answer_generated_at,
             reference_links=_links_to_json(question.reference_links),
-            display_order=order,
         )
         self._session.add(model)
         await self._session.flush()
+
+        for target_role_id in question.scope_target_role_ids:
+            order = await next_display_order(
+                self._session,
+                InterviewQuestionScopeTagModel,
+                tenant_id=question.tenant_id,
+                scope_filter=(InterviewQuestionScopeTagModel.user_id == question.user_id)
+                & _scope_condition(InterviewQuestionScopeTagModel, target_role_id),
+            )
+            self._session.add(
+                InterviewQuestionScopeTagModel(
+                    tenant_id=question.tenant_id,
+                    user_id=question.user_id,
+                    question_id=question.id,
+                    target_role_id=target_role_id,
+                    display_order=order,
+                )
+            )
+        await self._session.flush()
         await self._session.refresh(model)
-        return _question_to_domain(model)
+        return _question_to_domain(model, list(question.scope_target_role_ids))
 
     async def get_by_id(self, tenant_id: UUID, question_id: UUID) -> InterviewQuestion | None:
         result = await self._session.execute(
@@ -217,42 +353,78 @@ class SqlAlchemyInterviewQuestionRepository:
             )
         )
         model = result.scalar_one_or_none()
-        return _question_to_domain(model) if model else None
+        if model is None:
+            return None
+        return _question_to_domain(model, await self._tags_for(question_id))
 
     async def list_for_scope(
         self, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None
     ) -> list[InterviewQuestion]:
-        scope_condition = (
-            InterviewQuestionModel.target_role_id == target_role_id
-            if target_role_id is not None
-            else InterviewQuestionModel.target_role_id.is_(None)
-        )
         result = await self._session.execute(
             select(InterviewQuestionModel)
+            .join(
+                InterviewQuestionScopeTagModel,
+                InterviewQuestionScopeTagModel.question_id == InterviewQuestionModel.id,
+            )
             .where(
                 InterviewQuestionModel.tenant_id == tenant_id,
-                InterviewQuestionModel.user_id == user_id,
-                scope_condition,
                 InterviewQuestionModel.deleted_at.is_(None),
+                InterviewQuestionScopeTagModel.user_id == user_id,
+                _scope_condition(InterviewQuestionScopeTagModel, target_role_id),
             )
-            .order_by(InterviewQuestionModel.display_order.asc())
+            .order_by(InterviewQuestionScopeTagModel.display_order.asc())
         )
-        return [_question_to_domain(model) for model in result.scalars().all()]
+        models = list(result.scalars().all())
+        tags_by_question = await self._tags_for_many([m.id for m in models])
+        return [_question_to_domain(m, tags_by_question[m.id]) for m in models]
 
     async def update(self, question: InterviewQuestion) -> InterviewQuestion:
         model = await self._session.get(InterviewQuestionModel, question.id)
         assert model is not None, "update() called with a question id that no longer exists"
         model.topic_id = question.topic_id
         model.question = question.question
+        model.category = question.category
         model.manual_answer = question.manual_answer
         model.ai_answer = question.ai_answer
         model.ai_answer_status = question.ai_answer_status
         model.ai_answer_error = question.ai_answer_error
         model.ai_answer_generated_at = question.ai_answer_generated_at
         model.reference_links = _links_to_json(question.reference_links)
+
+        current = await self._session.execute(
+            select(InterviewQuestionScopeTagModel).where(
+                InterviewQuestionScopeTagModel.question_id == question.id
+            )
+        )
+        current_tags = list(current.scalars().all())
+        current_role_ids = {t.target_role_id for t in current_tags}
+        desired_role_ids = set(question.scope_target_role_ids)
+
+        for tag in current_tags:
+            if tag.target_role_id not in desired_role_ids:
+                await self._session.delete(tag)
+
+        for target_role_id in desired_role_ids - current_role_ids:
+            order = await next_display_order(
+                self._session,
+                InterviewQuestionScopeTagModel,
+                tenant_id=question.tenant_id,
+                scope_filter=(InterviewQuestionScopeTagModel.user_id == question.user_id)
+                & _scope_condition(InterviewQuestionScopeTagModel, target_role_id),
+            )
+            self._session.add(
+                InterviewQuestionScopeTagModel(
+                    tenant_id=question.tenant_id,
+                    user_id=question.user_id,
+                    question_id=question.id,
+                    target_role_id=target_role_id,
+                    display_order=order,
+                )
+            )
+
         await self._session.flush()
         await self._session.refresh(model)
-        return _question_to_domain(model)
+        return _question_to_domain(model, list(question.scope_target_role_ids))
 
     async def soft_delete(self, tenant_id: UUID, question_id: UUID) -> None:
         result = await self._session.execute(
@@ -266,20 +438,51 @@ class SqlAlchemyInterviewQuestionRepository:
             model.deleted_at = datetime.now(UTC)
             await self._session.flush()
 
-    async def move(self, tenant_id: UUID, question_id: UUID, direction: Direction) -> None:
+    async def remove_scope(
+        self, tenant_id: UUID, question_id: UUID, target_role_id: UUID | None
+    ) -> None:
+        result = await self._session.execute(
+            select(InterviewQuestionScopeTagModel).where(
+                InterviewQuestionScopeTagModel.tenant_id == tenant_id,
+                InterviewQuestionScopeTagModel.question_id == question_id,
+                _scope_condition(InterviewQuestionScopeTagModel, target_role_id),
+            )
+        )
+        tag = result.scalar_one_or_none()
+        if tag is not None:
+            await self._session.delete(tag)
+            await self._session.flush()
+
+    async def move(
+        self, tenant_id: UUID, question_id: UUID, target_role_id: UUID | None, direction: Direction
+    ) -> None:
         model = await self._session.get(InterviewQuestionModel, question_id)
-        if model is None:
+        if model is None or model.deleted_at is not None:
             return
-        scope_condition = (
-            InterviewQuestionModel.target_role_id == model.target_role_id
-            if model.target_role_id is not None
-            else InterviewQuestionModel.target_role_id.is_(None)
+        result = await self._session.execute(
+            select(InterviewQuestionScopeTagModel)
+            .join(
+                InterviewQuestionModel,
+                InterviewQuestionScopeTagModel.question_id == InterviewQuestionModel.id,
+            )
+            .where(
+                InterviewQuestionScopeTagModel.tenant_id == tenant_id,
+                InterviewQuestionScopeTagModel.user_id == model.user_id,
+                _scope_condition(InterviewQuestionScopeTagModel, target_role_id),
+                InterviewQuestionModel.deleted_at.is_(None),
+            )
+            .order_by(InterviewQuestionScopeTagModel.display_order.asc())
         )
-        await move_item(
-            self._session,
-            InterviewQuestionModel,
-            tenant_id=tenant_id,
-            scope_filter=(InterviewQuestionModel.user_id == model.user_id) & scope_condition,
-            item_id=question_id,
-            direction=direction,
+        tags = list(result.scalars().all())
+        index = next((i for i, t in enumerate(tags) if t.question_id == question_id), None)
+        if index is None:
+            return
+        neighbor_index = index - 1 if direction == "up" else index + 1
+        if neighbor_index < 0 or neighbor_index >= len(tags):
+            return
+        current_tag, neighbor_tag = tags[index], tags[neighbor_index]
+        current_tag.display_order, neighbor_tag.display_order = (
+            neighbor_tag.display_order,
+            current_tag.display_order,
         )
+        await self._session.flush()

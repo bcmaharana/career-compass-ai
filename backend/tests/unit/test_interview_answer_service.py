@@ -52,7 +52,18 @@ class FakeInterviewQuestionRepository:
     async def soft_delete(self, tenant_id: uuid.UUID, question_id: uuid.UUID) -> None:
         self.questions.pop(question_id, None)
 
-    async def move(self, tenant_id: uuid.UUID, question_id: uuid.UUID, direction: str) -> None:
+    async def remove_scope(
+        self, tenant_id: uuid.UUID, question_id: uuid.UUID, target_role_id: uuid.UUID | None
+    ) -> None:
+        raise NotImplementedError("not exercised by these tests")
+
+    async def move(
+        self,
+        tenant_id: uuid.UUID,
+        question_id: uuid.UUID,
+        target_role_id: uuid.UUID | None,
+        direction: str,
+    ) -> None:
         pass
 
 
@@ -80,7 +91,14 @@ class FakeInterviewTopicRepository:
     async def soft_delete(self, tenant_id: uuid.UUID, topic_id: uuid.UUID) -> None:
         self.topics.pop(topic_id, None)
 
-    async def move(self, tenant_id: uuid.UUID, topic_id: uuid.UUID, direction: str) -> None:
+    async def remove_scope(
+        self, tenant_id: uuid.UUID, topic_id: uuid.UUID, target_role_id: uuid.UUID | None
+    ) -> None:
+        raise NotImplementedError("not exercised by these tests")
+
+    async def move(
+        self, tenant_id: uuid.UUID, topic_id: uuid.UUID, target_role_id: uuid.UUID | None, direction: str
+    ) -> None:
         pass
 
 
@@ -184,9 +202,8 @@ def _make_question(tenant_id: uuid.UUID, user_id: uuid.UUID, **kwargs: object) -
         id=uuid.uuid4(),
         tenant_id=tenant_id,
         user_id=user_id,
-        target_role_id=None,
         question="Tell me about yourself.",
-        display_order=0,
+        scope_target_role_ids=[None],
         created_at=now,
         updated_at=now,
     )
@@ -229,7 +246,7 @@ class TestGenerateAnswer:
         role = _make_target_role(tenant_id, user_id, "Staff Engineer")
         questions_repo = FakeInterviewQuestionRepository()
         question = await questions_repo.create(
-            _make_question(tenant_id, user_id, target_role_id=role.id)
+            _make_question(tenant_id, user_id, scope_target_role_ids=[role.id])
         )
         career_profile = CareerProfileService(
             FakeCareerProfileRepository(), FakeCareerProfileVersionRepository()
@@ -287,10 +304,9 @@ class TestGenerateAnswer:
                 id=uuid.uuid4(),
                 tenant_id=tenant_id,
                 user_id=user_id,
-                target_role_id=None,
                 name="System Design",
                 discussion="Focus on trade-offs between consistency and availability.",
-                display_order=0,
+                scope_target_role_ids=[None],
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
             )

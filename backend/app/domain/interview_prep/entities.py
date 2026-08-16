@@ -3,10 +3,29 @@
 Plain dataclasses — no SQLAlchemy, no Pydantic, no FastAPI. Mirrors the
 pattern established in app/domain/career_profile/entities.py.
 
-Both InterviewTopic and InterviewQuestion are scoped by `target_role_id:
-UUID | None` — None = generic/Master-scoped, a real id = tied to that
-specific Target Role, exactly the same split CareerProfile itself uses
-(two fully independent scopes, not a filter/view over one shared list).
+Both InterviewTopic and InterviewQuestion carry `scope_target_role_ids:
+list[UUID | None]` — the set of scopes this item is tagged into and
+visible under (None entries mean the Master/generic scope, a real id
+means a specific Target Role). This is a genuine many-to-many tagging
+model, not the single-exclusive-scope split most of this app's other
+entities use (see CareerProfile) — requested directly by the user:
+"Each question or topic can be tagged with one or more roles...
+Correcting in one place will update in others automatically." A tagged
+item is the SAME row surfaced under every scope in this list, not a
+copy — editing or deleting it affects every scope it's tagged to at
+once (deletion has an explicit "everywhere" vs "just this scope" choice
+at the service layer, see InterviewTopicService.delete). There is no
+longer a single "home"/original scope distinguished from "additional"
+tags — the full set is always freely editable, matching the user's
+explicit choice over pinning the creation-time scope.
+
+Ordering (display_order) deliberately does NOT live on these entities —
+the same item can sit at a different position in each scope's own list
+(confirmed with the user: reordering is independent per scope, not
+shared), so display_order is a property of the (item, scope) pairing,
+tracked only in the InterviewTopicScopeTag/InterviewQuestionScopeTag
+join-table rows the repository layer manages — never exposed on the
+domain entity itself.
 """
 
 from __future__ import annotations
@@ -42,11 +61,13 @@ class InterviewTopic:
     id: UUID
     tenant_id: UUID
     user_id: UUID
-    target_role_id: UUID | None  # None = generic/Master-scoped
     name: str
-    display_order: int
     created_at: datetime
     updated_at: datetime
+    #: Every scope this topic is tagged into and visible under — see
+    #: this module's own docstring. Always non-empty for a persisted
+    #: topic (enforced by InterviewTopicService, not here).
+    scope_target_role_ids: list[UUID | None] = field(default_factory=list)
     section: str | None = None
     discussion: str | None = None
     image_key: str | None = None  # private-bucket storage key, not a URL
@@ -59,18 +80,24 @@ class InterviewQuestion:
     """An interview question with a place for the user's own answer, an
     AI-generated one (read-only, regenerate-only — see
     InterviewAnswerService), a list of labeled reference links, and an
-    optional link to one of this scope's InterviewTopics.
+    optional link to one of this scope's InterviewTopics. `category` is
+    a plain free-text grouping label with no separate entity of its
+    own — same "just a string on each item" pattern
+    InterviewTopic.section already established for grouping Topics.
     """
 
     id: UUID
     tenant_id: UUID
     user_id: UUID
-    target_role_id: UUID | None  # None = generic/Master-scoped
     question: str
-    display_order: int
     created_at: datetime
     updated_at: datetime
+    #: Every scope this question is tagged into and visible under — see
+    #: this module's own docstring. Always non-empty for a persisted
+    #: question (enforced by InterviewQuestionService, not here).
+    scope_target_role_ids: list[UUID | None] = field(default_factory=list)
     topic_id: UUID | None = None
+    category: str | None = None
     manual_answer: str | None = None
     ai_answer: str | None = None
     #: None = never generated. "generated" | "failed".

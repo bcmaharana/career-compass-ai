@@ -1,7 +1,13 @@
 """SQLAlchemy ORM models for the Interview Preparation bounded context.
-Both tables are tenant-owned (tenant_id NOT NULL, RLS with exact-match
-policy — see the accompanying migration), same shape as
+All four tables are tenant-owned (tenant_id NOT NULL, RLS with
+exact-match policy — see the accompanying migrations), same shape as
 app/adapters/db/models/learning_intelligence.py.
+
+InterviewTopicModel/InterviewQuestionModel no longer carry a scoping
+column themselves — scoping is a many-to-many relationship, tracked in
+InterviewTopicScopeTagModel/InterviewQuestionScopeTagModel (see those
+classes' own docstrings, and app/domain/interview_prep/entities.py's
+module docstring for the full "why").
 """
 
 from __future__ import annotations
@@ -17,9 +23,9 @@ from app.adapters.db.base import Base
 
 
 class InterviewTopicModel(Base):
-    """A study-notes card — scoped directly by user_id, optionally tied
-    to a Target Role (target_role_id), same Master-vs-Target-Role split
-    CareerProfileModel uses."""
+    """A study-notes card — scoped by user_id plus zero or more entries
+    in InterviewTopicScopeTagModel (Master and/or one or more Target
+    Roles)."""
 
     __tablename__ = "interview_topics"
 
@@ -32,12 +38,6 @@ class InterviewTopicModel(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
-    # ON DELETE SET NULL — deleting the target role shouldn't destroy
-    # prep content, only unlink it back to generic/Master scope. Same
-    # precedent as LearningItemModel.target_role_id.
-    target_role_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("target_roles.id", ondelete="SET NULL"), nullable=True
-    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     section: Mapped[str | None] = mapped_column(String(255), nullable=True)
     discussion: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -45,7 +45,6 @@ class InterviewTopicModel(Base):
     # list[{"url": str, "label": str}] — same "nested value type inside a
     # JSON blob" pattern InterviewQuestionModel.reference_links uses.
     reference_links: Mapped[list[dict[str, str]]] = mapped_column(JSON, nullable=False, default=list)
-    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -53,9 +52,54 @@ class InterviewTopicModel(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class InterviewTopicScopeTagModel(Base):
+    """One row per scope an InterviewTopic is tagged into and visible
+    under — `target_role_id` NULL means the Master/generic scope,
+    matching the NULL-means-Master convention used elsewhere in this
+    app. `display_order` lives here, not on InterviewTopicModel,
+    because the same topic can sit at a different position in each
+    scope's own list (confirmed with the user: reordering is
+    independent per scope). `ON DELETE CASCADE` on both FKs — deleting
+    the topic or the target role just removes this one tag row, never
+    cascades further.
+
+    Two partial unique indexes (not one plain UNIQUE(topic_id,
+    target_role_id)) enforce "at most one tag per topic per scope,
+    including Master" — Postgres treats every NULL as distinct in a
+    normal unique constraint, which would otherwise silently allow
+    duplicate Master tags for the same topic. See the accompanying
+    migration for the actual index DDL (SQLAlchemy has no first-class
+    partial-unique-index construct on the model itself)."""
+
+    __tablename__ = "interview_topic_scope_tags"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False
+    )
+    # Denormalized from the parent topic — lets next_display_order()/
+    # move() scope "this user's ordered list for this scope" without a
+    # join, which matters especially for Master (target_role_id IS
+    # NULL, no owning row of its own to key off of).
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    topic_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("interview_topics.id", ondelete="CASCADE"), nullable=False
+    )
+    target_role_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("target_roles.id", ondelete="CASCADE"), nullable=True
+    )
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class InterviewQuestionModel(Base):
-    """An interview question — scoped directly by user_id, optionally
-    tied to a Target Role and/or an InterviewTopic."""
+    """An interview question — scoped by user_id plus zero or more
+    entries in InterviewQuestionScopeTagModel, optionally tied to an
+    InterviewTopic."""
 
     __tablename__ = "interview_questions"
     __table_args__ = (
@@ -74,15 +118,13 @@ class InterviewQuestionModel(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
-    target_role_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("target_roles.id", ondelete="SET NULL"), nullable=True
-    )
     # ON DELETE SET NULL — deleting a Topic un-links its questions
     # rather than deleting them.
     topic_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("interview_topics.id", ondelete="SET NULL"), nullable=True
     )
     question: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str | None] = mapped_column(String(255), nullable=True)
     manual_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_answer_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
@@ -93,9 +135,34 @@ class InterviewQuestionModel(Base):
     # list[{"url": str, "label": str}] — same "nested value type inside a
     # JSON blob" pattern CareerProfileModel.core_competencies uses.
     reference_links: Mapped[list[dict[str, str]]] = mapped_column(JSON, nullable=False, default=list)
-    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class InterviewQuestionScopeTagModel(Base):
+    """One row per scope an InterviewQuestion is tagged into — mirrors
+    InterviewTopicScopeTagModel exactly, see that class's docstring for
+    the full rationale."""
+
+    __tablename__ = "interview_question_scope_tags"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    question_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("interview_questions.id", ondelete="CASCADE"), nullable=False
+    )
+    target_role_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("target_roles.id", ondelete="CASCADE"), nullable=True
+    )
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -1,9 +1,12 @@
 """Interview Topic application service.
 
-Topics are scoped directly by user_id, optionally tied to a Target Role
-(target_role_id) — same not-found-not-forbidden ownership pattern
-CareerGoalService/LearningItemService already use. Image upload writes
-to the private object storage bucket (see
+Topics are scoped by user_id plus a many-to-many set of tagged scopes
+(scope_target_role_ids — None means Master, a real id means a specific
+Target Role; see app/domain/interview_prep/entities.py's module
+docstring for the full multi-scope-tagging design) — same
+not-found-not-forbidden ownership pattern CareerGoalService/
+LearningItemService already use for the ownership half. Image upload
+writes to the private object storage bucket (see
 app/domain/resume_intelligence/storage.py's PrivateObjectStorageRepository)
 rather than the public profile-photo bucket — a topic image could be a
 personal notes screenshot, not necessarily meant to be public.
@@ -26,6 +29,12 @@ MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5MB — same limit as profile photos
 _EXTENSION_BY_CONTENT_TYPE = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 
 
+def _dedupe_scopes(scope_target_role_ids: list[UUID | None]) -> list[UUID | None]:
+    """Preserves order while dropping duplicates — a plain `list(set(...))`
+    would both lose order and choke on `None` sorting inconsistently."""
+    return list(dict.fromkeys(scope_target_role_ids))
+
+
 class InterviewTopicService:
     def __init__(
         self, topics: InterviewTopicRepository, storage: PrivateObjectStorageRepository
@@ -46,22 +55,26 @@ class InterviewTopicService:
         *,
         tenant_id: UUID,
         user_id: UUID,
-        target_role_id: UUID | None,
         name: str,
         section: str | None,
         discussion: str | None,
+        scope_target_role_ids: list[UUID | None],
     ) -> InterviewTopic:
+        deduped = _dedupe_scopes(scope_target_role_ids)
+        if not deduped:
+            raise ValidationError(
+                "A topic must be tagged to at least one scope.", code="SCOPE_REQUIRED"
+            )
         now = datetime.now(UTC)
         return await self._topics.create(
             InterviewTopic(
                 id=uuid.uuid4(),
                 tenant_id=tenant_id,
                 user_id=user_id,
-                target_role_id=target_role_id,
                 name=name,
                 section=section,
                 discussion=sanitize_rich_text(discussion),
-                display_order=0,  # overwritten by the repository on create
+                scope_target_role_ids=deduped,
                 created_at=now,
                 updated_at=now,
             )
@@ -82,31 +95,68 @@ class InterviewTopicService:
         section: str | None,
         discussion: str | None,
         reference_links: list[ReferenceLink],
+        scope_target_role_ids: list[UUID | None],
     ) -> InterviewTopic:
+        deduped = _dedupe_scopes(scope_target_role_ids)
+        if not deduped:
+            raise ValidationError(
+                "A topic must be tagged to at least one scope.", code="SCOPE_REQUIRED"
+            )
         topic = await self.get_owned_or_raise(tenant_id=tenant_id, user_id=user_id, topic_id=topic_id)
         topic.name = name
         topic.section = section
         topic.discussion = sanitize_rich_text(discussion)
         topic.reference_links = reference_links
+        topic.scope_target_role_ids = deduped
         return await self._topics.update(topic)
 
-    async def delete(self, *, tenant_id: UUID, user_id: UUID, topic_id: UUID) -> None:
+    async def delete(
+        self,
+        *,
+        tenant_id: UUID,
+        user_id: UUID,
+        topic_id: UUID,
+        target_role_id: UUID | None,
+        delete_everywhere: bool,
+    ) -> None:
+        """Deletes the topic entirely if `delete_everywhere` is true, or
+        if it's only tagged to `target_role_id` in the first place (a
+        single-scope topic has no meaningful "just this scope" option —
+        removing its only scope leaves it invisible everywhere, which is
+        the same outcome as deleting it, so this always takes the full
+        delete path rather than leaving an orphaned zero-scope row).
+        Otherwise, untags it from just `target_role_id`, leaving it
+        intact under its other tagged scopes — the caller (API layer)
+        is expected to have already asked the user which behavior they
+        want when the topic has more than one tag; see
+        InterviewTopicResponse.scope_target_role_ids for how the
+        frontend knows whether to ask at all.
+        """
         topic = await self.get_owned_or_raise(tenant_id=tenant_id, user_id=user_id, topic_id=topic_id)
-        if topic.image_key is not None:
-            try:
-                await self._storage.delete_private(key=topic.image_key)
-            except CareerCompassError:
-                # Best-effort — the DB row is the source of truth for
-                # "does this topic have an image," same reasoning
-                # CareerProfileService.delete_photo already established.
-                pass
-        await self._topics.soft_delete(tenant_id, topic_id)
+        if delete_everywhere or len(topic.scope_target_role_ids) <= 1:
+            if topic.image_key is not None:
+                try:
+                    await self._storage.delete_private(key=topic.image_key)
+                except CareerCompassError:
+                    # Best-effort — the DB row is the source of truth for
+                    # "does this topic have an image," same reasoning
+                    # CareerProfileService.delete_photo already established.
+                    pass
+            await self._topics.soft_delete(tenant_id, topic_id)
+        else:
+            await self._topics.remove_scope(tenant_id, topic_id, target_role_id)
 
     async def move(
-        self, *, tenant_id: UUID, user_id: UUID, topic_id: UUID, direction: Direction
+        self,
+        *,
+        tenant_id: UUID,
+        user_id: UUID,
+        topic_id: UUID,
+        target_role_id: UUID | None,
+        direction: Direction,
     ) -> None:
         await self.get_owned_or_raise(tenant_id=tenant_id, user_id=user_id, topic_id=topic_id)
-        await self._topics.move(tenant_id, topic_id, direction)
+        await self._topics.move(tenant_id, topic_id, target_role_id, direction)
 
     async def upload_image(
         self,

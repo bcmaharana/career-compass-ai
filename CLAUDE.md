@@ -2882,6 +2882,167 @@ Known environment gotchas already solved, don't reintroduce:
   running prod backend, including the XSS-sanitization path (`<script>`
   stripped, `<b>` preserved) — then deleted via `DELETE /identity/me`,
   same cleanup discipline used throughout dev verification all day.
+- **Interview Preparation: Question categories** (2026-08-17) — done,
+  verified live in dev; prod not yet deployed. First of two enhancement
+  requests from the same message ("The interview questions can [be]
+  categorized... give the user the ability to add the questions to a
+  specific category, if already exists, or add the category when
+  adding the question"). Directly mirrors `InterviewTopic.section`'s
+  existing shape: a new `category: str | None` column on
+  `interview_questions` (migration `c5e91b4f7a03`), full stack (entity/
+  model/repository/service/schema/router), a datalist-of-existing-
+  values `<Input>` in the Add/Edit dialog (same UX as Topics' Section
+  field), and a new `lib/group-interview-questions-by-category.ts`
+  (line-for-line mirror of `group-interview-topics-by-section.ts`,
+  reimplemented rather than generalized since the two source types
+  differ) grouping questions by category in both the main question
+  list (category header, uncategorized questions in a trailing bucket
+  with no header) and the Table of Contents (nested one level under the
+  existing "Questions:" label, e.g. "Questions:" → "Behavioral:" →
+  the actual question links). **A real correctness risk caught before
+  shipping, not after**: `category` is optional in
+  `InterviewQuestionUpdateRequest` (Pydantic default `None`) but always
+  unconditionally applied by the service/router — meaning any partial
+  update that didn't explicitly resend the existing category would
+  silently wipe it. Threaded `category: question.category` through
+  every one of `InterviewQuestionsSection.tsx`'s partial-update call
+  sites (Save Answer, Add Link, Remove Link), the same "resend
+  unchanged fields too" convention this app already established for
+  `manual_answer`/`reference_links` in this exact file. 2 new backend
+  unit tests (`test_adds_a_question_with_a_category`,
+  `test_category_defaults_to_none`), full 399-test backend suite
+  passing, mypy clean across all 235 `app/` source files. Frontend
+  `typecheck`/`lint`/`build` all clean. Verified live via a real
+  headless-Chromium Playwright session against a throwaway Enterprise
+  account: added two questions under the same "Behavioral" category via
+  datalist reuse and confirmed a single shared header (not duplicated),
+  confirmed the Table of Contents shows the nested category sub-header,
+  and confirmed editing a previously-uncategorized question into an
+  existing category correctly re-groups it under that same single
+  header — zero console errors.
+- **Interview Preparation: multi-role/Master scope tagging** (2026-08-17,
+  same day) — done, verified live in dev; prod not yet deployed. The
+  second of the two enhancement requests from the same message: "Each
+  question or topic can be tagged with one or more roles... When tagged
+  to a role apart from the current role, the particular item will be
+  available in that role as well. Correcting in one place will update
+  in others automatically." Genuinely new territory for this domain —
+  Topics and Questions went from a single scalar `target_role_id`
+  (`None` = Master) to a real many-to-many tagging model. Four design
+  questions were asked and answered directly rather than assumed:
+  **Master is a selectable tag alongside real Target Roles** (not
+  role-only); the multi-select is a **fully flat, freely editable set**
+  — no distinguished "home" scope, the scope an item was created under
+  can be unchecked same as any other; delete asks **"remove from just
+  this scope, or delete everywhere it's tagged"** (the user's own
+  words, driving a real 3-way delete UX rather than a plain yes/no);
+  and reordering is **independent per scope** — moving an item in one
+  scope's list never touches its position in another scope's list.
+  **Backend — full replacement, not an additive column**: `target_role_id`
+  and `display_order` were removed from `interview_topics`/
+  `interview_questions` entirely, replaced by two new join tables,
+  `interview_topic_scope_tags`/`interview_question_scope_tags`
+  (migration `d4a8f21e6c37`) — `(item_id, target_role_id nullable)` per
+  tag row, each carrying its **own** `display_order` (the mechanism
+  behind independent per-scope ordering). Two partial unique indexes
+  per table (`WHERE target_role_id IS NOT NULL` / `WHERE target_role_id
+  IS NULL`) enforce "at most one tag per item per scope" — a plain
+  `UNIQUE(item_id, target_role_id)` constraint would silently allow
+  duplicate Master tags, since Postgres treats every `NULL` as distinct.
+  **A real design bug caught before running any tests, not by review**:
+  the tag tables initially had no `user_id` column — without one,
+  computing "next display_order for this user's Master-scoped items"
+  has no `TargetRole` row to join against for user-filtering (Master
+  has `target_role_id IS NULL`), which would have silently pooled every
+  user's Master-tagged items into one shared, cross-user ordering
+  sequence. Fixed pre-emptively (caught via reasoning about the
+  `next_display_order` query shape, not a failing test) by adding a
+  denormalized `user_id` to both tag tables before ever running
+  `alembic upgrade head` against real data. `InterviewTopic`/
+  `InterviewQuestion` entities now carry `scope_target_role_ids:
+  list[UUID | None]` instead of a single `target_role_id`; both
+  services gained `_dedupe_scopes()` (order-preserving,
+  `list(dict.fromkeys(...))`) and reject an empty scope list with
+  `ValidationError(code="SCOPE_REQUIRED")` — an item tagged to nothing
+  would be unreachable from any page. `delete()` on both services now
+  takes `target_role_id` (the scope currently being viewed) and
+  `delete_everywhere: bool`: a full soft-delete fires when
+  `delete_everywhere` is true OR the item only has one scope tag left
+  (removing its only tag and deleting it are the same outcome), else a
+  new `remove_scope()` repository method deletes just that one tag row,
+  leaving the item fully intact under its other tags. `move()` is a
+  bespoke swap directly against the tag table (not reusing
+  `reorder.py`'s `move_item`, since tag rows have no `deleted_at`) —
+  queries same-scope, same-user tag rows joined to the not-deleted item
+  table, swaps `display_order` with the correct neighbor.
+  `InterviewAnswerService` (AI generation) now grounds on the first
+  real (non-Master) tagged role, falling back to Master profile context
+  if the item is Master-only — deliberately not blending every tagged
+  role's context into one generation call. Both new tag tables get
+  `ON DELETE CASCADE` on the item FK and the target-role FK — deleting
+  a Topic/Question or a TargetRole just removes that one tag row, which
+  also means `account_deletion.py` needed **no new cleanup code** for
+  the tag tables at all (only a stale comment naming the old
+  `ON DELETE SET NULL` behavior was fixed) — confirmed, not assumed.
+  55 backend unit tests across the 4 interview-prep test files rewritten
+  for the new multi-scope fake-repository shape (`FakeInterviewTopicRepository`/
+  `FakeInterviewQuestionRepository` now simulate the join table as
+  `dict[item_id, dict[scope, display_order]]`), full 417-test backend
+  suite passing, mypy clean across all 235 source files. **Verified live
+  via direct HTTP calls before any frontend work began** (throwaway
+  Enterprise account, deleted afterward): a topic tagged `[null,
+  role_id]` appeared identically (same `id`) under both `GET
+  .../topics` (Master) and `?target_role_id=<role_id>`; a `PATCH` made
+  while viewing the role scope was immediately visible from the Master
+  GET too (same underlying row); `DELETE ...?delete_everywhere=false`
+  from Master removed it from the Master list while it stayed visible
+  under the role; a follow-up `DELETE
+  ...?target_role_id=<role_id>&delete_everywhere=true` removed it from
+  there too; moving an item "up" with `target_role_id=<role_id>` in the
+  move request body reordered the role-scoped list while the
+  Master-scoped list's order stayed untouched — independent per-scope
+  ordering confirmed at the API level, not just reasoned about.
+  **Frontend**: two new shared components — `ScopeTagSelector.tsx`
+  (plain checkbox multi-select, no heavy UI kit, matching this app's
+  hand-rolled-primitives convention) and `DeleteScopeChoiceDialog.tsx`
+  (Cancel / "Remove from {scope} only" / "Delete everywhere", shown
+  only when the item being deleted has more than one scope tag — a
+  single-scope item still uses the plain `ConfirmDialog` as before,
+  since "remove its only scope" and "delete everywhere" are the same
+  outcome there). Both `InterviewTopicsSection.tsx`/
+  `InterviewQuestionsSection.tsx` gained a `targetRoles` prop (threaded
+  from `InterviewPrepPage.tsx`'s already-fetched `useTargetRoles()`,
+  no new fetch), a `scopeLabelFor()` helper for the delete dialog's
+  "Remove from X only" label, and every one of their internal
+  `update()` call sites — the Add/Edit dialog's own submit, plus each
+  card's Discussion/Answer-save, Add-link, and Remove-link
+  mini-mutations — now resend `scope_target_role_ids` alongside every
+  other already-established "resend unchanged fields too" field
+  (`reference_links`, `manual_answer`, `category`/`section`), same
+  convention this file already documents for this exact pair of
+  components. Query hooks
+  (`frontend/src/api/queries/interview-prep.ts`) changed shape too:
+  `useDeleteInterviewTopic`/`useDeleteInterviewQuestion`'s mutation
+  functions now take `{id, deleteEverywhere}` instead of a bare id, and
+  send `target_role_id`/`delete_everywhere` as query params. Verified
+  live via two separate real headless-Chromium Playwright sessions
+  (one for Topics, one for Questions — throwaway Enterprise accounts,
+  each deleted via `DELETE /identity/me` afterward), 19 checks total,
+  all passing, zero console errors either run: tagging a new item to
+  both Master and a real Target Role via the checkbox UI and confirming
+  the exact same row (not a copy) appears under both scopes; editing
+  while viewing the non-Master scope and confirming the edit is visible
+  from Master immediately after switching (same underlying row, no
+  refetch-lag); the delete-scope-choice dialog appearing only for a
+  multi-tagged item, "remove from this scope only" leaving the item
+  intact under its other tag, and a follow-up "delete everywhere"
+  actually removing it from every scope; a single-scope item correctly
+  using the plain `ConfirmDialog` instead (Questions run, explicit
+  check); and, Topics-only, adding a second multi-tagged item and
+  moving it up while viewing the Target Role scope, confirming the
+  Target-Role-scoped list's order changed while the Master-scoped
+  list's order was completely unaffected — independent per-scope
+  reordering confirmed through the real UI, not just the API.
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in

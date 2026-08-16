@@ -1,6 +1,11 @@
 """Unit tests for InterviewTopicService — fake repository/storage, no
 database, no real object storage. Mirrors the fake-repository pattern
 established in tests/unit/test_target_role_service.py.
+
+FakeInterviewTopicRepository simulates the real many-to-many scope-tag
+join table as a plain `dict[topic_id, dict[target_role_id, display_order]]`
+— close enough to the real SqlAlchemyInterviewTopicRepository's shape
+(same list_for_scope/move/remove_scope semantics) without a database.
 """
 
 from __future__ import annotations
@@ -23,50 +28,79 @@ pytestmark = pytest.mark.unit
 class FakeInterviewTopicRepository:
     def __init__(self) -> None:
         self.topics: dict[uuid.UUID, InterviewTopic] = {}
-        self._order_counter = 0
+        self.tags: dict[uuid.UUID, dict[uuid.UUID | None, int]] = {}
+        self._order_counters: dict[tuple[uuid.UUID, uuid.UUID | None], int] = {}
+
+    def _next_order(self, user_id: uuid.UUID, target_role_id: uuid.UUID | None) -> int:
+        key = (user_id, target_role_id)
+        self._order_counters[key] = self._order_counters.get(key, 0) + 1
+        return self._order_counters[key]
 
     async def create(self, topic: InterviewTopic) -> InterviewTopic:
-        self._order_counter += 1
-        topic.display_order = self._order_counter
         self.topics[topic.id] = topic
+        self.tags[topic.id] = {
+            rid: self._next_order(topic.user_id, rid) for rid in topic.scope_target_role_ids
+        }
         return topic
 
     async def get_by_id(self, tenant_id: uuid.UUID, topic_id: uuid.UUID) -> InterviewTopic | None:
         topic = self.topics.get(topic_id)
-        return topic if topic and topic.tenant_id == tenant_id else None
+        if topic is None or topic.tenant_id != tenant_id:
+            return None
+        topic.scope_target_role_ids = list(self.tags.get(topic_id, {}).keys())
+        return topic
 
     async def list_for_scope(
         self, tenant_id: uuid.UUID, user_id: uuid.UUID, target_role_id: uuid.UUID | None
     ) -> list[InterviewTopic]:
-        return sorted(
-            (
-                t
-                for t in self.topics.values()
-                if t.tenant_id == tenant_id
-                and t.user_id == user_id
-                and t.target_role_id == target_role_id
-            ),
-            key=lambda t: t.display_order,
-        )
+        matches: list[tuple[int, InterviewTopic]] = []
+        for topic_id, tag_map in self.tags.items():
+            if target_role_id not in tag_map:
+                continue
+            topic = self.topics.get(topic_id)
+            if topic is None or topic.tenant_id != tenant_id or topic.user_id != user_id:
+                continue
+            matches.append((tag_map[target_role_id], topic))
+        matches.sort(key=lambda pair: pair[0])
+        for _, topic in matches:
+            topic.scope_target_role_ids = list(self.tags[topic.id].keys())
+        return [topic for _, topic in matches]
 
     async def update(self, topic: InterviewTopic) -> InterviewTopic:
         self.topics[topic.id] = topic
+        current = self.tags.setdefault(topic.id, {})
+        desired = set(topic.scope_target_role_ids)
+        for rid in list(current.keys()):
+            if rid not in desired:
+                del current[rid]
+        for rid in desired - set(current.keys()):
+            current[rid] = self._next_order(topic.user_id, rid)
         return topic
 
     async def soft_delete(self, tenant_id: uuid.UUID, topic_id: uuid.UUID) -> None:
         self.topics.pop(topic_id, None)
+        self.tags.pop(topic_id, None)
 
-    async def move(self, tenant_id: uuid.UUID, topic_id: uuid.UUID, direction: str) -> None:
-        items = await self.list_for_scope(
-            tenant_id, self.topics[topic_id].user_id, self.topics[topic_id].target_role_id
-        )
-        index = next(i for i, t in enumerate(items) if t.id == topic_id)
+    async def remove_scope(
+        self, tenant_id: uuid.UUID, topic_id: uuid.UUID, target_role_id: uuid.UUID | None
+    ) -> None:
+        if topic_id in self.tags:
+            self.tags[topic_id].pop(target_role_id, None)
+
+    async def move(
+        self, tenant_id: uuid.UUID, topic_id: uuid.UUID, target_role_id: uuid.UUID | None, direction: str
+    ) -> None:
+        items = await self.list_for_scope(tenant_id, self.topics[topic_id].user_id, target_role_id)
+        index = next((i for i, t in enumerate(items) if t.id == topic_id), None)
+        if index is None:
+            return
         neighbor_index = index - 1 if direction == "up" else index + 1
         if neighbor_index < 0 or neighbor_index >= len(items):
             return
-        items[index].display_order, items[neighbor_index].display_order = (
-            items[neighbor_index].display_order,
-            items[index].display_order,
+        neighbor_id = items[neighbor_index].id
+        self.tags[topic_id][target_role_id], self.tags[neighbor_id][target_role_id] = (
+            self.tags[neighbor_id][target_role_id],
+            self.tags[topic_id][target_role_id],
         )
 
 
@@ -96,9 +130,8 @@ def _make_topic(tenant_id: uuid.UUID, user_id: uuid.UUID, **kwargs: object) -> I
         id=uuid.uuid4(),
         tenant_id=tenant_id,
         user_id=user_id,
-        target_role_id=None,
         name="System Design",
-        display_order=0,
+        scope_target_role_ids=[None],
         created_at=now,
         updated_at=now,
     )
@@ -115,10 +148,10 @@ class TestAdd:
         topic = await service.add(
             tenant_id=tenant_id,
             user_id=user_id,
-            target_role_id=None,
             name="System Design",
             section="Technical",
             discussion="Notes here.",
+            scope_target_role_ids=[None],
         )
 
         assert topic.name == "System Design"
@@ -133,13 +166,65 @@ class TestAdd:
         topic = await service.add(
             tenant_id=tenant_id,
             user_id=user_id,
-            target_role_id=None,
             name="System Design",
             section=None,
             discussion='<i>Notes</i><script>alert(1)</script>',
+            scope_target_role_ids=[None],
         )
 
         assert topic.discussion == "<i>Notes</i>alert(1)"
+
+    async def test_rejects_an_empty_scope_list(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        service = InterviewTopicService(FakeInterviewTopicRepository(), FakePrivateObjectStorage())
+
+        with pytest.raises(ValidationError):
+            await service.add(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                name="System Design",
+                section=None,
+                discussion=None,
+                scope_target_role_ids=[],
+            )
+
+    async def test_tags_into_multiple_scopes_including_master_and_a_role(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        role_id = uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        service = InterviewTopicService(repo, FakePrivateObjectStorage())
+
+        topic = await service.add(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            name="Cross-tagged topic",
+            section=None,
+            discussion=None,
+            scope_target_role_ids=[None, role_id],
+        )
+
+        assert set(topic.scope_target_role_ids) == {None, role_id}
+        master_list = await repo.list_for_scope(tenant_id, user_id, None)
+        role_list = await repo.list_for_scope(tenant_id, user_id, role_id)
+        assert [t.id for t in master_list] == [topic.id]
+        assert [t.id for t in role_list] == [topic.id]
+
+    async def test_duplicate_scopes_are_deduplicated(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        role_id = uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        service = InterviewTopicService(repo, FakePrivateObjectStorage())
+
+        topic = await service.add(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            name="Deduped topic",
+            section=None,
+            discussion=None,
+            scope_target_role_ids=[role_id, role_id, role_id],
+        )
+
+        assert topic.scope_target_role_ids == [role_id]
 
 
 class TestUpdateAndDelete:
@@ -157,6 +242,7 @@ class TestUpdateAndDelete:
             section=None,
             discussion='<span style="color: red; background: url(x)">colored</span>',
             reference_links=[],
+            scope_target_role_ids=[None],
         )
 
         assert updated.discussion == '<span style="color: red;">colored</span>'
@@ -175,6 +261,7 @@ class TestUpdateAndDelete:
             section=None,
             discussion=None,
             reference_links=[ReferenceLink(url="https://example.com", label="Example")],
+            scope_target_role_ids=[None],
         )
 
         assert updated.reference_links == [ReferenceLink(url="https://example.com", label="Example")]
@@ -194,7 +281,124 @@ class TestUpdateAndDelete:
                 section=None,
                 discussion=None,
                 reference_links=[],
+                scope_target_role_ids=[None],
             )
+
+    async def test_update_rejects_an_empty_scope_list(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        topic = await repo.create(_make_topic(tenant_id, user_id))
+        service = InterviewTopicService(repo, FakePrivateObjectStorage())
+
+        with pytest.raises(ValidationError):
+            await service.update(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                topic_id=topic.id,
+                name=topic.name,
+                section=None,
+                discussion=None,
+                reference_links=[],
+                scope_target_role_ids=[],
+            )
+
+    async def test_update_can_add_a_scope_tag(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        role_id = uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        topic = await repo.create(_make_topic(tenant_id, user_id))  # Master only
+        service = InterviewTopicService(repo, FakePrivateObjectStorage())
+
+        updated = await service.update(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            topic_id=topic.id,
+            name=topic.name,
+            section=None,
+            discussion=None,
+            reference_links=[],
+            scope_target_role_ids=[None, role_id],
+        )
+
+        assert set(updated.scope_target_role_ids) == {None, role_id}
+        role_list = await repo.list_for_scope(tenant_id, user_id, role_id)
+        assert [t.id for t in role_list] == [topic.id]
+
+    async def test_update_can_remove_the_original_scope_entirely(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        role_id = uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        topic = await repo.create(_make_topic(tenant_id, user_id))  # Master only
+        service = InterviewTopicService(repo, FakePrivateObjectStorage())
+
+        updated = await service.update(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            topic_id=topic.id,
+            name=topic.name,
+            section=None,
+            discussion=None,
+            reference_links=[],
+            scope_target_role_ids=[role_id],
+        )
+
+        assert updated.scope_target_role_ids == [role_id]
+        master_list = await repo.list_for_scope(tenant_id, user_id, None)
+        assert master_list == []
+
+    async def test_delete_removes_everywhere_when_only_one_scope(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        topic = await repo.create(_make_topic(tenant_id, user_id))
+        service = InterviewTopicService(repo, FakePrivateObjectStorage())
+
+        await service.delete(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            topic_id=topic.id,
+            target_role_id=None,
+            delete_everywhere=False,
+        )
+
+        assert topic.id not in repo.topics
+
+    async def test_delete_from_just_this_scope_leaves_the_topic_visible_elsewhere(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        role_id = uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        topic = await repo.create(_make_topic(tenant_id, user_id, scope_target_role_ids=[None, role_id]))
+        service = InterviewTopicService(repo, FakePrivateObjectStorage())
+
+        await service.delete(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            topic_id=topic.id,
+            target_role_id=None,
+            delete_everywhere=False,
+        )
+
+        assert topic.id in repo.topics
+        master_list = await repo.list_for_scope(tenant_id, user_id, None)
+        role_list = await repo.list_for_scope(tenant_id, user_id, role_id)
+        assert master_list == []
+        assert [t.id for t in role_list] == [topic.id]
+
+    async def test_delete_everywhere_removes_it_from_every_tagged_scope(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        role_id = uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        topic = await repo.create(_make_topic(tenant_id, user_id, scope_target_role_ids=[None, role_id]))
+        service = InterviewTopicService(repo, FakePrivateObjectStorage())
+
+        await service.delete(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            topic_id=topic.id,
+            target_role_id=None,
+            delete_everywhere=True,
+        )
+
+        assert topic.id not in repo.topics
 
     async def test_delete_best_effort_removes_image(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
@@ -203,7 +407,13 @@ class TestUpdateAndDelete:
         storage = FakePrivateObjectStorage()
         service = InterviewTopicService(repo, storage)
 
-        await service.delete(tenant_id=tenant_id, user_id=user_id, topic_id=topic.id)
+        await service.delete(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            topic_id=topic.id,
+            target_role_id=None,
+            delete_everywhere=False,
+        )
 
         assert storage.deleted_keys == ["interview-topics/x.jpg"]
         assert topic.id not in repo.topics
@@ -215,7 +425,13 @@ class TestUpdateAndDelete:
         storage = FakePrivateObjectStorage(fail_delete=True)
         service = InterviewTopicService(repo, storage)
 
-        await service.delete(tenant_id=tenant_id, user_id=user_id, topic_id=topic.id)
+        await service.delete(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            topic_id=topic.id,
+            target_role_id=None,
+            delete_everywhere=False,
+        )
 
         assert topic.id not in repo.topics
 
@@ -228,10 +444,39 @@ class TestMove:
         second = await repo.create(_make_topic(tenant_id, user_id, name="Second"))
         service = InterviewTopicService(repo, FakePrivateObjectStorage())
 
-        await service.move(tenant_id=tenant_id, user_id=user_id, topic_id=second.id, direction="up")
+        await service.move(
+            tenant_id=tenant_id, user_id=user_id, topic_id=second.id, target_role_id=None, direction="up"
+        )
 
         ordered = await repo.list_for_scope(tenant_id, user_id, None)
         assert [t.id for t in ordered] == [second.id, first.id]
+
+    async def test_move_is_independent_per_scope(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        role_id = uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        # Both topics tagged to Master AND role_id, in the same relative order.
+        first = await repo.create(
+            _make_topic(tenant_id, user_id, name="First", scope_target_role_ids=[None, role_id])
+        )
+        second = await repo.create(
+            _make_topic(tenant_id, user_id, name="Second", scope_target_role_ids=[None, role_id])
+        )
+        service = InterviewTopicService(repo, FakePrivateObjectStorage())
+
+        # Move "second" up only within the role_id scope.
+        await service.move(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            topic_id=second.id,
+            target_role_id=role_id,
+            direction="up",
+        )
+
+        role_ordered = await repo.list_for_scope(tenant_id, user_id, role_id)
+        master_ordered = await repo.list_for_scope(tenant_id, user_id, None)
+        assert [t.id for t in role_ordered] == [second.id, first.id]
+        assert [t.id for t in master_ordered] == [first.id, second.id]
 
 
 class TestUploadImage:

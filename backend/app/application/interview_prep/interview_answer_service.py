@@ -56,15 +56,25 @@ class InterviewAnswerService:
                 "Interview question not found.", code="INTERVIEW_QUESTION_NOT_FOUND"
             )
 
+        # A question can now be tagged to more than one scope — ground
+        # against the first real Target Role it's tagged to (in tag
+        # order, i.e. whichever was added first), falling back to the
+        # Master profile if it's only tagged to Master (or has no real
+        # role tags at all). Blending context from every tagged role
+        # would be more "complete" but adds real complexity for a
+        # single generated answer that doesn't need it.
+        target_role_id = next(
+            (rid for rid in question.scope_target_role_ids if rid is not None), None
+        )
         role_context = ""
-        if question.target_role_id is not None:
+        if target_role_id is not None:
             role = await self._target_roles.get_owned_or_raise(
-                tenant_id=tenant_id, user_id=user_id, target_role_id=question.target_role_id
+                tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
             )
             role_context = f" for the \"{role.role_name}\" role"
 
         profile = await self._career_profile.get_or_create(
-            tenant_id=tenant_id, user_id=user_id, target_role_id=question.target_role_id
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
         )
         profile_lines: list[str] = []
         if profile.headline:

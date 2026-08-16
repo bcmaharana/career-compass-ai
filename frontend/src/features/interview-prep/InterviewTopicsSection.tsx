@@ -18,6 +18,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
 import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
+import { DeleteScopeChoiceDialog } from "@/features/interview-prep/DeleteScopeChoiceDialog";
+import { ScopeTagSelector, type ScopeOption } from "@/features/interview-prep/ScopeTagSelector";
 import { groupInterviewTopicsBySection } from "@/lib/group-interview-topics-by-section";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
@@ -26,24 +28,37 @@ import { type Dispatch, type FormEvent, type SetStateAction, useRef, useState } 
 
 type InterviewTopic = components["schemas"]["InterviewTopicResponse"];
 type ReferenceLink = components["schemas"]["ReferenceLinkPayload"];
+type TargetRole = components["schemas"]["TargetRoleResponse"];
 
 interface FormState {
   name: string;
   section: string;
+  scopeTargetRoleIds: (string | null)[];
 }
 
-const EMPTY_FORM: FormState = { name: "", section: "" };
-
 function toFormState(topic: InterviewTopic): FormState {
-  return { name: topic.name, section: topic.section ?? "" };
+  return {
+    name: topic.name,
+    section: topic.section ?? "",
+    scopeTargetRoleIds: topic.scope_target_role_ids,
+  };
+}
+
+/** Scope label for a delete-choice dialog's "Remove from X only" —
+ * "Master" for null, the role's name otherwise. */
+function scopeLabelFor(targetRoleId: string | null, targetRoles: TargetRole[]): string {
+  if (targetRoleId === null) return "Master";
+  return targetRoles.find((r) => r.id === targetRoleId)?.role_name ?? "this role";
 }
 
 export function InterviewTopicsSection({
   scope,
+  targetRoles,
   expandedId,
   setExpandedId,
 }: {
   scope: string | null;
+  targetRoles: TargetRole[];
   // Accordion state, lifted up to InterviewPrepPage so the page's Table
   // of Contents can force a specific topic open (and scroll to it)
   // without going through this component's own toggle semantics — a TOC
@@ -62,11 +77,16 @@ export function InterviewTopicsSection({
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [form, setForm] = useState<FormState>({ name: "", section: "", scopeTargetRoleIds: [scope] });
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<InterviewTopic | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   const fileInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+
+  const scopeOptions: ScopeOption[] = [
+    { id: null, label: "Master (generic)" },
+    ...targetRoles.map((r) => ({ id: r.id, label: r.role_name })),
+  ];
 
   function toggleExpanded(id: string) {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -74,7 +94,7 @@ export function InterviewTopicsSection({
 
   function openAddDialog() {
     setEditingId(null);
-    setForm(EMPTY_FORM);
+    setForm({ name: "", section: "", scopeTargetRoleIds: [scope] });
     setDialogOpen(true);
   }
 
@@ -98,13 +118,14 @@ export function InterviewTopicsSection({
             section,
             discussion: existing?.discussion ?? null,
             reference_links: existing?.reference_links ?? [],
+            scope_target_role_ids: form.scopeTargetRoleIds,
           },
         })
         .then(() => setDialogOpen(false))
         .catch(() => {});
     } else {
       addTopic
-        .mutateAsync({ name, section, discussion: null, target_role_id: scope })
+        .mutateAsync({ name, section, discussion: null, scope_target_role_ids: form.scopeTargetRoleIds })
         .then((created) => {
           setDialogOpen(false);
           setExpandedId(created.id);
@@ -221,7 +242,23 @@ export function InterviewTopicsSection({
               ))}
             </datalist>
           </div>
-          <Button type="submit" disabled={addTopic.isPending || updateTopic.isPending}>
+          <ScopeTagSelector
+            id="topic-scopes"
+            options={scopeOptions}
+            selected={form.scopeTargetRoleIds}
+            onChange={(next) => setForm({ ...form, scopeTargetRoleIds: next })}
+          />
+          {form.scopeTargetRoleIds.length === 0 && (
+            <p role="alert" className="text-sm text-destructive">
+              Select at least one scope.
+            </p>
+          )}
+          <Button
+            type="submit"
+            disabled={
+              addTopic.isPending || updateTopic.isPending || form.scopeTargetRoleIds.length === 0
+            }
+          >
             {addTopic.isPending || updateTopic.isPending
               ? "Saving..."
               : editingId
@@ -236,21 +273,39 @@ export function InterviewTopicsSection({
         </form>
       </Dialog>
 
-      <ConfirmDialog
-        open={deleteTarget !== null}
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={() => {
-          if (deleteTarget) deleteTopic.mutate(deleteTarget.id);
-          setDeleteTarget(null);
-        }}
-        title="Delete topic?"
-        description={
-          deleteTarget
-            ? `Remove "${deleteTarget.name}"? Any questions linked to it will be un-linked, not deleted. This can't be undone.`
-            : ""
-        }
-        isPending={deleteTopic.isPending}
-      />
+      {deleteTarget && deleteTarget.scope_target_role_ids.length > 1 ? (
+        <DeleteScopeChoiceDialog
+          open={deleteTarget !== null}
+          onCancel={() => setDeleteTarget(null)}
+          onRemoveFromScope={() => {
+            deleteTopic.mutate({ id: deleteTarget.id, deleteEverywhere: false });
+            setDeleteTarget(null);
+          }}
+          onDeleteEverywhere={() => {
+            deleteTopic.mutate({ id: deleteTarget.id, deleteEverywhere: true });
+            setDeleteTarget(null);
+          }}
+          itemLabel={deleteTarget.name}
+          scopeLabel={scopeLabelFor(scope, targetRoles)}
+          isPending={deleteTopic.isPending}
+        />
+      ) : (
+        <ConfirmDialog
+          open={deleteTarget !== null}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => {
+            if (deleteTarget) deleteTopic.mutate({ id: deleteTarget.id, deleteEverywhere: true });
+            setDeleteTarget(null);
+          }}
+          title="Delete topic?"
+          description={
+            deleteTarget
+              ? `Remove "${deleteTarget.name}"? Any questions linked to it will be un-linked, not deleted. This can't be undone.`
+              : ""
+          }
+          isPending={deleteTopic.isPending}
+        />
+      )}
     </Card>
   );
 }
@@ -313,6 +368,7 @@ function TopicCard({
           section: topic.section,
           discussion: discussionDraft || null,
           reference_links: topic.reference_links,
+          scope_target_role_ids: topic.scope_target_role_ids,
         },
       },
       { onSuccess: () => setIsEditingDiscussion(false) },
@@ -342,6 +398,7 @@ function TopicCard({
         section: topic.section,
         discussion: topic.discussion,
         reference_links: nextLinks,
+        scope_target_role_ids: topic.scope_target_role_ids,
       },
     });
     setLinkUrl("");
@@ -358,6 +415,7 @@ function TopicCard({
         section: topic.section,
         discussion: topic.discussion,
         reference_links: nextLinks,
+        scope_target_role_ids: topic.scope_target_role_ids,
       },
     });
     setDeleteLinkIndex(null);

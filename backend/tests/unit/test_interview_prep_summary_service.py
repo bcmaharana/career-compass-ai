@@ -41,7 +41,7 @@ class FakeInterviewTopicRepository:
             for t in self.topics.values()
             if t.tenant_id == tenant_id
             and t.user_id == user_id
-            and t.target_role_id == target_role_id
+            and target_role_id in t.scope_target_role_ids
         ]
 
     async def update(self, topic: InterviewTopic) -> InterviewTopic:
@@ -77,7 +77,7 @@ class FakeInterviewQuestionRepository:
             for q in self.questions.values()
             if q.tenant_id == tenant_id
             and q.user_id == user_id
-            and q.target_role_id == target_role_id
+            and target_role_id in q.scope_target_role_ids
         ]
 
     async def update(self, question: InterviewQuestion) -> InterviewQuestion:
@@ -134,9 +134,8 @@ def make_topic(
         id=uuid.uuid4(),
         tenant_id=tenant_id,
         user_id=user_id,
-        target_role_id=target_role_id,
         name="Some topic",
-        display_order=1,
+        scope_target_role_ids=[target_role_id],
         created_at=now,
         updated_at=now,
     )
@@ -150,9 +149,8 @@ def make_question(
         id=uuid.uuid4(),
         tenant_id=tenant_id,
         user_id=user_id,
-        target_role_id=target_role_id,
         question="Some question",
-        display_order=1,
+        scope_target_role_ids=[target_role_id],
         created_at=now,
         updated_at=now,
     )

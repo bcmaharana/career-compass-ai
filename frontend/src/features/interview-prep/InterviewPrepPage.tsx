@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { InterviewQuestionsSection } from "@/features/interview-prep/InterviewQuestionsSection";
 import { InterviewTopicsSection } from "@/features/interview-prep/InterviewTopicsSection";
+import { groupInterviewQuestionsByCategory } from "@/lib/group-interview-questions-by-category";
 import { groupInterviewTopicsBySection } from "@/lib/group-interview-topics-by-section";
 import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -173,6 +174,7 @@ export function InterviewPrepPage() {
       <InterviewTopicsSection
         key={`${scopeKey}-topics`}
         scope={targetRoleId}
+        targetRoles={targetRoles ?? []}
         expandedId={expandedTopicId}
         setExpandedId={setExpandedTopicId}
       />
@@ -180,6 +182,7 @@ export function InterviewPrepPage() {
         key={`${scopeKey}-questions`}
         scope={targetRoleId}
         topics={topics ?? []}
+        targetRoles={targetRoles ?? []}
         expandedId={expandedQuestionId}
         setExpandedId={setExpandedQuestionId}
       />
@@ -214,6 +217,7 @@ function TableOfContents({
   if (topics.length === 0 && questions.length === 0) return null;
 
   const groups = groupInterviewTopicsBySection(topics);
+  const questionGroups = groupInterviewQuestionsByCategory(questions);
 
   return (
     <Card>
@@ -246,21 +250,30 @@ function TableOfContents({
           </div>
         )}
         {questions.length > 0 && (
-          <div className="flex flex-col gap-1">
-            <p className="text-xs font-medium text-muted-foreground">Questions:</p>
-            <ul className="flex list-disc flex-col gap-1 pl-5">
-              {questions.map((question) => (
-                <li key={question.id}>
-                  <button
-                    type="button"
-                    onClick={() => onSelectQuestion(question.id)}
-                    className="truncate text-left text-sm font-medium text-accent underline underline-offset-2 hover:text-accent/80"
-                  >
-                    {question.question}
-                  </button>
-                </li>
-              ))}
-            </ul>
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Questions:
+            </p>
+            {questionGroups.map((group) => (
+              <div key={group.category ?? "__uncategorized"}>
+                {group.category && (
+                  <p className="text-xs font-medium text-muted-foreground">{group.category}:</p>
+                )}
+                <ul className="flex list-disc flex-col gap-1 pl-5">
+                  {group.questions.map((question) => (
+                    <li key={question.id}>
+                      <button
+                        type="button"
+                        onClick={() => onSelectQuestion(question.id)}
+                        className="truncate text-left text-sm font-medium text-accent underline underline-offset-2 hover:text-accent/80"
+                      >
+                        {question.question}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
         )}
       </CardContent>

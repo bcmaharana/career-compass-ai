@@ -144,12 +144,15 @@ class SqlAlchemyAccountDeletionRepository:
             # would otherwise block it, same as CareerProfile/Resume above).
             LearningItemModel,
             LearningRecommendationSetModel,
-            # Both reference target_role_id and (InterviewQuestionModel
-            # only) topic_id — both FKs are ON DELETE SET NULL, so order
-            # relative to target_roles/interview_topics isn't a hard
-            # requirement the way LearningRecommendationSet's NOT NULL FK
-            # is, but they're still real rows for this tenant that need
-            # deleting like everything else here.
+            # Deleting these cascades (ON DELETE CASCADE, a real DB-level
+            # FK constraint that fires regardless of how the row is
+            # deleted) to their InterviewTopicScopeTagModel/
+            # InterviewQuestionScopeTagModel rows automatically — no
+            # separate cleanup needed for those two tables. Order
+            # relative to target_roles below isn't a hard requirement
+            # (topic_id/target_role_id on the scope-tag tables are also
+            # ON DELETE CASCADE), unlike LearningRecommendationSet's
+            # NOT NULL FK above.
             InterviewQuestionModel,
             InterviewTopicModel,
             UserRoleModel,

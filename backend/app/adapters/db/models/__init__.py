@@ -58,7 +58,12 @@ from app.adapters.db.models.identity import (
     UserModel,
     UserRoleModel,
 )
-from app.adapters.db.models.interview_prep import InterviewQuestionModel, InterviewTopicModel
+from app.adapters.db.models.interview_prep import (
+    InterviewQuestionModel,
+    InterviewQuestionScopeTagModel,
+    InterviewTopicModel,
+    InterviewTopicScopeTagModel,
+)
 from app.adapters.db.models.learning_intelligence import (
     LearningItemModel,
     LearningRecommendationSetModel,
@@ -89,7 +94,9 @@ __all__ = [
     "ExperienceModel",
     "FeatureFlagModel",
     "InterviewQuestionModel",
+    "InterviewQuestionScopeTagModel",
     "InterviewTopicModel",
+    "InterviewTopicScopeTagModel",
     "JobListingCacheModel",
     "KeyAchievementModel",
     "LearningItemModel",
