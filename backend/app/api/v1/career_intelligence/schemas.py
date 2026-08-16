@@ -139,7 +139,7 @@ _ENTITY_TYPE_PATTERN = (
     "^(skill_category|competency|skill|cikg_role"
     "|edge:category_parent|edge:skill_category_membership"
     "|edge:skill_competency_membership|edge:related_to|edge:role_required_skill"
-    "|edge:prerequisite_of|edge:specializes|edge:synonym_of)$"
+    "|edge:prerequisite_of|edge:specializes|edge:synonym_of|edge:role_progresses_to)$"
 )
 
 

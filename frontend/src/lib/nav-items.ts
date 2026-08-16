@@ -1,10 +1,13 @@
 import {
   Bot,
+  Briefcase,
   FileText,
   Gauge,
+  GraduationCap,
   LineChart,
   Settings,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   User,
   UserCircle,
@@ -54,6 +57,18 @@ export const NAV_ITEMS: NavItem[] = [
     icon: FileText,
     purpose: "Upload resumes, review AI-extracted details, and manage your resume history.",
   },
+  {
+    to: "/opportunities",
+    label: "Opportunity Intelligence",
+    icon: Briefcase,
+    purpose: "Discover matching job listings and see your career path forward.",
+  },
+  {
+    to: "/learning",
+    label: "Learning Intelligence",
+    icon: GraduationCap,
+    purpose: "Track your learning log and get AI-recommended resources for your skill gaps.",
+  },
 ];
 
 /**
@@ -81,6 +96,13 @@ export const SETTINGS_NAV_ITEMS: NavItem[] = [
     icon: Bot,
     end: true,
     purpose: "Choose which AI model powers your Career Coach chat.",
+  },
+  {
+    to: "/settings/job-search-preference",
+    label: "Job Search Preference",
+    icon: SlidersHorizontal,
+    end: true,
+    purpose: "Set the location and filters used when searching for job listings.",
   },
   {
     to: "/settings/account",

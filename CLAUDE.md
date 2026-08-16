@@ -1891,7 +1891,391 @@ Known environment gotchas already solved, don't reintroduce:
   (separate, smaller fix, same day) so the Cloudflare Tunnel has less
   of a gap to log connection-refused errors into after a machine/Docker
   restart.
-- **Not yet started**: Phase 6 onward through Phase 9 (Phase 4.5.2+ —
+- **Phase 6 (Opportunity Intelligence) + Phase 7 (Learning Intelligence)**
+  (2026-08-15) — done, verified live in dev; prod deploy not yet done.
+  Built together, requested and planned as one combined round (see the
+  plan's own file for the full design rationale) — four independent
+  backend tracks plus a shared frontend pass.
+  **Track A — job listings**: real Adzuna API integration
+  (`app/adapters/job_listings/adzuna_provider.py`, plain httpx adapter,
+  no SDK — same shape as `zen_quotes_provider.py`). Adzuna's free tier
+  is rate-limited (~1,000 calls/month) with no job scheduler in this
+  codebase to refresh in the background, so results are cached in a new
+  global (no `tenant_id`/RLS) `job_listing_cache` table keyed by
+  normalized `(role_query, location_query)`, 24h TTL checked at request
+  time — a fresh-fetch failure serves stale cache rather than erroring
+  if any exists. `GET /api/v1/opportunities/jobs?target_role_id=`
+  resolves the search term from `TargetRole.role_name` and location
+  from `User.city`/`User.state`. Verified live end-to-end: real listings
+  with correct company/salary/category/posted_at parsing, confirmed
+  cache-hit behavior (identical `fetched_at` on a repeat call within
+  TTL) and cross-tenant isolation via two real JWTs.
+  **Track B — career path**: the CIKG graph's first-ever role-to-role
+  edge type, `role_progresses_to`
+  (`app/domain/career_intelligence/entities.py`'s `RoleProgressesToEdge`)
+  — deliberately a single edge type rather than mirroring Skill's three
+  (`prerequisite_of`/`specializes`/`synonym_of`), since career ladders
+  are simple linear progressions. Routed through the *existing*
+  `ContentRevisionService` governance workflow as-is (five small
+  additive edits: new `_DAG_EDGE_TYPES`/`_DIRECTED_ROLE_EDGE_TYPES`
+  membership, a cycle-check branch, an `_apply_role_progresses_to`
+  method, one constructor param) — no new governance mechanism, and the
+  existing DAG cycle-detection (`graph_validation.would_create_cycle`)
+  applies unchanged. New pure-logic `career_path_traversal.py` (BFS with
+  actual path reconstruction, distinct from `graph_validation.py`'s
+  reachability-only check). `CareerPathService` resolves a user's
+  free-text `TargetRole.role_name` to a `CikgRole` via exact title match
+  first, then `SearchService` as fallback — **on no match, returns
+  `resolved=false` as a normal 200, never a dead end**, since free text
+  can never guarantee a match even after content expansion.
+  User explicitly chose to expand the CIKG role catalog now (over an
+  Adzuna-derived shortcut or a low-coverage CIKG-only layer) — grew
+  `CikgRole` from 13 to 43 rows and added `role_progresses_to` edges,
+  one IC ladder + one management/alternate branch per each of the 5
+  existing seed domains, documented in
+  `docs/architecture/cikg-role-progressions-seed-data.md` and loaded via
+  `scripts/seed_cikg_role_progressions.py` (idempotent, same
+  hand-curated/no-draft-step precedent as `seed_cikg_mvp1.py`).
+  **Real content-quality bug caught by the user, not by testing**:
+  the first pass seeded 36 edges, 4 of which were speculative
+  cross-functional "lateral pivots" invented purely to add graph
+  cross-links (e.g. `Senior Software Engineer -> Enterprise Agile
+  Coach`) — these produced misleading `career-path` output, since the
+  upstream BFS treats every incoming edge as a real "path here," so
+  Enterprise Agile Coach's "roles that lead here" showed the entire
+  software engineering IC ladder. Fixed by removing all 4 (both from
+  the seed script and the real dev DB rows directly — the script is
+  additive-only, so editing it alone doesn't retract already-seeded
+  edges), down to 32 genuine within-track edges. Kept `Journeyman
+  Electrician -> Project Superintendent`, a real single-domain
+  progression, not a speculative cross-track jump like the other 4.
+  Real lesson, not just a one-off fix: only assert a
+  `role_progresses_to` edge for a progression that's genuinely common
+  knowledge within one career track — resist adding edges just to
+  reduce isolated nodes. Also checked live whether a better external
+  data source exists for this (the way Adzuna solved job listings) —
+  it doesn't: O*NET/CareerOneStop (the closest free, authoritative
+  option) models lateral "related occupations" for skill-based pivots,
+  not seniority ladders, and doesn't even have separate occupation
+  codes for e.g. "Software Engineer I" vs "Senior" — that leveling
+  concept is internal-to-a-company, not something a labor-statistics
+  database tracks. This is inherently curated content, same posture as
+  the original skill catalog.
+  **A real calibration bug caught live, not assumed**: the fuzzy-match
+  fallback's `_MIN_MATCH_SCORE` was initially set far too low (0.05) —
+  live testing showed a deliberately nonsense query ("Role 9") scoring
+  ~0.40 via vector similarity against *every* seeded role (embedding
+  noise, not real relevance), while a genuinely close match ("Senior
+  Agile Coach" → "Enterprise Agile Coach") scored 0.89 — a real gap
+  existed, just far higher than guessed; raised to 0.6 based on that
+  real observed spread, not a priori. Verified live via the actual
+  revision workflow (not direct SQL): proposed and approved a real
+  `role_progresses_to` edge, then proposed its reverse and confirmed it
+  was correctly blocked with `EDGE_APPROVAL_WOULD_CREATE_CYCLE` — same
+  exit-criterion shape as MVP 2B's own skill-edge verification.
+  **Track C — learning log**: standard 5-layer domain, `LearningItem`
+  modeled directly on `CareerGoal` (flat, `user_id`-scoped, not tied to
+  a Career Profile) — add/update/delete/move, reusing
+  `app/adapters/db/reorder.py`'s centralized swap logic. New `/learning/items*`
+  routes, `MoveRequest` reused from `career_profile.schemas` directly
+  (cross-domain schema reuse, not a layering violation — DTOs only).
+  **Track D — AI recommendations**: `LearningRecommendationService`
+  turns `GapAnalysisService`'s existing `missing_skills` output into
+  concrete suggested resources via the existing `LLMService.generate()`
+  — no new gap-computation logic. Degrade-gracefully choice: persists a
+  `status="failed"` row with `error_message` (Resume Intelligence's
+  pattern), not a hardcoded fallback (Chat's pattern), since a canned
+  reply would actively mislead here. Caching combines a 24h TTL *and* a
+  `missing_skills_hash` staleness check — regenerates automatically the
+  moment the underlying gap analysis actually changes, not just after
+  the TTL — plus an explicit `force_regenerate` override
+  (`POST /learning/recommendations/regenerate`). **A real token-budget
+  bug caught live**: the first real generation attempt against an
+  18-missing-skill role truncated mid-JSON (`output_tokens` hit the
+  1200 cap exactly, confirmed via `ai_invocations`) and correctly
+  persisted a `failed` row with a real, useful `error_message` — fixed
+  by capping skills actually sent to the prompt at 12
+  (`_MAX_SKILLS_PER_PROMPT`, the cache key still hashes the *full*
+  missing-skills list so gaining/losing a skill beyond the cap still
+  invalidates correctly) and raising the budget to 3000 tokens; verified
+  live afterward with a real 12-skill generation succeeding cleanly.
+  **Frontend**: two new permanent Left Nav items
+  (`/opportunities` Opportunity Intelligence, `/learning` Learning
+  Intelligence), each a single-file page matching
+  `ResumeIntelligencePage.tsx`'s precedent, plus two new Dashboard
+  cards (Opportunity Intelligence scoped to only the user's *first*
+  target role, since job/path lookups are real external/graph calls,
+  not free local computation, unlike the other Dashboard cards' full
+  fan-out). New query hook files
+  `api/queries/opportunity-intelligence.ts` /
+  `learning-intelligence.ts` follow the established KEYS-const +
+  useQuery/useMutation shape; `useGapAnalysis()` reused directly rather
+  than re-fetched. `npm run build` and `typecheck`/`lint` all clean.
+  **A second real bug caught live, unrelated to either track's own
+  logic**: deleting an account with a target role that had cached
+  recommendations raised a raw `ForeignKeyViolation` 500 —
+  `learning_recommendation_sets.target_role_id` is a NOT NULL FK with
+  no `ON DELETE CASCADE`, and `SqlAlchemyAccountDeletionRepository`
+  didn't know about either new table yet, the same class of bug this
+  file already documents for Resume/Platform Admin's own onboarding.
+  Fixed by adding `LearningItemModel`/`LearningRecommendationSetModel`
+  to its existing step-3 direct-delete loop, positioned before
+  `target_roles` itself gets deleted; new regression test
+  `test_delete_removes_learning_items_and_recommendation_sets`
+  (real Postgres, real RLS — the raw verification INSERT/SELECT needed
+  `set_tenant_context()` bound first, the same recurring gotcha this
+  file already documents for the Terms-of-Service verification script).
+  Verified live end-to-end via a real throwaway Enterprise account
+  (created via the low-level `/tenants` primitive, deleted via
+  `DELETE /identity/me` afterward) driven through a real headless-
+  Chromium Playwright session: logged in through the actual login form,
+  navigated via client-side nav (not `page.goto` — see the existing
+  in-memory-token gotcha this file documents), added a real learning
+  item through the UI, watched real Adzuna listings and a real
+  multi-hop career path graph render, and watched a real AI-generated
+  recommendation appear after adding required skills — zero console
+  errors throughout. 438 backend tests passing (1 pre-existing,
+  documented flaky failure — the same phone-number-collision test noted
+  elsewhere in this file — confirmed unrelated by rerunning in
+  isolation), mypy clean across all 220 backend source files. Dev
+  backend image rebuilt from scratch (`docker compose build backend`)
+  specifically so this session's several `docker cp`'d migrations don't
+  silently evaporate on a future container recreate, per this file's
+  own repeated warning about that gotcha.
+- **Phase 6/7 follow-on: UI fixes, career-path content correction, Job
+  Search Preference** (2026-08-15) — done, verified live in dev; prod
+  rebuild/redeploy not yet done. Four rounds of real-usage feedback on
+  the Phase 6/7 work above, same day.
+  **(1)** Resume/Opportunity/Learning Intelligence pages each had a
+  duplicate page-title/purpose block — `AppHeader` already renders this
+  from `nav-items.ts`, so the extra `<h1>+<p>` in each page body was
+  dead weight, caught directly by the user (who noted it had already
+  slipped through once on Resume Intelligence). Removed from all three.
+  **(2)** Opportunity Intelligence's target-role `<Select>` wasn't
+  wrapped in a `Card` like every sibling section — wrapped in
+  `<Card><CardContent>` to match.
+  **(3) Career path content correction**: real usage surfaced
+  `role_progresses_to` edges that read as fabricated cross-links rather
+  than genuine progressions (e.g. "Enterprise Agile Coach" showing an
+  unrelated engineering IC ladder as "roles that lead here"). Root
+  cause: 4 of the ~36 seeded edges were invented purely to add
+  cross-domain connectivity, not because they reflected a real career
+  path. Removed
+  (`Senior Software Engineer→Cloud Platform Engineer`,
+  `Senior Software Engineer→Enterprise Agile Coach`,
+  `Senior Financial Analyst→AML Compliance Officer`,
+  `Senior Account Executive→Customer Success Manager`) from both
+  `scripts/seed_cikg_role_progressions.py` and
+  `docs/architecture/cikg-role-progressions-seed-data.md`, and deleted
+  directly from the real dev database (the seed script is additive-only,
+  so a script re-run alone wouldn't have removed already-seeded rows).
+  One edge from the same original candidate list
+  (`Journeyman Electrician→Project Superintendent`) was kept — a
+  genuine, single-domain, directionally-correct progression, unlike the
+  other four. Also fixed in passing: `_ENTITY_TYPE_PATTERN` in
+  `api/v1/career_intelligence/schemas.py` was missing
+  `edge:role_progresses_to` entirely, caught testing the revisions API
+  live (not by review); and `CareerPathService._MIN_MATCH_SCORE` was
+  recalibrated from an initial 0.05 to 0.6 after live testing showed
+  embedding noise scoring ~0.40 for nonsense queries vs. ~0.89 for
+  genuine matches — 0.05 was accepting nonsense matches as "resolved."
+  **(4) Job Search Preference**: real usage raised a design question —
+  job listings were using the profile's city/state with no way to
+  search a different location or narrow by recency/distance/employment
+  type. Extensive live testing against the real Adzuna API (not just
+  reading their docs, which are JS-rendered) confirmed the actual
+  filter surface: `max_days_old` (posted-date recency, tested values
+  1/3/7), `distance` (radius in miles, tested 10/30/50/100),
+  `full_time`/`part_time` (mutually exclusive — combining both in one
+  request is a hard 400, not an OR), `contract`/`permanent` (same
+  mutual-exclusion rule) — and confirmed Adzuna has **no** native
+  remote/hybrid/on-site parameter, so that filter category from the
+  original ask was deliberately dropped rather than built as a UI
+  control with no backend effect. Landed as a Settings page
+  (`/settings/job-search-preference`, 5th `SETTINGS_NAV_ITEMS` entry)
+  per explicit user direction — filters live in one persisted place
+  rather than as page-local, session-only controls, with a note + link
+  on the Opportunity Intelligence page's Job Listings card pointing
+  back to it. **Backend**: 5 new nullable `job_search_*` columns on
+  `User` (location override + the 4 filter dimensions, `None` meaning
+  "no preference"/"use profile location" — same pattern as
+  `preferred_model_version_id`), a new
+  `JobSearchPreferenceService` (get/update, validated against the
+  exact live-confirmed value sets, `ValidationError` on anything else)
+  and two endpoints (`GET`/`PATCH /opportunities/job-search-preference`).
+  `job_listing_cache`'s unique constraint and cache-key lookup were
+  both widened from `(role_query, location_query)` to include all 4
+  filter dimensions (sentinel values `0`/`""` for "no preference," never
+  `NULL` — Postgres treats every `NULL` in a UNIQUE constraint as
+  distinct, so `NULL` sentinels would silently stop deduplicating).
+  Migration `9f8c93952d56`. **A real Pydantic v2 gotcha hit writing the
+  request schema**: `Field(pattern=...)` only validates `str` fields, not
+  `int` — silently does nothing on an `int | None` field rather than
+  erroring, so `max_days_old`/`distance_miles` use
+  `Literal[1, 3, 7] | None` / `Literal[10, 30, 50, 100] | None` instead.
+  **Frontend**: `SettingsJobSearchPreferencePage.tsx` — a location
+  `<Input>` plus four `SegmentedControl` rows (the same visual pattern
+  as `LoginPage.tsx`'s Personal/Enterprise and Email/Phone toggles:
+  `bg-muted p-1 rounded-md` wrapper, `bg-card` + `shadow-sm` on the
+  active option), each mapping a "No preference" option alongside the
+  real Adzuna-confirmed values — deliberately not raw radio buttons,
+  to match this app's existing toggle-group visual language rather than
+  introducing a new control type. Saving invalidates every cached
+  `["opportunities", "jobs", ...]` query so the next Opportunity
+  Intelligence visit refetches under the new preference rather than
+  showing stale results silently. 8 new unit tests
+  (`test_job_search_preference_service.py`, fake `UserRepository`); the
+  pre-existing `test_job_listing_service.py` needed updating too, since
+  its fakes' `search()`/`get_by_search()`/`upsert()` signatures predated
+  the 4 new filter params. 352 backend unit tests passing, mypy clean
+  across all 221 source files; frontend `typecheck`/`lint`/`build` all
+  clean. Verified live end-to-end via a real headless-Chromium
+  Playwright session against a throwaway Enterprise account (created via
+  the low-level `/tenants` primitive, deleted via `DELETE /identity/me`
+  afterward): saved all 5 fields through the real Settings UI, confirmed
+  every value survived a genuine logout/login round trip (not just
+  client cache — a hard `page.reload()` was deliberately avoided, since
+  it wipes the in-memory-only access token per this file's existing
+  gotcha, so persistence was checked via a real fresh login instead),
+  confirmed the note+link renders on the Job Listings card and
+  navigates correctly, and separately confirmed via direct HTTP calls
+  that a saved location/filter set actually changes which
+  `job_listing_cache` row `JobListingService` resolves and that real,
+  non-empty Adzuna results flow through end to end. Dev backend image
+  rebuilt (`docker compose build backend`) to durably bake in migration
+  `9f8c93952d56` alongside everything else from this session.
+- **Job listings: relaxed-query fallback for compound/niche role
+  titles** (2026-08-15, same day) — done, verified live in dev; prod
+  rebuild/redeploy not yet done. User-reported: searching Job Listings
+  with location "Philadelphia, PA" and every other filter at "No
+  preference" returned zero results for nearly every target role except
+  "Release Train Engineer." Root cause, confirmed via direct live calls
+  against the real Adzuna API (not guessed): Adzuna's `what` param ANDs
+  every word together, so a literal multi-word compound title only
+  matches a posting containing that *exact* word combination — real for
+  an established term like "Release Train Engineer" or "AI
+  Transformation Leader," but near-impossible for a title this app's
+  own free text/CIKG catalog produces, like "Enterprise Agile Coach" or
+  "Delivery Lead / Program Delivery Manager." Also tried and rejected:
+  Adzuna's `what_or` (OR semantics) returns thousands of mostly
+  irrelevant results (tested live: "Senior Agile Coach" → 12,345 hits,
+  top result "Technical Project Manager (Agile, Scrum) IV"); `what_phrase`
+  (exact phrase) fails identically to plain `what`. Fixed with a
+  text-only query relaxation in `JobListingService`
+  (`_query_candidates`/`_strip_qualifiers`/`_QUALIFIER_WORDS`), not an
+  Adzuna param change: try the literal role name first; if that returns
+  zero results (not an error — a real API failure still falls back to
+  stale cache/raises exactly as before), retry with the text before a
+  `/` (for slash-separated compound titles), then with common
+  seniority/scope qualifier words stripped (senior, lead, staff,
+  enterprise, director, of, etc.), stopping at the first candidate that
+  returns real results. Every fallback candidate was confirmed live
+  against the real API before being trusted: "Senior Agile Coach" →
+  "Agile Coach" (14 results), "Director of Agile Transformation" →
+  "Agile Transformation" (23 results), "Delivery Lead / Program
+  Delivery Manager" → "Delivery Lead" (459 results). The relaxation
+  only ever fires after a genuine zero-result attempt and stops at the
+  first non-empty candidate, so an already-working literal title (e.g.
+  "Release Train Engineer," "AI Transformation Leader") makes exactly
+  one provider call, same as before this fix. 4 new unit tests for
+  `_query_candidates`'s pure candidate-generation logic plus 3 new
+  service-level tests (`TestRelaxedQueryFallback`) using an extended
+  `FakeJobListingProvider` that can return different results per query
+  string; 2 pre-existing tests' call-count assertions updated from 1 to
+  2 to reflect the new (correct) behavior of trying a relaxed candidate
+  when a fixture legitimately returns empty. 351 backend unit tests
+  passing, mypy clean. **A real deployment gotcha hit verifying this
+  fix, not a code bug**: `job_listing_cache` is global (no `tenant_id`,
+  shared across every tenant by design — see this feature's own
+  original design note), so the *exact* zero-result rows the user's own
+  testing had already written before this fix (role_query +
+  location_query + filter-dimension key, 24h TTL) were still fresh
+  enough to serve stale empty results to a brand-new verification
+  tenant querying the identical role/location/filters — the code fix
+  alone doesn't retroactively correct already-cached data. Fixed by
+  deleting every zero-result row directly
+  (`DELETE FROM job_listing_cache WHERE jsonb_array_length(listings::jsonb) = 0`)
+  — safe, since this table is pure disposable derived cache, never a
+  source of truth. Re-verified live afterward via a real throwaway
+  Enterprise account and the user's exact reported target roles: all
+  four previously-zero roles ("Senior Agile Coach," "Enterprise Agile
+  Coach," "Delivery Lead / Program Delivery Manager," "Director of
+  Agile Transformation") now return 14-20 real, relevant Adzuna
+  listings each with location Philadelphia, PA and all other filters at
+  "No preference," confirmed via direct HTTP calls against the actual
+  `/opportunities/jobs` endpoint (not the raw Adzuna API). Dev backend
+  image rebuilt (`docker compose build backend`) to bake in the fix.
+  **If the same "no results" report recurs for a brand-new title this
+  fallback doesn't relax correctly**, the fix is either widening
+  `_QUALIFIER_WORDS` or purging that title's specific stale
+  `job_listing_cache` rows (same command as above, or targeted by
+  `role_query`) — not assuming the code fix itself needs to change
+  without first checking whether it's actually just a stale-cache
+  repeat of this same class of issue.
+- **Footer chat composer: auto-growing textarea** (2026-08-16) — done,
+  verified live in dev; prod rebuild/redeploy not yet done. The
+  persistent "Ask Career Compass AI..." footer box was a fixed single
+  line (`h-11`, `rows={1}`); requested to grow with a longer message
+  instead of forcing everything onto one scrolled-within line. This
+  touches a part of the app shell CLAUDE.md already documents as
+  deliberately rigid — all four shell regions are `position: fixed`,
+  sized off shared `--shell-*` tokens that the center `<main>` also
+  reads for its own inset, specifically so the fixed regions and the
+  scrollable center panel can never drift apart. Growing the composer
+  meant growing the footer bar around it, which meant `<main>`'s bottom
+  inset had to grow to match too — solved with the same "one JS-driven
+  CSS variable, nothing can drift" pattern DesktopShell.tsx already uses
+  for `--current-left-nav-w`/`--current-right-nav-w`, just driven by a
+  `ResizeObserver` instead of toggle state. **`ChatComposerForm.tsx`**:
+  the textarea's fixed `h-11` became `min-h-11` (a floor, not a fixed
+  size); `autoResize()` resets to `height: auto` then sets it to
+  `scrollHeight` clamped between that CSS min-height and
+  `MAX_HEIGHT_LINES` (5) times it — deliberately a multiplier of the
+  live-read CSS min-height (`getComputedStyle(el).minHeight`), not a
+  hardcoded px cap, so both the floor and the ceiling scale the same way
+  globals.css's existing mobile root-font-size scaling already does
+  (verified live: 44px/220px desktop vs. 38.5px/192.5px at a mobile
+  viewport, exactly a 0.875 ratio in both). Past the cap it scrolls
+  internally (`overflow-y-auto scrollbar-hide`, both already-established
+  conventions elsewhere in this app) rather than growing further. The
+  form itself switched from `items-center` to `items-end` so the send
+  button stays pinned to the last line as the box grows upward, not
+  floating centered against a taller sibling. Sending a message resets
+  the box by clearing the inline height style (falls back to the CSS
+  `min-h-11` default) rather than recomputing anything — verified live
+  this fires immediately on send, not after the AI response returns,
+  since it happens synchronously right after `sendTurn()` is called, not
+  in a callback. **`AppFooter.tsx`**: `h-[var(--shell-mobile-header-h)]
+  md:h-[var(--shell-footer-h)]` became `min-h-...`/`md:min-h-...`
+  (same floor-not-fixed change), plus a `ResizeObserver` on the footer
+  element itself that publishes its real measured height to
+  `document.documentElement` as `--current-footer-h` on every resize
+  (written to `<html>`, not the footer's own subtree, since `<main>` in
+  either shell is a sibling of the footer, not a descendant of it).
+  **`DesktopShell.tsx`/`MobileShell.tsx`**: `<main>`'s
+  `bottom-[var(--shell-footer-h)]` /
+  `bottom-[var(--shell-mobile-header-h)]` became
+  `bottom-[var(--current-footer-h,var(--shell-footer-h))]` /
+  `...,var(--shell-mobile-header-h))]` — the CSS comma-fallback syntax
+  covers the brief instant before the `ResizeObserver`'s first
+  measurement lands (in practice imperceptible, since the observer is
+  wired in a `useLayoutEffect`, which runs before the browser paints).
+  No change was needed to `AppFooter`'s own `items-stretch`
+  (mobile)/`items-center` (desktop) — both already re-center/re-stretch
+  correctly as the row's content grows, with no explicit height math
+  required beyond the floor-not-fixed swap. Verified live via real
+  headless-Chromium Playwright runs at both a desktop (1400px) and a
+  mobile (390px) viewport against a throwaway Enterprise account: typing
+  a short message keeps the original single-line height; typing a long,
+  multi-line message grows the textarea, the footer bar, and moves
+  `<main>`'s bottom edge up in lockstep (confirmed via real
+  `getBoundingClientRect()` measurements, not just visual inspection);
+  typing enough lines to exceed the cap confirmed internal scrolling
+  kicks in (`scrollHeight > clientHeight`) rather than growing past it;
+  sending the message confirmed the box drops straight back to its
+  original single-line height. Zero console errors throughout, both
+  viewports. `typecheck`/`lint`/`build` all clean.
+- **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in
   `docs/architecture/system-overview.md`; that doc doesn't enumerate a

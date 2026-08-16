@@ -1336,6 +1336,145 @@ export interface paths {
         patch: operations["update_platform_admin_api_v1_platform_admin_admins__grant_id__patch"];
         trace?: never;
     };
+    "/api/v1/opportunities/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Job Listings */
+        get: operations["get_job_listings_api_v1_opportunities_jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/opportunities/career-path": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Career Path */
+        get: operations["get_career_path_api_v1_opportunities_career_path_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/opportunities/job-search-preference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Job Search Preference */
+        get: operations["get_job_search_preference_api_v1_opportunities_job_search_preference_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Job Search Preference */
+        patch: operations["update_job_search_preference_api_v1_opportunities_job_search_preference_patch"];
+        trace?: never;
+    };
+    "/api/v1/learning/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Learning Items */
+        get: operations["list_learning_items_api_v1_learning_items_get"];
+        put?: never;
+        /** Add Learning Item */
+        post: operations["add_learning_item_api_v1_learning_items_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/learning/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Learning Item */
+        delete: operations["delete_learning_item_api_v1_learning_items__item_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Learning Item */
+        patch: operations["update_learning_item_api_v1_learning_items__item_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/learning/items/{item_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move Learning Item */
+        post: operations["move_learning_item_api_v1_learning_items__item_id__move_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/learning/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Learning Recommendations */
+        get: operations["get_learning_recommendations_api_v1_learning_recommendations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/learning/recommendations/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Regenerate Learning Recommendations */
+        post: operations["regenerate_learning_recommendations_api_v1_learning_recommendations_regenerate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1479,6 +1618,18 @@ export interface components {
             display_order: number;
             /** Include In Resume */
             include_in_resume: boolean;
+        };
+        /** CareerPathResponse */
+        CareerPathResponse: {
+            /** Resolved */
+            resolved: boolean;
+            matched_role: components["schemas"]["CikgRoleSummary"] | null;
+            /** Match Type */
+            match_type: string | null;
+            /** Upstream */
+            upstream: components["schemas"]["CikgRoleSummary"][];
+            /** Downstream */
+            downstream: components["schemas"]["CikgRoleSummary"][];
         };
         /** CareerProfileResponse */
         CareerProfileResponse: {
@@ -1633,6 +1784,20 @@ export interface components {
             experience_level: string | null;
             /** Content Status */
             content_status: string;
+        };
+        /** CikgRoleSummary */
+        CikgRoleSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string | null;
+            /** Experience Level */
+            experience_level: string | null;
         };
         /** CompetencyResponse */
         CompetencyResponse: {
@@ -2000,6 +2165,76 @@ export interface components {
             /** App Env */
             app_env: string;
         };
+        /** JobListingResponse */
+        JobListingResponse: {
+            /** Provider Id */
+            provider_id: string;
+            /** Title */
+            title: string;
+            /** Company */
+            company: string | null;
+            /** Location */
+            location: string | null;
+            /** Description */
+            description: string;
+            /** Redirect Url */
+            redirect_url: string;
+            /** Salary Min */
+            salary_min: number | null;
+            /** Salary Max */
+            salary_max: number | null;
+            /** Contract Type */
+            contract_type: string | null;
+            /** Category */
+            category: string | null;
+            /** Posted At */
+            posted_at: string | null;
+        };
+        /** JobListingsResponse */
+        JobListingsResponse: {
+            /**
+             * Target Role Id
+             * Format: uuid
+             */
+            target_role_id: string;
+            /** Role Query */
+            role_query: string;
+            /** Location Query */
+            location_query: string;
+            /**
+             * Fetched At
+             * Format: date-time
+             */
+            fetched_at: string;
+            /** Listings */
+            listings: components["schemas"]["JobListingResponse"][];
+        };
+        /** JobSearchPreferenceRequest */
+        JobSearchPreferenceRequest: {
+            /** Location */
+            location?: string | null;
+            /** Max Days Old */
+            max_days_old?: (1 | 3 | 7) | null;
+            /** Distance Miles */
+            distance_miles?: (10 | 30 | 50 | 100) | null;
+            /** Employment Time */
+            employment_time?: ("full_time" | "part_time") | null;
+            /** Employment Type */
+            employment_type?: ("contract" | "permanent") | null;
+        };
+        /** JobSearchPreferenceResponse */
+        JobSearchPreferenceResponse: {
+            /** Location */
+            location: string | null;
+            /** Max Days Old */
+            max_days_old: number | null;
+            /** Distance Miles */
+            distance_miles: number | null;
+            /** Employment Time */
+            employment_time: string | null;
+            /** Employment Type */
+            employment_type: string | null;
+        };
         /** KeyAchievementRequest */
         KeyAchievementRequest: {
             /** Title */
@@ -2040,6 +2275,88 @@ export interface components {
         LatestConversationResponse: {
             /** Conversation Id */
             conversation_id: string | null;
+        };
+        /** LearningItemRequest */
+        LearningItemRequest: {
+            /** Title */
+            title: string;
+            /** Provider */
+            provider?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Target Role Id */
+            target_role_id?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Started At */
+            started_at?: string | null;
+        };
+        /** LearningItemResponse */
+        LearningItemResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Provider */
+            provider: string | null;
+            /** Url */
+            url: string | null;
+            /** Status */
+            status: string;
+            /** Target Role Id */
+            target_role_id: string | null;
+            /** Notes */
+            notes: string | null;
+            /** Started At */
+            started_at: string | null;
+            /** Completed At */
+            completed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** LearningItemUpdateRequest */
+        LearningItemUpdateRequest: {
+            /** Title */
+            title: string;
+            /** Provider */
+            provider?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Status */
+            status: string;
+            /** Target Role Id */
+            target_role_id?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+        };
+        /** LearningRecommendationResponse */
+        LearningRecommendationResponse: {
+            /**
+             * Target Role Id
+             * Format: uuid
+             */
+            target_role_id: string;
+            /** Status */
+            status: string;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Recommendations */
+            recommendations: components["schemas"]["SkillRecommendationResponse"][] | null;
+            /** Error Message */
+            error_message: string | null;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -2647,6 +2964,15 @@ export interface components {
             related_skill_ids: string[];
             /** Aliases */
             aliases: string[];
+        };
+        /** SkillRecommendationResponse */
+        SkillRecommendationResponse: {
+            /** Skill */
+            skill: string;
+            /** Resources */
+            resources: string[];
+            /** Summary */
+            summary: string;
         };
         /** SkillResponse */
         SkillResponse: {
@@ -5990,6 +6316,335 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformAdminGrantResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_listings_api_v1_opportunities_jobs_get: {
+        parameters: {
+            query: {
+                target_role_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobListingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_career_path_api_v1_opportunities_career_path_get: {
+        parameters: {
+            query: {
+                target_role_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CareerPathResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_search_preference_api_v1_opportunities_job_search_preference_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSearchPreferenceResponse"];
+                };
+            };
+        };
+    };
+    update_job_search_preference_api_v1_opportunities_job_search_preference_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobSearchPreferenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSearchPreferenceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_learning_items_api_v1_learning_items_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningItemResponse"][];
+                };
+            };
+        };
+    };
+    add_learning_item_api_v1_learning_items_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearningItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_learning_item_api_v1_learning_items__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_learning_item_api_v1_learning_items__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearningItemUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_learning_item_api_v1_learning_items__item_id__move_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningItemResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_learning_recommendations_api_v1_learning_recommendations_get: {
+        parameters: {
+            query: {
+                target_role_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningRecommendationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    regenerate_learning_recommendations_api_v1_learning_recommendations_regenerate_post: {
+        parameters: {
+            query: {
+                target_role_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningRecommendationResponse"];
                 };
             };
             /** @description Validation Error */

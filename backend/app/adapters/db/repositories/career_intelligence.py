@@ -27,6 +27,7 @@ from app.adapters.db.models import (
     CompetencyModel,
     PrerequisiteOfEdgeModel,
     RelatedSkillModel,
+    RoleProgressesToEdgeModel,
     RoleRequiredSkillModel,
     SkillAliasModel,
     SkillCategoryMembershipModel,
@@ -43,6 +44,7 @@ from app.domain.career_intelligence.entities import (
     Competency,
     PrerequisiteOfEdge,
     RelatedSkill,
+    RoleProgressesToEdge,
     RoleRequiredSkill,
     Skill,
     SkillAlias,
@@ -768,3 +770,60 @@ class SqlAlchemySynonymOfEdgeRepository:
             )
         )
         return [_synonym_of_to_domain(m) for m in result.scalars().all()]
+
+
+def _role_progresses_to_domain(model: RoleProgressesToEdgeModel) -> RoleProgressesToEdge:
+    return RoleProgressesToEdge(
+        id=model.id,
+        source_role_id=model.source_role_id,
+        target_role_id=model.target_role_id,
+        content_status=model.content_status,  # type: ignore[arg-type]
+        source_attribution=model.source_attribution,
+        created_at=model.created_at,
+    )
+
+
+class SqlAlchemyRoleProgressesToEdgeRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def create(self, edge: RoleProgressesToEdge) -> RoleProgressesToEdge:
+        model = RoleProgressesToEdgeModel(
+            id=edge.id,
+            source_role_id=edge.source_role_id,
+            target_role_id=edge.target_role_id,
+            content_status=edge.content_status,
+            source_attribution=edge.source_attribution,
+        )
+        self._session.add(model)
+        await self._session.flush()
+        return _role_progresses_to_domain(model)
+
+    async def get_by_pair(
+        self, source_role_id: UUID, target_role_id: UUID
+    ) -> RoleProgressesToEdge | None:
+        result = await self._session.execute(
+            select(RoleProgressesToEdgeModel).where(
+                RoleProgressesToEdgeModel.source_role_id == source_role_id,
+                RoleProgressesToEdgeModel.target_role_id == target_role_id,
+            )
+        )
+        model = result.scalar_one_or_none()
+        return _role_progresses_to_domain(model) if model else None
+
+    async def list_all_approved(self) -> list[RoleProgressesToEdge]:
+        result = await self._session.execute(
+            select(RoleProgressesToEdgeModel).where(
+                RoleProgressesToEdgeModel.content_status == "approved"
+            )
+        )
+        return [_role_progresses_to_domain(m) for m in result.scalars().all()]
+
+    async def list_for_role(self, role_id: UUID) -> list[RoleProgressesToEdge]:
+        result = await self._session.execute(
+            select(RoleProgressesToEdgeModel).where(
+                (RoleProgressesToEdgeModel.source_role_id == role_id)
+                | (RoleProgressesToEdgeModel.target_role_id == role_id)
+            )
+        )
+        return [_role_progresses_to_domain(m) for m in result.scalars().all()]

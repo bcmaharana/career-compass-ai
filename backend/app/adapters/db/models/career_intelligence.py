@@ -39,12 +39,12 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     Computed,
     DateTime,
     Float,
     ForeignKey,
-    JSON,
     String,
     Text,
     UniqueConstraint,
@@ -124,7 +124,9 @@ class CompetencyModel(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     search_vector: Mapped[str] = mapped_column(
         TSVECTOR,
-        Computed("to_tsvector('english', name || ' ' || coalesce(description, ''))", persisted=True),
+        Computed(
+            "to_tsvector('english', name || ' ' || coalesce(description, ''))", persisted=True
+        ),
         nullable=False,
     )
 
@@ -153,7 +155,9 @@ class SkillModel(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     search_vector: Mapped[str] = mapped_column(
         TSVECTOR,
-        Computed("to_tsvector('english', name || ' ' || coalesce(description, ''))", persisted=True),
+        Computed(
+            "to_tsvector('english', name || ' ' || coalesce(description, ''))", persisted=True
+        ),
         nullable=False,
     )
 
@@ -183,7 +187,9 @@ class CikgRoleModel(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     search_vector: Mapped[str] = mapped_column(
         TSVECTOR,
-        Computed("to_tsvector('english', title || ' ' || coalesce(description, ''))", persisted=True),
+        Computed(
+            "to_tsvector('english', title || ' ' || coalesce(description, ''))", persisted=True
+        ),
         nullable=False,
     )
 
@@ -198,9 +204,7 @@ class CategoryParentModel(Base):
 
     __tablename__ = "category_parents"
     __table_args__ = (
-        CheckConstraint(
-            f"content_status IN {_CONTENT_STATUS_VALUES}", name="status"
-        ),
+        CheckConstraint(f"content_status IN {_CONTENT_STATUS_VALUES}", name="status"),
         UniqueConstraint(
             "child_category_id", "parent_category_id", name="uq_category_parents_pair"
         ),
@@ -256,9 +260,7 @@ class SkillCompetencyMembershipModel(Base):
             f"content_status IN {_CONTENT_STATUS_VALUES}",
             name="status",
         ),
-        UniqueConstraint(
-            "skill_id", "competency_id", name="uq_skill_competency_memberships_pair"
-        ),
+        UniqueConstraint("skill_id", "competency_id", name="uq_skill_competency_memberships_pair"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -285,12 +287,8 @@ class RelatedSkillModel(Base):
 
     __tablename__ = "related_skills"
     __table_args__ = (
-        CheckConstraint(
-            f"content_status IN {_CONTENT_STATUS_VALUES}", name="status"
-        ),
-        CheckConstraint(
-            "strength IN ('weak', 'moderate', 'strong')", name="strength"
-        ),
+        CheckConstraint(f"content_status IN {_CONTENT_STATUS_VALUES}", name="status"),
+        CheckConstraint("strength IN ('weak', 'moderate', 'strong')", name="strength"),
         CheckConstraint("skill_a_id != skill_b_id", name="no_self_loop"),
         UniqueConstraint("skill_a_id", "skill_b_id", name="uq_related_skills_pair"),
     )
@@ -316,9 +314,7 @@ class RoleRequiredSkillModel(Base):
 
     __tablename__ = "role_required_skills"
     __table_args__ = (
-        CheckConstraint(
-            f"content_status IN {_CONTENT_STATUS_VALUES}", name="status"
-        ),
+        CheckConstraint(f"content_status IN {_CONTENT_STATUS_VALUES}", name="status"),
         CheckConstraint(
             "requirement_level IN ('required', 'preferred')",
             name="level",
@@ -376,7 +372,9 @@ class PrerequisiteOfEdgeModel(Base):
     __table_args__ = (
         CheckConstraint(f"content_status IN {_CONTENT_STATUS_VALUES}", name="status"),
         CheckConstraint("source_skill_id != target_skill_id", name="no_self_loop"),
-        UniqueConstraint("source_skill_id", "target_skill_id", name="uq_prerequisite_of_edges_pair"),
+        UniqueConstraint(
+            "source_skill_id", "target_skill_id", name="uq_prerequisite_of_edges_pair"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -441,6 +439,35 @@ class SynonymOfEdgeModel(Base):
     )
     skill_b_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("skills.id"), nullable=False
+    )
+    content_status: Mapped[str] = mapped_column(String(20), nullable=False, default="approved")
+    source_attribution: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RoleProgressesToEdgeModel(Base):
+    """Directed: source_role_id is an earlier/lower career rung that
+    typically progresses to target_role_id (Phase 6, Opportunity
+    Intelligence). DAG-required — cycle-checked at approval, same as
+    PrerequisiteOfEdgeModel/SpecializesEdgeModel above, applied to roles."""
+
+    __tablename__ = "role_progresses_to_edges"
+    __table_args__ = (
+        CheckConstraint(f"content_status IN {_CONTENT_STATUS_VALUES}", name="status"),
+        CheckConstraint("source_role_id != target_role_id", name="no_self_loop"),
+        UniqueConstraint(
+            "source_role_id", "target_role_id", name="uq_role_progresses_to_edges_pair"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    source_role_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("cikg_roles.id"), nullable=False
+    )
+    target_role_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("cikg_roles.id"), nullable=False
     )
     content_status: Mapped[str] = mapped_column(String(20), nullable=False, default="approved")
     source_attribution: Mapped[str | None] = mapped_column(String(255), nullable=True)

@@ -34,6 +34,7 @@ from app.domain.career_intelligence.entities import (
     ContentRevision,
     PrerequisiteOfEdge,
     RelatedSkill,
+    RoleProgressesToEdge,
     RoleRequiredSkill,
     Skill,
     SkillAlias,
@@ -304,7 +305,9 @@ class FakeSynonymOfEdgeRepository:
         self.rows[edge.id] = edge
         return replace(edge)
 
-    async def get_by_pair(self, skill_a_id: uuid.UUID, skill_b_id: uuid.UUID) -> SynonymOfEdge | None:
+    async def get_by_pair(
+        self, skill_a_id: uuid.UUID, skill_b_id: uuid.UUID
+    ) -> SynonymOfEdge | None:
         for row in self.rows.values():
             if row.skill_a_id == skill_a_id and row.skill_b_id == skill_b_id:
                 return replace(row)
@@ -315,6 +318,33 @@ class FakeSynonymOfEdgeRepository:
             replace(r)
             for r in self.rows.values()
             if r.skill_a_id == skill_id or r.skill_b_id == skill_id
+        ]
+
+
+class FakeRoleProgressesToEdgeRepository:
+    def __init__(self) -> None:
+        self.rows: dict[uuid.UUID, RoleProgressesToEdge] = {}
+
+    async def create(self, edge: RoleProgressesToEdge) -> RoleProgressesToEdge:
+        self.rows[edge.id] = edge
+        return replace(edge)
+
+    async def get_by_pair(
+        self, source_role_id: uuid.UUID, target_role_id: uuid.UUID
+    ) -> RoleProgressesToEdge | None:
+        for row in self.rows.values():
+            if row.source_role_id == source_role_id and row.target_role_id == target_role_id:
+                return replace(row)
+        return None
+
+    async def list_all_approved(self) -> list[RoleProgressesToEdge]:
+        return [replace(r) for r in self.rows.values() if r.content_status == "approved"]
+
+    async def list_for_role(self, role_id: uuid.UUID) -> list[RoleProgressesToEdge]:
+        return [
+            replace(r)
+            for r in self.rows.values()
+            if r.source_role_id == role_id or r.target_role_id == role_id
         ]
 
 
@@ -400,6 +430,7 @@ def _make_service() -> ContentRevisionService:
         prerequisite_of_edges=FakePrerequisiteOfEdgeRepository(),
         specializes_edges=FakeSpecializesEdgeRepository(),
         synonym_of_edges=FakeSynonymOfEdgeRepository(),
+        role_progresses_to_edges=FakeRoleProgressesToEdgeRepository(),
         revisions=FakeContentRevisionRepository(),
         history=FakeContentHistoryRepository(),
     )
@@ -533,7 +564,9 @@ class TestProposeSubmitApproveLifecycle:
         )
         await service.submit_for_review(revision.id)
 
-        rejected = await service.mark_rejected(revision.id, review_notes="superseded by another proposal")
+        rejected = await service.mark_rejected(
+            revision.id, review_notes="superseded by another proposal"
+        )
 
         assert rejected.status == "rejected"
 
@@ -549,7 +582,9 @@ class TestRelatedToEdgeValidation:
                 entity_type="edge:related_to",
                 entity_id=None,
                 proposed_data={
-                    "skill_a_id": str(skill.id), "skill_b_id": str(skill.id), "strength": "moderate"
+                    "skill_a_id": str(skill.id),
+                    "skill_b_id": str(skill.id),
+                    "strength": "moderate",
                 },
                 source_attribution="curated",
             )
@@ -566,7 +601,9 @@ class TestRelatedToEdgeValidation:
             entity_type="edge:related_to",
             entity_id=None,
             proposed_data={
-                "skill_a_id": str(higher_id), "skill_b_id": str(lower_id), "strength": "moderate"
+                "skill_a_id": str(higher_id),
+                "skill_b_id": str(lower_id),
+                "strength": "moderate",
             },
             source_attribution="curated",
         )
@@ -583,7 +620,8 @@ class TestCycleDetectionAtApproval:
         b = await _propose_submit_approve_skill(service, "Machine Learning")
 
         forward = await service.propose(
-            entity_type="edge:prerequisite_of", entity_id=None,
+            entity_type="edge:prerequisite_of",
+            entity_id=None,
             proposed_data={"source_skill_id": str(a.id), "target_skill_id": str(b.id)},
             source_attribution="curated",
         )
@@ -591,9 +629,11 @@ class TestCycleDetectionAtApproval:
         await service.approve(forward.id, reviewed_by=uuid.uuid4())
 
         reverse = await service.propose(
-            entity_type="edge:prerequisite_of", entity_id=None,
+            entity_type="edge:prerequisite_of",
+            entity_id=None,
             proposed_data={"source_skill_id": str(b.id), "target_skill_id": str(a.id)},
-            source_attribution="ai_suggested", confidence=0.8,
+            source_attribution="ai_suggested",
+            confidence=0.8,
         )
         await service.submit_for_review(reverse.id)
 
@@ -621,7 +661,8 @@ class TestBatchApprove:
         # irrelevant here); create the real forward edge first via a
         # separate, already-approved revision outside the batch.
         forward = await service.propose(
-            entity_type="edge:prerequisite_of", entity_id=None,
+            entity_type="edge:prerequisite_of",
+            entity_id=None,
             proposed_data={"source_skill_id": str(a.id), "target_skill_id": str(b.id)},
             source_attribution="curated",
         )
@@ -629,15 +670,21 @@ class TestBatchApprove:
         await service.approve(forward.id, reviewed_by=uuid.uuid4())
 
         blocked = await service.propose(
-            entity_type="edge:prerequisite_of", entity_id=None,
+            entity_type="edge:prerequisite_of",
+            entity_id=None,
             proposed_data={"source_skill_id": str(b.id), "target_skill_id": str(a.id)},
-            source_attribution="ai_suggested", confidence=0.7, import_batch_id=batch_id,
+            source_attribution="ai_suggested",
+            confidence=0.7,
+            import_batch_id=batch_id,
         )
         await service.submit_for_review(blocked.id)
         fine = await service.propose(
-            entity_type="edge:prerequisite_of", entity_id=None,
+            entity_type="edge:prerequisite_of",
+            entity_id=None,
             proposed_data={"source_skill_id": str(b.id), "target_skill_id": str(c.id)},
-            source_attribution="ai_suggested", confidence=0.7, import_batch_id=batch_id,
+            source_attribution="ai_suggested",
+            confidence=0.7,
+            import_batch_id=batch_id,
         )
         await service.submit_for_review(fine.id)
 
@@ -669,14 +716,23 @@ class TestSkillAliasResolutionService:
         skills = FakeSkillRepository()
         now = datetime.now(UTC)
         skill = Skill(
-            id=uuid.uuid4(), name="Python Programming", description=None,
-            content_status="approved", source_attribution="seed_script",
-            created_at=now, updated_at=now,
+            id=uuid.uuid4(),
+            name="Python Programming",
+            description=None,
+            content_status="approved",
+            source_attribution="seed_script",
+            created_at=now,
+            updated_at=now,
         )
         skills.rows[skill.id] = skill
         aliases.rows[uuid.uuid4()] = SkillAlias(
-            id=uuid.uuid4(), skill_id=skill.id, alias_text="python",
-            normalized_text="python", source="curated", confidence=None, created_at=now,
+            id=uuid.uuid4(),
+            skill_id=skill.id,
+            alias_text="python",
+            normalized_text="python",
+            source="curated",
+            confidence=None,
+            created_at=now,
         )
         resolver = SkillAliasResolutionService(aliases, skills)
 
@@ -701,9 +757,13 @@ class TestSkillAliasResolutionService:
         skills = FakeSkillRepository()
         now = datetime.now(UTC)
         skill = Skill(
-            id=uuid.uuid4(), name="Data Analysis", description=None,
-            content_status="approved", source_attribution="seed_script",
-            created_at=now, updated_at=now,
+            id=uuid.uuid4(),
+            name="Data Analysis",
+            description=None,
+            content_status="approved",
+            source_attribution="seed_script",
+            created_at=now,
+            updated_at=now,
         )
         skills.rows[skill.id] = skill
         resolver = SkillAliasResolutionService(FakeSkillAliasRepository(), skills)

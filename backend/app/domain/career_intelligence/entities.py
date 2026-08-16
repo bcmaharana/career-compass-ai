@@ -338,3 +338,23 @@ class SynonymOfEdge:
     content_status: ContentStatus
     source_attribution: str | None
     created_at: datetime
+
+
+@dataclass(slots=True)
+class RoleProgressesToEdge:
+    """Directed: `source_role_id` is an earlier/lower career rung that
+    typically progresses to `target_role_id` (e.g. "Software Engineer
+    II" progresses_to "Senior Software Engineer"). DAG-required — same
+    cycle check as the Skill edges above, applied to roles instead
+    (Phase 6, Opportunity Intelligence's career-path feature). A single
+    edge type rather than mirroring Skill's three (prerequisite_of/
+    specializes/synonym_of) — career ladders are simple linear "next
+    role" progressions, no need for that much nuance for a first cut.
+    """
+
+    id: UUID
+    source_role_id: UUID
+    target_role_id: UUID
+    content_status: ContentStatus
+    source_attribution: str | None
+    created_at: datetime

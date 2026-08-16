@@ -23,6 +23,7 @@ from uuid import UUID
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.db.models.ai_platform import AIInvocationModel
 from app.adapters.db.models.career_profile import (
     CareerGoalModel,
     CareerHighlightModel,
@@ -35,7 +36,6 @@ from app.adapters.db.models.career_profile import (
     PeerEndorsementModel,
     TargetRoleModel,
 )
-from app.adapters.db.models.ai_platform import AIInvocationModel
 from app.adapters.db.models.chat import ChatConversationModel, ChatMessageModel
 from app.adapters.db.models.identity import (
     AuditEventModel,
@@ -47,6 +47,10 @@ from app.adapters.db.models.identity import (
     TenantModel,
     UserModel,
     UserRoleModel,
+)
+from app.adapters.db.models.learning_intelligence import (
+    LearningItemModel,
+    LearningRecommendationSetModel,
 )
 from app.adapters.db.models.platform_admin import PlatformAdminModel, PlatformSettingModel
 from app.adapters.db.models.resume_intelligence import ResumeModel
@@ -120,6 +124,12 @@ class SqlAlchemyAccountDeletionRepository:
             PasswordResetTokenModel,
             PersonalPhoneLoginModel,
             CareerGoalModel,
+            # Both reference target_role_id — must be deleted before step 4's
+            # target_roles delete below (LearningItem's FK is ON DELETE
+            # SET NULL, but LearningRecommendationSet's is NOT NULL and
+            # would otherwise block it, same as CareerProfile/Resume above).
+            LearningItemModel,
+            LearningRecommendationSetModel,
             UserRoleModel,
             PlatformAdminModel,
         ):

@@ -20,6 +20,7 @@ from app.adapters.db.models.career_intelligence import (
     CompetencyModel,
     PrerequisiteOfEdgeModel,
     RelatedSkillModel,
+    RoleProgressesToEdgeModel,
     RoleRequiredSkillModel,
     SkillAliasModel,
     SkillCategoryMembershipModel,
@@ -57,6 +58,11 @@ from app.adapters.db.models.identity import (
     UserModel,
     UserRoleModel,
 )
+from app.adapters.db.models.learning_intelligence import (
+    LearningItemModel,
+    LearningRecommendationSetModel,
+)
+from app.adapters.db.models.opportunity_intelligence import JobListingCacheModel
 from app.adapters.db.models.platform_admin import PlatformAdminModel, PlatformSettingModel
 from app.adapters.db.models.resume_intelligence import ResumeModel
 from app.adapters.db.models.search import ContentEmbeddingModel, EmbeddingModelModel
@@ -81,7 +87,10 @@ __all__ = [
     "EmbeddingModelModel",
     "ExperienceModel",
     "FeatureFlagModel",
+    "JobListingCacheModel",
     "KeyAchievementModel",
+    "LearningItemModel",
+    "LearningRecommendationSetModel",
     "ModelVersionModel",
     "OrganizationModel",
     "PasswordResetTokenModel",
@@ -97,6 +106,7 @@ __all__ = [
     "ResumeModel",
     "RoleModel",
     "RolePermissionModel",
+    "RoleProgressesToEdgeModel",
     "RoleRequiredSkillModel",
     "SkillAliasModel",
     "SkillCategoryMembershipModel",

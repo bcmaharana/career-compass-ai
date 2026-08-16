@@ -181,6 +181,15 @@ class Settings(BaseSettings):
     # yet just skips this step rather than guessing who the owner is.
     platform_admin_bootstrap_accounts: str = Field(default="")
 
+    # --- Opportunity Intelligence (Adzuna job listings, Phase 6) ---
+    # Free-tier signup at developer.adzuna.com — no billing concern, but
+    # rate-limited (~1,000 calls/month), which is why job listings are
+    # cached (see app/adapters/db/models/opportunity_intelligence.py)
+    # rather than fetched fresh on every request.
+    adzuna_app_id: str = Field(default="")
+    adzuna_app_key: str = Field(default="")
+    adzuna_base_url: str = Field(default="https://api.adzuna.com/v1/api/jobs")
+
     @property
     def is_local(self) -> bool:
         return self.app_env == "local"

@@ -12,10 +12,13 @@ import { PrivacyPolicyPage } from "@/features/legal/PrivacyPolicyPage";
 import { TermsOfServicePage } from "@/features/legal/TermsOfServicePage";
 import { SettingsAIModelPage } from "@/features/settings/SettingsAIModelPage";
 import { SettingsAccountPage } from "@/features/settings/SettingsAccountPage";
+import { SettingsJobSearchPreferencePage } from "@/features/settings/SettingsJobSearchPreferencePage";
 import { SettingsLandingPage } from "@/features/settings/SettingsLandingPage";
 import { SettingsPlatformAdminPage } from "@/features/settings/SettingsPlatformAdminPage";
 import { SettingsProfilePage } from "@/features/settings/SettingsProfilePage";
 import { ResumeIntelligencePage } from "@/features/resume-intelligence/ResumeIntelligencePage";
+import { OpportunityIntelligencePage } from "@/features/opportunity-intelligence/OpportunityIntelligencePage";
+import { LearningIntelligencePage } from "@/features/learning-intelligence/LearningIntelligencePage";
 import { NotFoundPage } from "@/routes/NotFound";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 import { SkillIntelligencePage } from "@/features/skill-intelligence/SkillIntelligencePage";
@@ -76,11 +79,17 @@ export const router = createBrowserRouter([
           { path: "dashboard", element: <DashboardPage /> },
           { path: "profile", element: <CareerProfilePage /> },
           { path: "resumes", element: <ResumeIntelligencePage /> },
+          { path: "opportunities", element: <OpportunityIntelligencePage /> },
+          { path: "learning", element: <LearningIntelligencePage /> },
           { path: "skills", element: <SkillIntelligencePage /> },
           { path: "coach", element: <CoachPage /> },
           { path: "settings", element: <SettingsLandingPage /> },
           { path: "settings/profile", element: <SettingsProfilePage /> },
           { path: "settings/ai-model", element: <SettingsAIModelPage /> },
+          {
+            path: "settings/job-search-preference",
+            element: <SettingsJobSearchPreferencePage />,
+          },
           { path: "settings/account", element: <SettingsAccountPage /> },
           { path: "settings/platform-admin", element: <SettingsPlatformAdminPage /> },
         ],

@@ -57,6 +57,7 @@ from app.adapters.db.repositories.career_intelligence import (
     SqlAlchemyCompetencyRepository,
     SqlAlchemyPrerequisiteOfEdgeRepository,
     SqlAlchemyRelatedSkillRepository,
+    SqlAlchemyRoleProgressesToEdgeRepository,
     SqlAlchemyRoleRequiredSkillRepository,
     SqlAlchemySkillAliasRepository,
     SqlAlchemySkillCategoryMembershipRepository,
@@ -75,19 +76,27 @@ from app.adapters.db.repositories.governance import (
     SqlAlchemyContentHistoryRepository,
     SqlAlchemyContentRevisionRepository,
 )
+from app.adapters.db.repositories.learning_intelligence import (
+    SqlAlchemyLearningItemRepository,
+    SqlAlchemyLearningRecommendationRepository,
+)
+from app.adapters.db.repositories.opportunity_intelligence import (
+    SqlAlchemyJobListingCacheRepository,
+)
 from app.adapters.db.repositories.platform_admin import (
     SqlAlchemyPlatformAdminRepository,
     SqlAlchemyPlatformSettingsRepository,
 )
 from app.adapters.db.repositories.resume_intelligence import SqlAlchemyResumeRepository
-from app.adapters.email.resend_provider import ResendEmailProvider
 from app.adapters.db.repositories.search import (
     SqlAlchemyContentEmbeddingRepository,
     SqlAlchemyEmbeddingModelRepository,
     SqlAlchemySearchRepository,
 )
+from app.adapters.email.resend_provider import ResendEmailProvider
 from app.adapters.identity_providers.firebase_phone import FirebasePhoneVerifier
 from app.adapters.identity_providers.internal_jwt import InternalJWTProvider, verify_access_token
+from app.adapters.job_listings.adzuna_provider import AdzunaJobProvider
 from app.adapters.parsing.resume_text_extractor import PdfDocxTextExtractor
 from app.adapters.quotes.zen_quotes_provider import ZenQuotesProvider
 from app.adapters.storage.s3_object_storage import S3ObjectStorageRepository
@@ -105,10 +114,10 @@ from app.application.career_intelligence.skill_alias_resolution_service import (
 from app.application.career_profile.career_goal_service import CareerGoalService
 from app.application.career_profile.career_highlight_service import CareerHighlightService
 from app.application.career_profile.career_profile_service import CareerProfileService
-from app.application.career_profile.certification_service import CertificationService
 from app.application.career_profile.career_profile_summary_service import (
     CareerProfileSummaryService,
 )
+from app.application.career_profile.certification_service import CertificationService
 from app.application.career_profile.clear_profile_service import ClearCareerProfileService
 from app.application.career_profile.education_service import EducationService
 from app.application.career_profile.experience_service import ExperienceService
@@ -132,6 +141,15 @@ from app.application.identity.request_personal_signup import RequestPersonalSign
 from app.application.identity.reset_password import ResetPasswordService
 from app.application.identity.update_user_profile import UpdateUserProfileService
 from app.application.identity.verify_signup import VerifySignupService
+from app.application.learning_intelligence.learning_item_service import LearningItemService
+from app.application.learning_intelligence.learning_recommendation_service import (
+    LearningRecommendationService,
+)
+from app.application.opportunity_intelligence.career_path_service import CareerPathService
+from app.application.opportunity_intelligence.job_listing_service import JobListingService
+from app.application.opportunity_intelligence.job_search_preference_service import (
+    JobSearchPreferenceService,
+)
 from app.application.platform_admin.grant_service import PlatformAdminService
 from app.application.platform_admin.settings_service import PlatformSettingsService
 from app.application.quotes.quote_of_the_day_service import QuoteOfTheDayService
@@ -615,9 +633,7 @@ def get_platform_admin_service(
 
 
 def get_platform_settings_service(
-    settings_repo: SqlAlchemyPlatformSettingsRepository = Depends(
-        get_platform_settings_repository
-    ),
+    settings_repo: SqlAlchemyPlatformSettingsRepository = Depends(get_platform_settings_repository),
 ) -> PlatformSettingsService:
     return PlatformSettingsService(settings_repo)
 
@@ -1008,9 +1024,7 @@ def get_chat_message_repository(
 
 
 def get_chat_service(
-    conversations: SqlAlchemyChatConversationRepository = Depends(
-        get_chat_conversation_repository
-    ),
+    conversations: SqlAlchemyChatConversationRepository = Depends(get_chat_conversation_repository),
     messages: SqlAlchemyChatMessageRepository = Depends(get_chat_message_repository),
     llm_service: LLMService = Depends(get_llm_service),
 ) -> ChatService:
@@ -1063,6 +1077,68 @@ def get_resume_merge_service(
     )
 
 
+# --- Opportunity Intelligence wiring (Phase 6) ---
+# get_adzuna_provider is process-wide (lru_cache), same rationale as
+# get_quote_provider below — a plain httpx-based adapter, no reason to
+# reconstruct it every request.
+
+
+@lru_cache
+def get_adzuna_provider() -> AdzunaJobProvider:
+    return AdzunaJobProvider(get_settings())
+
+
+def get_job_listing_cache_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyJobListingCacheRepository:
+    # Not tenant-scoped — job_listing_cache is global reference data
+    # (see its model's docstring), same as CIKG's repositories.
+    return SqlAlchemyJobListingCacheRepository(session)
+
+
+def get_job_listing_service(
+    cache: SqlAlchemyJobListingCacheRepository = Depends(get_job_listing_cache_repository),
+    provider: AdzunaJobProvider = Depends(get_adzuna_provider),
+    target_roles: TargetRoleService = Depends(get_target_role_service),
+    users: SqlAlchemyUserRepository = Depends(get_user_repository_scoped),
+) -> JobListingService:
+    return JobListingService(cache, provider, target_roles, users)
+
+
+def get_job_search_preference_service(
+    users: SqlAlchemyUserRepository = Depends(get_user_repository_scoped),
+) -> JobSearchPreferenceService:
+    return JobSearchPreferenceService(users)
+
+
+# get_career_path_service is defined further below, after get_search_service
+# — Depends() default arguments resolve at function-definition time, so
+# referencing get_search_service here before it exists would raise
+# NameError at import (see the Platform Admin section of CLAUDE.md for
+# this exact gotcha hit once already in this file).
+
+
+# --- Learning Intelligence wiring (Phase 7) ---
+
+
+def get_learning_item_repository(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyLearningItemRepository:
+    return SqlAlchemyLearningItemRepository(session)
+
+
+def get_learning_item_service(
+    items: SqlAlchemyLearningItemRepository = Depends(get_learning_item_repository),
+) -> LearningItemService:
+    return LearningItemService(items)
+
+
+def get_learning_recommendation_repository(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyLearningRecommendationRepository:
+    return SqlAlchemyLearningRecommendationRepository(session)
+
+
 # --- Quote of the day wiring (UI enhancement brief Part 1.3) ---
 # get_quote_provider is process-wide (lru_cache), not per-request — the
 # provider's in-memory daily cache (see ZenQuotesProvider) would reset on
@@ -1104,6 +1180,21 @@ def get_gap_analysis_service(
     target_roles: TargetRoleService = Depends(get_target_role_service),
 ) -> GapAnalysisService:
     return GapAnalysisService(career_profiles, target_roles)
+
+
+# get_learning_recommendation_service depends on get_gap_analysis_service
+# and get_llm_service, both defined above — must come after both, same
+# Depends()-resolves-at-definition-time constraint noted elsewhere in
+# this file.
+def get_learning_recommendation_service(
+    recommendations: SqlAlchemyLearningRecommendationRepository = Depends(
+        get_learning_recommendation_repository
+    ),
+    gap_analysis: GapAnalysisService = Depends(get_gap_analysis_service),
+    llm: LLMService = Depends(get_llm_service),
+    target_roles: TargetRoleService = Depends(get_target_role_service),
+) -> LearningRecommendationService:
+    return LearningRecommendationService(recommendations, gap_analysis, llm, target_roles)
 
 
 # --- Career Intelligence Knowledge Graph wiring (Phase 4.5.1 / MVP 1) ---
@@ -1196,6 +1287,12 @@ def get_synonym_of_edge_repository(
     return SqlAlchemySynonymOfEdgeRepository(session)
 
 
+def get_role_progresses_to_edge_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyRoleProgressesToEdgeRepository:
+    return SqlAlchemyRoleProgressesToEdgeRepository(session)
+
+
 def get_content_revision_repository(
     session: AsyncSession = Depends(get_db_session),
 ) -> SqlAlchemyContentRevisionRepository:
@@ -1213,9 +1310,7 @@ def get_content_revision_service(
     competencies: SqlAlchemyCompetencyRepository = Depends(get_competency_repository),
     skills: SqlAlchemySkillRepository = Depends(get_skill_repository),
     roles: SqlAlchemyCikgRoleRepository = Depends(get_cikg_role_repository),
-    category_parents: SqlAlchemyCategoryParentRepository = Depends(
-        get_category_parent_repository
-    ),
+    category_parents: SqlAlchemyCategoryParentRepository = Depends(get_category_parent_repository),
     skill_category_memberships: SqlAlchemySkillCategoryMembershipRepository = Depends(
         get_skill_category_membership_repository
     ),
@@ -1233,6 +1328,9 @@ def get_content_revision_service(
         get_specializes_edge_repository
     ),
     synonym_of_edges: SqlAlchemySynonymOfEdgeRepository = Depends(get_synonym_of_edge_repository),
+    role_progresses_to_edges: SqlAlchemyRoleProgressesToEdgeRepository = Depends(
+        get_role_progresses_to_edge_repository
+    ),
     revisions: SqlAlchemyContentRevisionRepository = Depends(get_content_revision_repository),
     history: SqlAlchemyContentHistoryRepository = Depends(get_content_history_repository),
 ) -> ContentRevisionService:
@@ -1249,6 +1347,7 @@ def get_content_revision_service(
         prerequisite_of_edges=prerequisite_of_edges,
         specializes_edges=specializes_edges,
         synonym_of_edges=synonym_of_edges,
+        role_progresses_to_edges=role_progresses_to_edges,
         revisions=revisions,
         history=history,
     )
@@ -1259,9 +1358,7 @@ def get_catalog_query_service(
     competencies: SqlAlchemyCompetencyRepository = Depends(get_competency_repository),
     skills: SqlAlchemySkillRepository = Depends(get_skill_repository),
     roles: SqlAlchemyCikgRoleRepository = Depends(get_cikg_role_repository),
-    category_parents: SqlAlchemyCategoryParentRepository = Depends(
-        get_category_parent_repository
-    ),
+    category_parents: SqlAlchemyCategoryParentRepository = Depends(get_category_parent_repository),
     skill_category_memberships: SqlAlchemySkillCategoryMembershipRepository = Depends(
         get_skill_category_membership_repository
     ),
@@ -1348,3 +1445,14 @@ def get_search_service(
     return SearchService(
         search_repo, related_skills, embedding_models, embedding_provider, alias_resolver
     )
+
+
+def get_career_path_service(
+    target_roles: TargetRoleService = Depends(get_target_role_service),
+    cikg_roles: SqlAlchemyCikgRoleRepository = Depends(get_cikg_role_repository),
+    search: SearchService = Depends(get_search_service),
+    edges: SqlAlchemyRoleProgressesToEdgeRepository = Depends(
+        get_role_progresses_to_edge_repository
+    ),
+) -> CareerPathService:
+    return CareerPathService(target_roles, cikg_roles, search, edges)

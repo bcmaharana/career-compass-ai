@@ -336,6 +336,32 @@ specified earlier. Your entire response must be a single valid JSON object: the 
 very first character must be "{{" and the very last character must be "}}".
 """
 
+# --- Learning Intelligence (Phase 7) ---
+# {role_name}/{missing_skills} are filled in by
+# LearningRecommendationService via str.format() — the literal JSON
+# braces below are escaped as {{ }} for that reason, same as the resume
+# extraction template above. Wrapped in a top-level JSON *object*
+# (not a bare array) specifically so the response can reuse the same
+# robust "find the outermost {{ and }}" parsing idiom every other
+# structured-output use case in this codebase already relies on.
+LEARNING_RECOMMENDATIONS_USE_CASE = "learning_recommendations"
+LEARNING_RECOMMENDATIONS_PROMPT_TEMPLATE = """You are a career development advisor inside \
+Career Compass AI. A user targeting the role "{role_name}" has these skill gaps: \
+{missing_skills}. For each skill, suggest 2-3 concrete, actionable learning resources \
+(real, well-known courses, books, certifications, or hands-on project ideas) and a \
+one-sentence note on why it matters for this role.
+
+Respond with ONLY the raw JSON object below — no prose, no markdown code fences, no \
+explanation. Your entire response must be a single valid JSON object: the very first \
+character must be "{{" and the very last character must be "}}".
+
+{{
+  "recommendations": [
+    {{"skill": string, "resources": [string, ...], "summary": string}}
+  ]
+}}
+"""
+
 # Catalog of selectable models (Settings > AI Model lets a user pick
 # among "active" rows). Adding a non-Anthropic/non-Ollama entry also
 # means registering its provider adapter in app/api/dependencies.py's
@@ -375,7 +401,10 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("cikg.content.create", "Create/edit draft CIKG content (skills, roles, categories, edges)."),
     ("cikg.content.review", "Move draft CIKG content to in_review, leave review comments."),
     ("cikg.content.approve", "Approve in_review/draft CIKG content, or reject back to draft."),
-    ("cikg.content.deprecate", "Move approved CIKG content to deprecated; resolve conflicting edges."),
+    (
+        "cikg.content.deprecate",
+        "Move approved CIKG content to deprecated; resolve conflicting edges.",
+    ),
     (
         "cikg.content.admin",
         "All cikg.content.* permissions, plus manage CareerLevel/CareerTrack reference "
@@ -502,6 +531,11 @@ async def _seed_ai_platform_defaults(session: AsyncSession) -> None:
     )
     await _seed_prompt_version(
         session, use_case=RESUME_EXTRACTION_USE_CASE, template=RESUME_EXTRACTION_PROMPT_TEMPLATE
+    )
+    await _seed_prompt_version(
+        session,
+        use_case=LEARNING_RECOMMENDATIONS_USE_CASE,
+        template=LEARNING_RECOMMENDATIONS_PROMPT_TEMPLATE,
     )
 
     result = await session.execute(select(ModelVersionModel))

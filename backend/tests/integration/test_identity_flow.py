@@ -121,29 +121,21 @@ class TestLogin:
 
         assert result["last_login_at"] is None
 
-    async def test_second_login_returns_the_previous_logins_time(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_second_login_returns_the_previous_logins_time(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
 
-        first = await _login(
-            client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery"
-        )
+        first = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         assert first["last_login_at"] is None
 
-        second = await _login(
-            client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery"
-        )
+        second = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
 
         # Reflects *before* this second login, not "now" — a stable
         # value to display as "Last logged in @ ...", not one that
         # already moved to the moment you're reading it.
         assert second["last_login_at"] is not None
 
-        third = await _login(
-            client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery"
-        )
+        third = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         assert third["last_login_at"] != second["last_login_at"]
 
     async def test_login_reflects_updated_salutation(self, client: AsyncClient) -> None:
@@ -322,7 +314,11 @@ class TestPasswordReset:
         # new one works.
         old_password_attempt = await client.post(
             "/api/v1/identity/login",
-            json={"subdomain": subdomain, "email": admin_email, "password": "correct-horse-battery"},
+            json={
+                "subdomain": subdomain,
+                "email": admin_email,
+                "password": "correct-horse-battery",
+            },
         )
         assert old_password_attempt.status_code == 401
 
@@ -565,16 +561,12 @@ class TestPersonalSignup:
 
         async with async_session_factory() as session:
             await session.execute(
-                text(
-                    "UPDATE pending_signups SET expires_at = :expired WHERE email = :email"
-                ),
+                text("UPDATE pending_signups SET expires_at = :expired WHERE email = :email"),
                 {"expired": datetime.now(UTC) - timedelta(minutes=1), "email": email},
             )
             await session.commit()
 
-        verify_response = await client.post(
-            "/api/v1/identity/signup/verify", json={"token": token}
-        )
+        verify_response = await client.post("/api/v1/identity/signup/verify", json={"token": token})
         assert verify_response.status_code == 401
         assert verify_response.json()["error"]["code"] == "INVALID_SIGNUP_TOKEN"
 
@@ -653,9 +645,7 @@ class TestOrganizationSignup:
         assert request_response.status_code == 202
         token = _extract_reset_token(email_provider.sent[-1])
 
-        verify_response = await client.post(
-            "/api/v1/identity/signup/verify", json={"token": token}
-        )
+        verify_response = await client.post("/api/v1/identity/signup/verify", json={"token": token})
         assert verify_response.status_code == 200, verify_response.text
         assert verify_response.json()["email"] == admin_email
 
@@ -880,6 +870,93 @@ class TestDeleteAccount:
                 {"user_id": user_id},
             )
             assert result.scalar_one() == 0
+
+    async def test_delete_removes_learning_items_and_recommendation_sets(
+        self, client: AsyncClient, email_provider: FakeEmailProvider
+    ) -> None:
+        """learning_recommendation_sets.target_role_id is a NOT NULL FK
+        (no ON DELETE CASCADE) — the exact bug caught live building
+        Learning Intelligence: deleting an account with a target role
+        that had cached recommendations raised a raw ForeignKeyViolation
+        500 before LearningItemModel/LearningRecommendationSetModel were
+        added to SqlAlchemyAccountDeletionRepository's step-3 delete
+        loop (deletion order deletes these before target_roles, which
+        step 4 deletes). The recommendation set is inserted directly (no
+        real LLM call in this test), same pattern as this class's
+        platform-admin sibling test.
+        """
+        email = _unique_email()
+        registration = await _signup_personal(
+            client, email=email, password="a-real-password-1", email_provider=email_provider
+        )
+        headers = {"Authorization": f"Bearer {registration['access_token']}"}
+        tenant_id = uuid.UUID(registration["tenant_id"])
+        user_id = uuid.UUID(registration["user_id"])
+
+        target_role_response = await client.post(
+            "/api/v1/career-profile/target-roles",
+            headers=headers,
+            json={"role_name": "Staff Engineer", "tag": "SE"},
+        )
+        assert target_role_response.status_code == 201, target_role_response.text
+        target_role_id = uuid.UUID(target_role_response.json()["id"])
+
+        await client.post(
+            "/api/v1/learning/items",
+            headers=headers,
+            json={"title": "Deep Learning Spec", "target_role_id": str(target_role_id)},
+        )
+
+        async with async_session_factory() as session:
+            # RLS-protected table — set_config('app.tenant_id', ...)
+            # must be bound first, or the policy's own tenant_id cast
+            # sees an empty string and errors (the same gotcha this
+            # test suite's Terms-of-Service verification script hit).
+            await set_tenant_context(session, tenant_id)
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO learning_recommendation_sets
+                        (id, tenant_id, user_id, target_role_id, status,
+                         missing_skills_hash, recommendations, generated_at)
+                    VALUES
+                        (:id, :tenant_id, :user_id, :target_role_id, 'generated',
+                         'deadbeef', '[]', now())
+                    """
+                ),
+                {
+                    "id": uuid.uuid4(),
+                    "tenant_id": tenant_id,
+                    "user_id": user_id,
+                    "target_role_id": target_role_id,
+                },
+            )
+            await session.commit()
+
+        delete_response = await client.delete("/api/v1/identity/me", headers=headers)
+        assert delete_response.status_code == 204, delete_response.text
+
+        # Bind tenant context even though the tenant row itself is
+        # already gone — set_config() doesn't validate the value against
+        # the tenants table, it's just a session GUC RLS's own policy
+        # reads. Without it, current_setting('app.tenant_id', true)
+        # returns '' (not NULL) for a session that never bound one,
+        # which errors casting to uuid — the same gotcha this test
+        # suite's Terms-of-Service verification script hit live.
+        async with async_session_factory() as session:
+            await set_tenant_context(session, tenant_id)
+            items_count = await session.execute(
+                text("SELECT count(*) FROM learning_items WHERE tenant_id = :tenant_id"),
+                {"tenant_id": tenant_id},
+            )
+            assert items_count.scalar_one() == 0
+            recs_count = await session.execute(
+                text(
+                    "SELECT count(*) FROM learning_recommendation_sets WHERE tenant_id = :tenant_id"
+                ),
+                {"tenant_id": tenant_id},
+            )
+            assert recs_count.scalar_one() == 0
 
     async def test_delete_removes_the_tenant_and_login_then_fails(
         self, client: AsyncClient, email_provider: FakeEmailProvider

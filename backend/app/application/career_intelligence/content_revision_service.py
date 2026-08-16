@@ -55,6 +55,7 @@ from app.domain.career_intelligence.entities import (
     RelatedSkill,
     RequirementLevel,
     RevisionSourceAttribution,
+    RoleProgressesToEdge,
     RoleRequiredSkill,
     Skill,
     SkillCategory,
@@ -72,6 +73,7 @@ from app.domain.career_intelligence.repositories import (
     ContentRevisionRepository,
     PrerequisiteOfEdgeRepository,
     RelatedSkillRepository,
+    RoleProgressesToEdgeRepository,
     RoleRequiredSkillRepository,
     SkillCategoryMembershipRepository,
     SkillCategoryRepository,
@@ -81,9 +83,15 @@ from app.domain.career_intelligence.repositories import (
     SynonymOfEdgeRepository,
 )
 
-_DAG_EDGE_TYPES = {"edge:category_parent", "edge:prerequisite_of", "edge:specializes"}
+_DAG_EDGE_TYPES = {
+    "edge:category_parent",
+    "edge:prerequisite_of",
+    "edge:specializes",
+    "edge:role_progresses_to",
+}
 _SYMMETRIC_EDGE_TYPES = {"edge:related_to", "edge:synonym_of"}
 _DIRECTED_SKILL_EDGE_TYPES = {"edge:prerequisite_of", "edge:specializes"}
+_DIRECTED_ROLE_EDGE_TYPES = {"edge:role_progresses_to"}
 
 
 @dataclass(slots=True)
@@ -114,6 +122,7 @@ class ContentRevisionService:
         prerequisite_of_edges: PrerequisiteOfEdgeRepository,
         specializes_edges: SpecializesEdgeRepository,
         synonym_of_edges: SynonymOfEdgeRepository,
+        role_progresses_to_edges: RoleProgressesToEdgeRepository,
         revisions: ContentRevisionRepository,
         history: ContentHistoryRepository,
     ) -> None:
@@ -129,6 +138,7 @@ class ContentRevisionService:
         self._prerequisite_of_edges = prerequisite_of_edges
         self._specializes_edges = specializes_edges
         self._synonym_of_edges = synonym_of_edges
+        self._role_progresses_to_edges = role_progresses_to_edges
         self._revisions = revisions
         self._history = history
 
@@ -182,8 +192,7 @@ class ContentRevisionService:
         revision = await self._get_or_raise(revision_id)
         if revision.status != "in_review":
             raise ValidationError(
-                f"Only an in_review revision can be approved (current status: "
-                f"{revision.status}).",
+                f"Only an in_review revision can be approved (current status: {revision.status}).",
                 code="REVISION_NOT_IN_REVIEW",
             )
 
@@ -194,8 +203,7 @@ class ContentRevisionService:
             applied_entity_id = await self._apply(revision)
         except IntegrityError as exc:
             raise ConflictError(
-                "This content conflicts with something already approved "
-                "(likely a duplicate edge).",
+                "This content conflicts with something already approved (likely a duplicate edge).",
                 code="REVISION_APPLY_CONFLICT",
             ) from exc
 
@@ -212,8 +220,7 @@ class ContentRevisionService:
         revision = await self._get_or_raise(revision_id)
         if revision.status != "in_review":
             raise ValidationError(
-                f"Only an in_review revision can be rejected (current status: "
-                f"{revision.status}).",
+                f"Only an in_review revision can be rejected (current status: {revision.status}).",
                 code="REVISION_NOT_IN_REVIEW",
             )
         revision.status = "draft"
@@ -283,12 +290,16 @@ class ContentRevisionService:
                 )
             return data
 
+        if entity_type in _DIRECTED_ROLE_EDGE_TYPES:
+            source, target = _uuid(data, "source_role_id"), _uuid(data, "target_role_id")
+            if source == target:
+                raise ValidationError("A role cannot progress to itself.", code="EDGE_SELF_LOOP")
+            return data
+
         if entity_type == "edge:category_parent":
             child, parent = _uuid(data, "child_category_id"), _uuid(data, "parent_category_id")
             if child == parent:
-                raise ValidationError(
-                    "A category cannot be its own parent.", code="EDGE_SELF_LOOP"
-                )
+                raise ValidationError("A category cannot be its own parent.", code="EDGE_SELF_LOOP")
             return data
 
         return data
@@ -299,11 +310,18 @@ class ContentRevisionService:
         if entity_type == "edge:category_parent":
             existing = await self._category_parents.list_all_approved()
             edges = [(e.child_category_id, e.parent_category_id) for e in existing]
-            new_source, new_target = _uuid(data, "child_category_id"), _uuid(data, "parent_category_id")
+            new_source, new_target = (
+                _uuid(data, "child_category_id"),
+                _uuid(data, "parent_category_id"),
+            )
         elif entity_type == "edge:prerequisite_of":
             existing_p = await self._prerequisite_of_edges.list_all_approved()
             edges = [(e.source_skill_id, e.target_skill_id) for e in existing_p]
             new_source, new_target = _uuid(data, "source_skill_id"), _uuid(data, "target_skill_id")
+        elif entity_type == "edge:role_progresses_to":
+            existing_r = await self._role_progresses_to_edges.list_all_approved()
+            edges = [(e.source_role_id, e.target_role_id) for e in existing_r]
+            new_source, new_target = _uuid(data, "source_role_id"), _uuid(data, "target_role_id")
         else:  # edge:specializes
             existing_s = await self._specializes_edges.list_all_approved()
             edges = [(e.source_skill_id, e.target_skill_id) for e in existing_s]
@@ -318,7 +336,11 @@ class ContentRevisionService:
     # --- Apply dispatch ---
 
     async def _apply(self, revision: ContentRevision) -> UUID:
-        entity_type, entity_id, data = revision.entity_type, revision.entity_id, revision.proposed_data
+        entity_type, entity_id, data = (
+            revision.entity_type,
+            revision.entity_id,
+            revision.proposed_data,
+        )
         if entity_type == "skill_category":
             return await self._apply_skill_category(revision.id, entity_id, data)
         if entity_type == "competency":
@@ -343,6 +365,8 @@ class ContentRevisionService:
             return await self._apply_specializes(data)
         if entity_type == "edge:synonym_of":
             return await self._apply_synonym_of(data)
+        if entity_type == "edge:role_progresses_to":
+            return await self._apply_role_progresses_to(data)
         raise ValidationError(
             f"Unknown entity_type '{entity_type}'.", code="REVISION_UNKNOWN_ENTITY_TYPE"
         )
@@ -377,9 +401,13 @@ class ContentRevisionService:
         if entity_id is None:
             created = await self._categories.create(
                 SkillCategory(
-                    id=uuid.uuid4(), name=name, description=description,
-                    content_status="approved", source_attribution=None,
-                    created_at=now, updated_at=now,
+                    id=uuid.uuid4(),
+                    name=name,
+                    description=description,
+                    content_status="approved",
+                    source_attribution=None,
+                    created_at=now,
+                    updated_at=now,
                 )
             )
             return created.id
@@ -388,7 +416,9 @@ class ContentRevisionService:
         if existing is None:
             raise NotFoundError("Skill category not found.", code="SKILL_CATEGORY_NOT_FOUND")
         await self._snapshot(
-            entity_type="skill_category", entity_id=entity_id, revision_id=revision_id,
+            entity_type="skill_category",
+            entity_id=entity_id,
+            revision_id=revision_id,
             snapshot={"name": existing.name, "description": existing.description},
         )
         existing.name = name
@@ -407,9 +437,13 @@ class ContentRevisionService:
         if entity_id is None:
             created = await self._competencies.create(
                 Competency(
-                    id=uuid.uuid4(), name=name, description=description,
-                    content_status="approved", source_attribution=None,
-                    created_at=now, updated_at=now,
+                    id=uuid.uuid4(),
+                    name=name,
+                    description=description,
+                    content_status="approved",
+                    source_attribution=None,
+                    created_at=now,
+                    updated_at=now,
                 )
             )
             return created.id
@@ -418,7 +452,9 @@ class ContentRevisionService:
         if existing is None:
             raise NotFoundError("Competency not found.", code="COMPETENCY_NOT_FOUND")
         await self._snapshot(
-            entity_type="competency", entity_id=entity_id, revision_id=revision_id,
+            entity_type="competency",
+            entity_id=entity_id,
+            revision_id=revision_id,
             snapshot={"name": existing.name, "description": existing.description},
         )
         existing.name = name
@@ -443,10 +479,15 @@ class ContentRevisionService:
         if entity_id is None:
             created = await self._skills.create(
                 Skill(
-                    id=uuid.uuid4(), name=name, description=description,
-                    content_status="approved", source_attribution=None,
-                    created_at=now, updated_at=now,
-                    ats_keywords=ats_keywords, proficiency_level_definitions=proficiency_dict,
+                    id=uuid.uuid4(),
+                    name=name,
+                    description=description,
+                    content_status="approved",
+                    source_attribution=None,
+                    created_at=now,
+                    updated_at=now,
+                    ats_keywords=ats_keywords,
+                    proficiency_level_definitions=proficiency_dict,
                 )
             )
             return created.id
@@ -455,9 +496,12 @@ class ContentRevisionService:
         if existing is None:
             raise NotFoundError("Skill not found.", code="SKILL_NOT_FOUND")
         await self._snapshot(
-            entity_type="skill", entity_id=entity_id, revision_id=revision_id,
+            entity_type="skill",
+            entity_id=entity_id,
+            revision_id=revision_id,
             snapshot={
-                "name": existing.name, "description": existing.description,
+                "name": existing.name,
+                "description": existing.description,
                 "ats_keywords": existing.ats_keywords,
                 "proficiency_level_definitions": existing.proficiency_level_definitions,
             },
@@ -482,9 +526,14 @@ class ContentRevisionService:
         if entity_id is None:
             created = await self._roles.create(
                 CikgRole(
-                    id=uuid.uuid4(), title=title, description=description,
-                    experience_level=experience_level, content_status="approved",
-                    source_attribution=None, created_at=now, updated_at=now,
+                    id=uuid.uuid4(),
+                    title=title,
+                    description=description,
+                    experience_level=experience_level,
+                    content_status="approved",
+                    source_attribution=None,
+                    created_at=now,
+                    updated_at=now,
                 )
             )
             return created.id
@@ -493,9 +542,12 @@ class ContentRevisionService:
         if existing is None:
             raise NotFoundError("Role not found.", code="CIKG_ROLE_NOT_FOUND")
         await self._snapshot(
-            entity_type="cikg_role", entity_id=entity_id, revision_id=revision_id,
+            entity_type="cikg_role",
+            entity_id=entity_id,
+            revision_id=revision_id,
             snapshot={
-                "title": existing.title, "description": existing.description,
+                "title": existing.title,
+                "description": existing.description,
                 "experience_level": existing.experience_level,
             },
         )
@@ -515,7 +567,8 @@ class ContentRevisionService:
                 id=uuid.uuid4(),
                 child_category_id=_uuid(data, "child_category_id"),
                 parent_category_id=_uuid(data, "parent_category_id"),
-                content_status="approved", source_attribution=None,
+                content_status="approved",
+                source_attribution=None,
                 created_at=datetime.now(UTC),
             )
         )
@@ -527,7 +580,8 @@ class ContentRevisionService:
                 id=uuid.uuid4(),
                 skill_id=_uuid(data, "skill_id"),
                 category_id=_uuid(data, "category_id"),
-                content_status="approved", source_attribution=None,
+                content_status="approved",
+                source_attribution=None,
                 created_at=datetime.now(UTC),
             )
         )
@@ -539,7 +593,8 @@ class ContentRevisionService:
                 id=uuid.uuid4(),
                 skill_id=_uuid(data, "skill_id"),
                 competency_id=_uuid(data, "competency_id"),
-                content_status="approved", source_attribution=None,
+                content_status="approved",
+                source_attribution=None,
                 created_at=datetime.now(UTC),
             )
         )
@@ -553,7 +608,8 @@ class ContentRevisionService:
                 skill_a_id=_uuid(data, "skill_a_id"),
                 skill_b_id=_uuid(data, "skill_b_id"),
                 strength=str(strength),  # type: ignore[arg-type]
-                content_status="approved", source_attribution=None,
+                content_status="approved",
+                source_attribution=None,
                 created_at=datetime.now(UTC),
             )
         )
@@ -567,7 +623,8 @@ class ContentRevisionService:
                 role_id=_uuid(data, "role_id"),
                 skill_id=_uuid(data, "skill_id"),
                 requirement_level=requirement_level,
-                content_status="approved", source_attribution=None,
+                content_status="approved",
+                source_attribution=None,
                 created_at=datetime.now(UTC),
             )
         )
@@ -579,7 +636,8 @@ class ContentRevisionService:
                 id=uuid.uuid4(),
                 source_skill_id=_uuid(data, "source_skill_id"),
                 target_skill_id=_uuid(data, "target_skill_id"),
-                content_status="approved", source_attribution=None,
+                content_status="approved",
+                source_attribution=None,
                 created_at=datetime.now(UTC),
             )
         )
@@ -591,7 +649,8 @@ class ContentRevisionService:
                 id=uuid.uuid4(),
                 source_skill_id=_uuid(data, "source_skill_id"),
                 target_skill_id=_uuid(data, "target_skill_id"),
-                content_status="approved", source_attribution=None,
+                content_status="approved",
+                source_attribution=None,
                 created_at=datetime.now(UTC),
             )
         )
@@ -603,7 +662,21 @@ class ContentRevisionService:
                 id=uuid.uuid4(),
                 skill_a_id=_uuid(data, "skill_a_id"),
                 skill_b_id=_uuid(data, "skill_b_id"),
-                content_status="approved", source_attribution=None,
+                content_status="approved",
+                source_attribution=None,
+                created_at=datetime.now(UTC),
+            )
+        )
+        return edge.id
+
+    async def _apply_role_progresses_to(self, data: dict[str, object]) -> UUID:
+        edge = await self._role_progresses_to_edges.create(
+            RoleProgressesToEdge(
+                id=uuid.uuid4(),
+                source_role_id=_uuid(data, "source_role_id"),
+                target_role_id=_uuid(data, "target_role_id"),
+                content_status="approved",
+                source_attribution=None,
                 created_at=datetime.now(UTC),
             )
         )

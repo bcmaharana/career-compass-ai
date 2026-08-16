@@ -3,6 +3,8 @@ import {
   useCareerProfileSummary,
   useTargetRoles,
 } from "@/api/queries/career-profile";
+import { useLearningItems } from "@/api/queries/learning-intelligence";
+import { useCareerPath, useJobListings } from "@/api/queries/opportunity-intelligence";
 import { useResumeList } from "@/api/queries/resume-intelligence";
 import { useGapAnalysis } from "@/api/queries/skill-intelligence";
 import type { components } from "@/api/schema.gen";
@@ -41,6 +43,8 @@ export function DashboardPage() {
       <ProfileCompletenessCard />
       <SkillIntelligenceCard />
       <ResumeIntelligenceCard />
+      <OpportunityIntelligenceCard />
+      <LearningIntelligenceCard />
     </div>
   );
 }
@@ -262,5 +266,87 @@ function ResumeStatusRow({
         <span>Downloaded: {hasGenerated ? `generated ${generatedAt}` : "None"}</span>
       </div>
     </div>
+  );
+}
+
+/** Scoped to the user's first target role only (not every role, unlike
+ * the other cards above) — job listings and career path are both real
+ * external/graph lookups, not free local computation, so the dashboard
+ * deliberately doesn't fan out to every target role here. */
+function OpportunityIntelligenceCard() {
+  const { data: targetRoles, isLoading: rolesLoading } = useTargetRoles();
+  const primaryRoleId = targetRoles?.[0]?.id ?? null;
+  const { data: jobListings, isLoading: jobsLoading } = useJobListings(primaryRoleId);
+  const { data: careerPath, isLoading: pathLoading } = useCareerPath(primaryRoleId);
+  const isLoading = rolesLoading || jobsLoading || pathLoading;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Opportunity Intelligence</CardTitle>
+        {targetRoles && targetRoles.length > 0 && (
+          <CardDescription>For {targetRoles[0]!.role_name}</CardDescription>
+        )}
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        {!primaryRoleId && (
+          <p className="text-sm text-muted-foreground">
+            Add a target role to see matching job listings and a career path.
+          </p>
+        )}
+        {primaryRoleId && isLoading && (
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        )}
+        {primaryRoleId && !isLoading && (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium">Job listings</span>
+              <Badge variant="default">{jobListings?.listings.length ?? 0} found</Badge>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium">Career path</span>
+              <Badge variant={careerPath?.resolved ? "accent" : "default"}>
+                {careerPath?.resolved ? "Available" : "No data yet"}
+              </Badge>
+            </div>
+          </>
+        )}
+        <Link to="/opportunities" className="text-xs text-accent hover:underline">
+          Go to Opportunity Intelligence
+        </Link>
+      </CardContent>
+    </Card>
+  );
+}
+
+function LearningIntelligenceCard() {
+  const { data: items, isLoading } = useLearningItems();
+  const inProgressCount = items?.filter((i) => i.status === "in_progress").length ?? 0;
+  const completedCount = items?.filter((i) => i.status === "completed").length ?? 0;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Learning Intelligence</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+        {!isLoading && items?.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            No learning items yet — track courses, certs, or resources you're working toward.
+          </p>
+        )}
+        {!isLoading && items && items.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Badge variant="default">{items.length} total</Badge>
+            <Badge variant="accent">{inProgressCount} in progress</Badge>
+            <Badge variant="default">{completedCount} completed</Badge>
+          </div>
+        )}
+        <Link to="/learning" className="text-xs text-accent hover:underline">
+          Go to Learning Intelligence
+        </Link>
+      </CardContent>
+    </Card>
   );
 }
