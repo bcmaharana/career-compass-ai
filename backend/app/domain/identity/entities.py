@@ -80,6 +80,22 @@ class User:
     #: chats (app/ai_platform/models/registry.py). None means "use the
     #: platform default" — see ModelRegistry.get_active_model.
     preferred_model_version_id: UUID | None = None
+    #: Job Search Preference (Settings > Job Search Preference, Phase 6
+    #: follow-up) — all None means "use profile city/state, no other
+    #: filters," the original behavior before this preference existed.
+    #: job_search_location overrides city/state when set (free text, an
+    #: Adzuna `where` value, not necessarily the same as the profile
+    #: address). job_search_max_days_old/distance_miles/employment_time/
+    #: employment_type map directly to real Adzuna query parameters
+    #: (max_days_old, distance, full_time|part_time, contract|permanent)
+    #: — verified live which parameters Adzuna actually supports before
+    #: this field set was decided; see JobListingService for the exact
+    #: mapping.
+    job_search_location: str | None = None
+    job_search_max_days_old: int | None = None
+    job_search_distance_miles: int | None = None
+    job_search_employment_time: str | None = None
+    job_search_employment_type: str | None = None
     #: When/which version of the Terms of Service + Privacy Policy this
     #: user agreed to at signup (see app/domain/identity/legal_terms.py).
     #: Both None for any account created before this was tracked —

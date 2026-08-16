@@ -95,6 +95,11 @@ def _user_to_domain(model: UserModel) -> User:
         visa_status=model.visa_status,
         linkedin_url=model.linkedin_url,
         other_professional_url=model.other_professional_url,
+        job_search_location=model.job_search_location,
+        job_search_max_days_old=model.job_search_max_days_old,
+        job_search_distance_miles=model.job_search_distance_miles,
+        job_search_employment_time=model.job_search_employment_time,
+        job_search_employment_type=model.job_search_employment_type,
     )
 
 
@@ -285,6 +290,11 @@ class SqlAlchemyUserRepository:
         model.visa_status = user.visa_status
         model.linkedin_url = user.linkedin_url
         model.other_professional_url = user.other_professional_url
+        model.job_search_location = user.job_search_location
+        model.job_search_max_days_old = user.job_search_max_days_old
+        model.job_search_distance_miles = user.job_search_distance_miles
+        model.job_search_employment_time = user.job_search_employment_time
+        model.job_search_employment_type = user.job_search_employment_type
         await self._session.flush()
         await self._session.refresh(model)
         return _user_to_domain(model)
@@ -391,9 +401,7 @@ class SqlAlchemyPasswordResetTokenRepository:
 
     async def get_by_token_hash(self, token_hash: str) -> PasswordResetToken | None:
         result = await self._session.execute(
-            select(PasswordResetTokenModel).where(
-                PasswordResetTokenModel.token_hash == token_hash
-            )
+            select(PasswordResetTokenModel).where(PasswordResetTokenModel.token_hash == token_hash)
         )
         model = result.scalar_one_or_none()
         return _password_reset_token_to_domain(model) if model else None

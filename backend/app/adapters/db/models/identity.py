@@ -25,7 +25,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -111,6 +111,11 @@ class UserModel(Base):
     visa_status: Mapped[str | None] = mapped_column(String(100), nullable=True)
     linkedin_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     other_professional_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    job_search_location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    job_search_max_days_old: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    job_search_distance_miles: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    job_search_employment_time: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    job_search_employment_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
 
 class PermissionModel(Base):
@@ -230,9 +235,7 @@ class PendingSignupModel(Base):
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    agreed_to_terms_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    agreed_to_terms_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     terms_version: Mapped[str] = mapped_column(String(20), nullable=False)
 
 
