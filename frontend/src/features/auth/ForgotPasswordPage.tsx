@@ -1,12 +1,12 @@
 import { useRequestPasswordReset } from "@/api/queries/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InlineLink } from "@/components/ui/inline-link";
 import { Label } from "@/components/ui/label";
 import { RainbowBorderInput } from "@/components/ui/rainbow-border-input";
 import { cn } from "@/lib/utils";
 import { Compass } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { Link } from "react-router-dom";
 
 /**
  * "Forgot password" request screen. Always shows the same generic
@@ -71,9 +71,9 @@ export function ForgotPasswordPage() {
                   If an account exists for that email, a reset link has been sent. Check your
                   inbox — the link expires in 30 minutes.
                 </p>
-                <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground">
+                <InlineLink to="/login" className="text-sm">
                   Back to sign in
-                </Link>
+                </InlineLink>
               </div>
             ) : (
               <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -128,12 +128,9 @@ export function ForgotPasswordPage() {
                   {requestReset.isPending ? "Sending..." : "Send reset link"}
                 </Button>
 
-                <Link
-                  to="/login"
-                  className="text-center text-sm text-muted-foreground hover:text-foreground"
-                >
+                <InlineLink to="/login" className="text-center text-sm">
                   Back to sign in
-                </Link>
+                </InlineLink>
               </form>
             )}
           </CardContent>

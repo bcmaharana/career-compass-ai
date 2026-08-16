@@ -1,3 +1,4 @@
+import { InlineLink } from "@/components/ui/inline-link";
 import { Compass } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -33,9 +34,9 @@ export function LegalPageLayout({ title, effectiveDate, summary, children }: Leg
             <Compass className="h-5 w-5 text-accent" strokeWidth={2} />
             <span className="font-display text-sm font-semibold">Career Compass AI</span>
           </Link>
-          <Link to="/signup" className="text-sm text-muted-foreground hover:text-foreground">
+          <InlineLink to="/signup" className="text-sm">
             Back to sign up
-          </Link>
+          </InlineLink>
         </div>
       </header>
 
@@ -55,7 +56,10 @@ export function LegalPageLayout({ title, effectiveDate, summary, children }: Leg
         <footer className="mt-12 border-t border-border pt-6 text-sm text-muted-foreground">
           <p>
             Questions about this document? Contact us at{" "}
-            <a href={`mailto:${CONTACT_EMAIL}`} className="text-foreground underline">
+            <a
+              href={`mailto:${CONTACT_EMAIL}`}
+              className="font-medium text-accent underline underline-offset-2 hover:text-accent/80"
+            >
               {CONTACT_EMAIL}
             </a>
             .

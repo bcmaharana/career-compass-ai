@@ -76,7 +76,7 @@ export function ResumeDownloadBar({
               href={profile.resume_docx_url}
               target="_blank"
               rel="noreferrer"
-              className="text-accent hover:underline"
+              className="font-medium text-accent underline underline-offset-2 hover:text-accent/80"
             >
               View Word
             </a>
@@ -86,7 +86,7 @@ export function ResumeDownloadBar({
               href={profile.resume_pdf_url}
               target="_blank"
               rel="noreferrer"
-              className="text-accent hover:underline"
+              className="font-medium text-accent underline underline-offset-2 hover:text-accent/80"
             >
               View PDF
             </a>

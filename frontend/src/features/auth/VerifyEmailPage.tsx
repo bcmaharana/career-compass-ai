@@ -1,9 +1,10 @@
 import { ApiError } from "@/api/client";
 import { useVerifySignup } from "@/api/queries/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InlineLink } from "@/components/ui/inline-link";
 import { Compass } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 /**
  * Lands here from the link in a signup-verification email. No form —
@@ -96,18 +97,18 @@ export function VerifyEmailPage() {
                 <p className="text-sm text-destructive">
                   This verification link is missing its token. Please sign up again.
                 </p>
-                <Link to="/signup" className="text-sm text-muted-foreground hover:text-foreground">
+                <InlineLink to="/signup" className="text-sm">
                   Back to sign up
-                </Link>
+                </InlineLink>
               </div>
             ) : errorMessage ? (
               <div className="flex flex-col gap-4">
                 <p role="alert" className="text-sm text-destructive">
                   {errorMessage}
                 </p>
-                <Link to="/signup" className="text-sm text-muted-foreground hover:text-foreground">
+                <InlineLink to="/signup" className="text-sm">
                   Back to sign up
-                </Link>
+                </InlineLink>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">Verifying...</p>

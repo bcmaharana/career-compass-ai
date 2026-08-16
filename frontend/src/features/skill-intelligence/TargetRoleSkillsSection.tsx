@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollapseToggle } from "@/components/ui/collapse-toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CopyButton } from "@/components/ui/copy-button";
+import { InlineLink } from "@/components/ui/inline-link";
 import { Input } from "@/components/ui/input";
 import { itemAlternateClass } from "@/features/career-profile/section-order";
 import { RenameSkillDialog } from "@/features/skill-intelligence/RenameSkillDialog";
@@ -224,8 +225,8 @@ export function TargetRoleSkillsSection({ cardBackground }: TargetRoleSkillsSect
         <CardContent className="flex flex-col gap-3">
           {targetRoles?.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              Add a target role in the Career Profile page's Target Roles widget, then link the
-              skills it requires here.
+              Add a target role in the <InlineLink to="/profile">Career Profile</InlineLink> page's
+              Target Roles widget, then link the skills it requires here.
             </p>
           )}
           {targetRoles?.map((role, index) => (

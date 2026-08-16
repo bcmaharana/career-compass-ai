@@ -2,6 +2,7 @@ import { ApiError } from "@/api/client";
 import { useLogin } from "@/api/queries/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InlineLink } from "@/components/ui/inline-link";
 import { Label } from "@/components/ui/label";
 import { RainbowBorderInput } from "@/components/ui/rainbow-border-input";
 import { RainbowBorderPasswordInput } from "@/components/ui/rainbow-border-password-input";
@@ -161,12 +162,9 @@ export function LoginPage() {
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between">
                       <Label htmlFor="password">Password</Label>
-                      <Link
-                        to="/forgot-password"
-                        className="text-xs text-muted-foreground hover:text-foreground"
-                      >
+                      <InlineLink to="/forgot-password" className="text-xs">
                         Forgot password?
-                      </Link>
+                      </InlineLink>
                     </div>
                     <RainbowBorderPasswordInput
                       id="password"
@@ -197,9 +195,7 @@ export function LoginPage() {
 
               <p className="mt-4 text-center text-sm text-muted-foreground">
                 Don't have an account?{" "}
-                <Link to="/signup" className="font-medium text-foreground underline">
-                  Sign up
-                </Link>
+                <InlineLink to="/signup">Sign up</InlineLink>
               </p>
             </CardContent>
           </Card>

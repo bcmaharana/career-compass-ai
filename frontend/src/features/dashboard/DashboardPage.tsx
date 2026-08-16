@@ -10,8 +10,8 @@ import { useGapAnalysis } from "@/api/queries/skill-intelligence";
 import type { components } from "@/api/schema.gen";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InlineLink } from "@/components/ui/inline-link";
 import { formatDisplayDate } from "@/lib/date-format";
-import { Link } from "react-router-dom";
 
 type ResumeSummary = components["schemas"]["ResumeSummary"];
 type TargetRoleResponse = components["schemas"]["TargetRoleResponse"];
@@ -61,9 +61,9 @@ function ProfileCompletenessCard() {
         {scopes.map((scope) => (
           <ProfileCompletenessRow key={scope.id ?? "master"} scope={scope.id} label={scope.label} />
         ))}
-        <Link to="/profile" className="text-xs text-accent hover:underline">
+        <InlineLink to="/profile" className="text-xs">
           Go to Career Profile
-        </Link>
+        </InlineLink>
       </CardContent>
     </Card>
   );
@@ -143,9 +143,9 @@ function SkillIntelligenceCard() {
           targetRoles?.map((role) => (
             <SkillIntelligenceRow key={role.id} role={role} missingSkills={missingSkillsFor(role.id)} />
           ))}
-        <Link to="/skills" className="text-xs text-accent hover:underline">
+        <InlineLink to="/skills" className="text-xs">
           Go to Skill Intelligence
-        </Link>
+        </InlineLink>
       </CardContent>
     </Card>
   );
@@ -227,9 +227,9 @@ function ResumeIntelligenceCard() {
             resumes={resumes ?? []}
           />
         ))}
-        <Link to="/resumes" className="text-xs text-accent hover:underline">
+        <InlineLink to="/resumes" className="text-xs">
           Go to Resume Intelligence
-        </Link>
+        </InlineLink>
       </CardContent>
     </Card>
   );
@@ -311,9 +311,9 @@ function OpportunityIntelligenceCard() {
             </div>
           </>
         )}
-        <Link to="/opportunities" className="text-xs text-accent hover:underline">
+        <InlineLink to="/opportunities" className="text-xs">
           Go to Opportunity Intelligence
-        </Link>
+        </InlineLink>
       </CardContent>
     </Card>
   );
@@ -343,9 +343,9 @@ function LearningIntelligenceCard() {
             <Badge variant="default">{completedCount} completed</Badge>
           </div>
         )}
-        <Link to="/learning" className="text-xs text-accent hover:underline">
+        <InlineLink to="/learning" className="text-xs">
           Go to Learning Intelligence
-        </Link>
+        </InlineLink>
       </CardContent>
     </Card>
   );

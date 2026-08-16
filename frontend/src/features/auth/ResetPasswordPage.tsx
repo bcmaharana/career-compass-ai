@@ -2,11 +2,12 @@ import { ApiError } from "@/api/client";
 import { useResetPassword } from "@/api/queries/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InlineLink } from "@/components/ui/inline-link";
 import { Label } from "@/components/ui/label";
 import { RainbowBorderInput } from "@/components/ui/rainbow-border-input";
 import { Compass } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 /**
  * "Set new password" screen, reached from the link in the password-reset
@@ -81,12 +82,9 @@ export function ResetPasswordPage() {
                 <p className="text-sm text-destructive">
                   This reset link is missing its token. Please request a new one.
                 </p>
-                <Link
-                  to="/forgot-password"
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                >
+                <InlineLink to="/forgot-password" className="text-sm">
                   Request a new reset link
-                </Link>
+                </InlineLink>
               </div>
             ) : (
               <form className="flex flex-col gap-4" onSubmit={handleSubmit}>

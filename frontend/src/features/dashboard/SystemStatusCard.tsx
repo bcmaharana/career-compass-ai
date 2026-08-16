@@ -5,8 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
+import { InlineLink } from "@/components/ui/inline-link";
 import { RefreshCw } from "lucide-react";
-import { Link } from "react-router-dom";
 
 type ServiceStatus = components["schemas"]["ServiceStatusResponse"];
 type RateLimitInfo = components["schemas"]["RateLimitInfoResponse"];
@@ -143,9 +143,9 @@ function ActiveModelRow() {
     <div className="flex flex-col gap-1 border-b border-border pb-2">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium">Active AI Model</span>
-        <Link to="/settings/ai-model" className="text-xs text-accent hover:underline">
+        <InlineLink to="/settings/ai-model" className="text-xs">
           Change
-        </Link>
+        </InlineLink>
       </div>
       {isLoading && <p className="text-xs text-muted-foreground">Loading...</p>}
       {isError && <p className="text-xs text-destructive">Could not load model selection.</p>}

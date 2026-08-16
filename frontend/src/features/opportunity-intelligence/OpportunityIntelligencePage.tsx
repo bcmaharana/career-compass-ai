@@ -2,13 +2,13 @@ import { useTargetRoles } from "@/api/queries/career-profile";
 import { useCareerPath, useJobListings } from "@/api/queries/opportunity-intelligence";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InlineLink } from "@/components/ui/inline-link";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { formatDisplayDateTime } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { ArrowRight, MapPin } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 
 /**
  * Phase 6 — Opportunity Intelligence. A target-role picker drives both
@@ -41,8 +41,8 @@ export function OpportunityIntelligencePage() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">
-              Add a target role on your Career Profile to see matching job listings and a career
-              path.
+              Add a target role on your <InlineLink to="/profile">Career Profile</InlineLink> to
+              see matching job listings and a career path.
             </p>
           </CardContent>
         </Card>
@@ -76,9 +76,7 @@ export function OpportunityIntelligencePage() {
           <CardContent className="flex flex-col gap-3">
             <p className="text-xs text-muted-foreground">
               Results below are based on your{" "}
-              <Link to="/settings/job-search-preference" className="text-accent hover:underline">
-                Job Search Preference
-              </Link>{" "}
+              <InlineLink to="/settings/job-search-preference">Job Search Preference</InlineLink>{" "}
               settings.
             </p>
             {jobsLoading && <p className="text-sm text-muted-foreground">Loading...</p>}

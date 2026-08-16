@@ -2,6 +2,7 @@ import { ApiError } from "@/api/client";
 import { useRequestOrganizationSignup, useRequestPersonalSignup } from "@/api/queries/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InlineLink } from "@/components/ui/inline-link";
 import { Label } from "@/components/ui/label";
 import { RainbowBorderInput } from "@/components/ui/rainbow-border-input";
 import { RainbowBorderPasswordInput } from "@/components/ui/rainbow-border-password-input";
@@ -146,9 +147,9 @@ export function SignupPage() {
                     Check your email for a verification link to finish creating your account. The
                     link expires in 60 minutes.
                   </p>
-                  <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground">
+                  <InlineLink to="/login" className="text-sm">
                     Back to sign in
-                  </Link>
+                  </InlineLink>
                 </div>
               ) : type === "individual" ? (
                 <form className="flex flex-col gap-4" onSubmit={handlePersonalSubmit}>
@@ -217,13 +218,13 @@ export function SignupPage() {
                     />
                     <span>
                       I agree to the{" "}
-                      <Link to="/terms" target="_blank" className="text-foreground underline">
+                      <InlineLink to="/terms" target="_blank">
                         Terms of Service
-                      </Link>{" "}
+                      </InlineLink>{" "}
                       and{" "}
-                      <Link to="/privacy" target="_blank" className="text-foreground underline">
+                      <InlineLink to="/privacy" target="_blank">
                         Privacy Policy
-                      </Link>
+                      </InlineLink>
                       .
                     </span>
                   </label>
@@ -343,13 +344,13 @@ export function SignupPage() {
                     />
                     <span>
                       I agree to the{" "}
-                      <Link to="/terms" target="_blank" className="text-foreground underline">
+                      <InlineLink to="/terms" target="_blank">
                         Terms of Service
-                      </Link>{" "}
+                      </InlineLink>{" "}
                       and{" "}
-                      <Link to="/privacy" target="_blank" className="text-foreground underline">
+                      <InlineLink to="/privacy" target="_blank">
                         Privacy Policy
-                      </Link>
+                      </InlineLink>
                       .
                     </span>
                   </label>
@@ -375,9 +376,7 @@ export function SignupPage() {
               {!activeMutation.isSuccess && (
                 <p className="mt-4 text-center text-sm text-muted-foreground">
                   Already have an account?{" "}
-                  <Link to="/login" className="font-medium text-foreground underline">
-                    Log in
-                  </Link>
+                  <InlineLink to="/login">Log in</InlineLink>
                 </p>
               )}
             </CardContent>
