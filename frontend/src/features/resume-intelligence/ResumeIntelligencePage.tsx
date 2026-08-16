@@ -109,14 +109,6 @@ export function ResumeIntelligencePage() {
 
   return (
     <div className="grid gap-4">
-      <div>
-        <h2 className="font-display text-lg font-semibold md:text-xl">Resume Intelligence</h2>
-        <p className="text-sm text-muted-foreground">
-          Upload resumes, review what we extract, and keep multiple versions tailored to
-          different target roles.
-        </p>
-      </div>
-
       <UploadCard onUploaded={(id) => setActiveResumeId(id)} />
 
       <Card>
