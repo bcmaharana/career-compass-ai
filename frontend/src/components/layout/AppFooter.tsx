@@ -2,6 +2,7 @@ import { ChatComposerForm } from "@/components/layout/ChatComposerForm";
 import { Tooltip } from "@/components/ui/tooltip";
 import { formatLastLogin } from "@/lib/format-last-login";
 import { Clock, LogOut, Settings } from "lucide-react";
+import { useLayoutEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
 interface AppFooterProps {
@@ -27,8 +28,10 @@ interface AppFooterProps {
  *
  * Shared by both DesktopShell and MobileShell rather than forked, mirroring
  * AppHeader.tsx's own pattern exactly: on desktop this is just the chat
- * composer at --shell-footer-h; on mobile it becomes a three-column bar at
- * the shorter --shell-mobile-header-h (matching the header's height, same
+ * composer, at least --shell-footer-h tall but free to grow past it as the
+ * composer's textarea grows (see the ResizeObserver below); on mobile it
+ * becomes a three-column bar at least the shorter --shell-mobile-header-h
+ * tall (matching the header's height, same
  * token reused for visual symmetry) — a left column with a Clock icon
  * (tooltip shows the formatted last-login string, replacing what Left
  * Nav's rail shows on desktop and has no other mobile home), the chat
@@ -49,10 +52,37 @@ interface AppFooterProps {
  */
 export function AppFooter({ onLogout, lastLoginAt }: AppFooterProps) {
   const isMobile = Boolean(onLogout);
+  const footerRef = useRef<HTMLElement>(null);
+
+  // The composer's textarea auto-grows with its content (ChatComposerForm.tsx),
+  // which makes this bar's own rendered height variable — h-* was fixed
+  // before this, min-h-* just sets the floor now. --current-footer-h
+  // publishes the bar's *actual* measured height so DesktopShell.tsx/
+  // MobileShell.tsx's <main> can keep its bottom inset in sync (same
+  // "one JS-driven variable, nothing can drift" pattern DesktopShell.tsx
+  // already uses for --current-left-nav-w/--current-right-nav-w, just
+  // driven by a ResizeObserver here instead of toggle state). Written to
+  // <html> (not this component's own element) since <main> in either
+  // shell is a sibling, not a descendant, of this footer.
+  useLayoutEffect(() => {
+    const el = footerRef.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height;
+      if (height) root.style.setProperty("--current-footer-h", `${height}px`);
+    });
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--current-footer-h");
+    };
+  }, []);
 
   return (
     <footer
-      className="fixed bottom-0 left-[var(--current-left-nav-w)] right-[var(--current-right-nav-w)] z-10 flex h-[var(--shell-mobile-header-h)] items-stretch gap-3 rainbow-border-t bg-[linear-gradient(to_bottom,#2A4382,#18284E)] px-3 pb-[env(safe-area-inset-bottom)] transition-[left,right] duration-200 ease-out md:h-[var(--shell-footer-h)] md:items-center md:px-6 md:pb-0"
+      ref={footerRef}
+      className="fixed bottom-0 left-[var(--current-left-nav-w)] right-[var(--current-right-nav-w)] z-10 flex min-h-[var(--shell-mobile-header-h)] items-stretch gap-3 rainbow-border-t bg-[linear-gradient(to_bottom,#2A4382,#18284E)] px-3 pb-[env(safe-area-inset-bottom)] transition-[left,right] duration-200 ease-out md:min-h-[var(--shell-footer-h)] md:items-center md:px-6 md:pb-0"
       aria-label="AI chat"
     >
       {isMobile && (

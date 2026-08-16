@@ -58,7 +58,7 @@ export function MobileShell({ mainRef, onLogout }: MobileShellProps) {
 
       <main
         ref={mainRef}
-        className="fixed inset-x-0 bottom-[var(--shell-mobile-header-h)] top-[var(--shell-mobile-header-h)] overflow-y-auto scrollbar-hide bg-[hsl(var(--center-bg))]"
+        className="fixed inset-x-0 bottom-[var(--current-footer-h,var(--shell-mobile-header-h))] top-[var(--shell-mobile-header-h)] overflow-y-auto scrollbar-hide bg-[hsl(var(--center-bg))]"
       >
         <div className="container py-6">
           <Outlet />

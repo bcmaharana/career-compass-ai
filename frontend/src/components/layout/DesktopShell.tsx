@@ -68,7 +68,12 @@ interface DesktopShellProps {
  * The wrapping div below carries no layout of its own (`display: contents`)
  * — it exists only to define --current-left-nav-w/--current-right-nav-w
  * for AppHeader/AppFooter/RightNav/`<main>`'s CSS var references, since
- * this state is otherwise local to this component.
+ * this state is otherwise local to this component. The Footer is the one
+ * region whose actual height isn't a fixed `--shell-*` token — its
+ * composer textarea can grow (ChatComposerForm.tsx), so `<main>` reads
+ * `--current-footer-h` instead (AppFooter.tsx publishes it via a
+ * ResizeObserver, with `--shell-footer-h` as the CSS fallback for the
+ * instant before that observer's first measurement lands).
  */
 export function DesktopShell({ mainRef, onLogout }: DesktopShellProps) {
   const location = useLocation();
@@ -226,7 +231,7 @@ export function DesktopShell({ mainRef, onLogout }: DesktopShellProps) {
 
       <main
         ref={mainRef}
-        className="fixed bottom-[var(--shell-footer-h)] left-[var(--current-left-nav-w)] right-[var(--current-right-nav-w)] top-[var(--shell-header-h)] overflow-y-auto scrollbar-hide bg-[hsl(var(--center-bg))] transition-[left,right] duration-200 ease-out"
+        className="fixed bottom-[var(--current-footer-h,var(--shell-footer-h))] left-[var(--current-left-nav-w)] right-[var(--current-right-nav-w)] top-[var(--shell-header-h)] overflow-y-auto scrollbar-hide bg-[hsl(var(--center-bg))] transition-[left,right] duration-200 ease-out"
       >
         <div className="container py-6 md:py-8">
           <Outlet />
