@@ -135,6 +135,15 @@ export function InterviewPrepPage() {
     scrollToAfterPaint(`interview-question-${id}`);
   }
 
+  // A follow-up only ever renders while its own parent question is
+  // open (see InterviewQuestionsSection.tsx), so selecting one from the
+  // TOC has to force both open together, not just the follow-up itself.
+  function openFollowUp(followUpId: string, parentQuestionId: string) {
+    setExpandedItem({ type: "question", id: parentQuestionId });
+    setExpandedFollowUpId(followUpId);
+    scrollToAfterPaint(`interview-question-${followUpId}`);
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <Card>
@@ -180,6 +189,7 @@ export function InterviewPrepPage() {
         questions={questions ?? []}
         onSelectTopic={openTopic}
         onSelectQuestion={openQuestion}
+        onSelectFollowUp={openFollowUp}
       />
 
       {/* Keyed by scope so switching between Master and a Target Role
@@ -226,11 +236,13 @@ function TableOfContents({
   questions,
   onSelectTopic,
   onSelectQuestion,
+  onSelectFollowUp,
 }: {
   topics: components["schemas"]["InterviewTopicResponse"][];
   questions: components["schemas"]["InterviewQuestionResponse"][];
   onSelectTopic: (id: string) => void;
   onSelectQuestion: (id: string) => void;
+  onSelectFollowUp: (followUpId: string, parentQuestionId: string) => void;
 }) {
   if (topics.length === 0 && questions.length === 0) return null;
 
@@ -279,6 +291,19 @@ function TableOfContents({
                       <TocEntryLink onSelect={() => onSelectQuestion(question.id)}>
                         {question.question}
                       </TocEntryLink>
+                      {question.follow_ups.length > 0 && (
+                        <ul className="list-disc space-y-1 pl-5">
+                          {question.follow_ups.map((followUp) => (
+                            <li key={followUp.id}>
+                              <TocEntryLink
+                                onSelect={() => onSelectFollowUp(followUp.id, question.id)}
+                              >
+                                {followUp.question}
+                              </TocEntryLink>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </li>
                   ))}
                 </ul>
