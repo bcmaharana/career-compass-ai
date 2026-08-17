@@ -123,6 +123,20 @@ class InterviewQuestionModel(Base):
     topic_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("interview_topics.id", ondelete="SET NULL"), nullable=True
     )
+    # Set only on a follow-up question — ON DELETE CASCADE, unlike
+    # topic_id's SET NULL, since a follow-up has no independent meaning
+    # once its parent is gone (contrast a Topic link, which is a loose
+    # cross-reference). display_order is meaningful only when this is
+    # set (ordering among siblings sharing the same parent — see
+    # app/domain/interview_prep/entities.py's docstring); unused
+    # (left at its default) for a top-level question, whose ordering
+    # instead lives in InterviewQuestionScopeTagModel, per-scope.
+    parent_question_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("interview_questions.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     question: Mapped[str] = mapped_column(Text, nullable=False)
     category: Mapped[str | None] = mapped_column(String(255), nullable=True)
     manual_answer: Mapped[str | None] = mapped_column(Text, nullable=True)

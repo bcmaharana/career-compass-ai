@@ -362,18 +362,22 @@ character must be "{{" and the very last character must be "}}".
 }}
 """
 
-# {question}/{role_context}/{profile_context}/{topic_context} are filled
-# in by InterviewAnswerService via str.format() — role_context/
-# profile_context/topic_context are each either a real sentence/block or
-# an empty string, so the template reads naturally either way without
-# needing separate templates for the grounded-vs-generic case. Plain-text
-# output only (no markdown), matching every other free-text field in
-# this app.
+# {question}/{role_context}/{profile_context}/{topic_context}/
+# {parent_question_context} are filled in by InterviewAnswerService via
+# str.format() — role_context/profile_context/topic_context/
+# parent_question_context are each either a real sentence/block or an
+# empty string, so the template reads naturally either way without
+# needing separate templates per case. parent_question_context is only
+# ever non-empty for a follow-up question (InterviewQuestion.
+# parent_question_id set) — it names the original question so the model
+# answers the follow-up in that actual conversational context, not as
+# an unrelated standalone question. Plain-text output only (no
+# markdown), matching every other free-text field in this app.
 INTERVIEW_ANSWER_GENERATION_USE_CASE = "interview_answer_generation"
 INTERVIEW_ANSWER_GENERATION_PROMPT_TEMPLATE = """You are an interview coach inside \
 Career Compass AI, helping a candidate prepare for a real job interview{role_context}.
 
-Interview question: "{question}"
+{parent_question_context}Interview question: "{question}"
 
 {profile_context}{topic_context}
 Write a strong, concise, first-person sample answer to this interview question — aim \

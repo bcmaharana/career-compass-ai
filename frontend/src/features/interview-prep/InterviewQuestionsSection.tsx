@@ -1,9 +1,13 @@
 import {
+  useAddFollowUpQuestion,
   useCreateInterviewQuestion,
+  useDeleteFollowUpQuestion,
   useDeleteInterviewQuestion,
   useGenerateInterviewAnswer,
   useInterviewQuestions,
+  useMoveFollowUpQuestion,
   useMoveInterviewQuestion,
+  useUpdateFollowUpQuestion,
   useUpdateInterviewQuestion,
 } from "@/api/queries/interview-prep";
 import type { components } from "@/api/schema.gen";
@@ -339,6 +343,27 @@ function QuestionCard({
 }) {
   const updateQuestion = useUpdateInterviewQuestion(scope);
   const generateAnswer = useGenerateInterviewAnswer(scope);
+  const addFollowUp = useAddFollowUpQuestion(scope);
+  const moveFollowUp = useMoveFollowUpQuestion(scope);
+  const deleteFollowUp = useDeleteFollowUpQuestion(scope);
+
+  const [followUpDraft, setFollowUpDraft] = useState("");
+  const [expandedFollowUpId, setExpandedFollowUpId] = useState<string | null>(null);
+  const [deleteFollowUpTarget, setDeleteFollowUpTarget] = useState<InterviewQuestion | null>(null);
+
+  function addFollowUpQuestion(event: FormEvent) {
+    event.preventDefault();
+    if (!followUpDraft.trim()) return;
+    addFollowUp.mutate(
+      { parentQuestionId: question.id, body: { question: followUpDraft } },
+      {
+        onSuccess: (created) => {
+          setFollowUpDraft("");
+          setExpandedFollowUpId(created.id);
+        },
+      },
+    );
+  }
 
   // Readonly-by-default: the saved answer displays as plain text with an
   // Edit button; the Textarea + Save button only appear while actively
@@ -622,8 +647,64 @@ function QuestionCard({
           </Button>
         </form>
       </div>
+
+      <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Follow-up Questions
+        </p>
+        {question.follow_ups.length === 0 && (
+          <p className="text-sm text-muted-foreground">No follow-up questions yet.</p>
+        )}
+        <div className="flex flex-col gap-2">
+          {question.follow_ups.map((followUp, followUpIndex) => (
+            <FollowUpQuestionCard
+              key={followUp.id}
+              followUp={followUp}
+              scope={scope}
+              index={followUpIndex}
+              total={question.follow_ups.length}
+              isEditMode={isEditMode}
+              onMove={(direction) =>
+                moveFollowUp.mutate({ id: followUp.id, direction, parentQuestionId: question.id })
+              }
+              moveDisabled={moveFollowUp.isPending}
+              onDelete={() => setDeleteFollowUpTarget(followUp)}
+              isOpen={expandedFollowUpId === followUp.id}
+              onToggleOpen={() =>
+                setExpandedFollowUpId((prev) => (prev === followUp.id ? null : followUp.id))
+              }
+            />
+          ))}
+        </div>
+        <form className="flex flex-wrap items-center gap-2" onSubmit={addFollowUpQuestion}>
+          <Input
+            value={followUpDraft}
+            onChange={(e) => setFollowUpDraft(e.target.value)}
+            placeholder="Add a follow-up question..."
+            className="min-w-64 flex-1"
+          />
+          <Button type="submit" variant="ghost" size="sm" disabled={addFollowUp.isPending}>
+            <Plus className="h-4 w-4" />
+            Add follow-up
+          </Button>
+        </form>
+      </div>
       </>
       )}
+
+      <ConfirmDialog
+        open={deleteFollowUpTarget !== null}
+        onCancel={() => setDeleteFollowUpTarget(null)}
+        onConfirm={() => {
+          if (deleteFollowUpTarget) {
+            deleteFollowUp.mutate({ id: deleteFollowUpTarget.id, parentQuestionId: question.id });
+          }
+          setDeleteFollowUpTarget(null);
+        }}
+        title="Delete follow-up question?"
+        description="Remove this follow-up question, its answers, and its reference links? This can't be undone."
+        isPending={deleteFollowUp.isPending}
+      />
 
       <ConfirmDialog
         open={deleteLinkIndex !== null}
@@ -636,6 +717,343 @@ function QuestionCard({
             : ""
         }
         isPending={updateQuestion.isPending}
+      />
+    </div>
+  );
+}
+
+/** A follow-up question — the same InterviewQuestion shape as a
+ * top-level question (its own Manual Answer, AI-Suggested Answer, and
+ * Reference Links, all reused as-is), just narrower: no category, no
+ * topic link, no ScopeTagSelector (a follow-up is never independently
+ * scope-tagged — it's visible wherever its parent is). Deliberately a
+ * separate, leaner component rather than overloading QuestionCard with
+ * a "follow-up mode" branch throughout — the two have genuinely
+ * different editable surfaces. */
+function FollowUpQuestionCard({
+  followUp,
+  scope,
+  index,
+  total,
+  isEditMode,
+  onMove,
+  moveDisabled,
+  onDelete,
+  isOpen,
+  onToggleOpen,
+}: {
+  followUp: InterviewQuestion;
+  scope: string | null;
+  index: number;
+  total: number;
+  isEditMode: boolean;
+  onMove: (direction: "up" | "down") => void;
+  moveDisabled: boolean;
+  onDelete: () => void;
+  isOpen: boolean;
+  onToggleOpen: () => void;
+}) {
+  const updateFollowUp = useUpdateFollowUpQuestion(scope);
+  const generateAnswer = useGenerateInterviewAnswer(scope);
+
+  const [isEditingQuestion, setIsEditingQuestion] = useState(false);
+  const [questionDraft, setQuestionDraft] = useState(followUp.question);
+  const [isEditingAnswer, setIsEditingAnswer] = useState(false);
+  const [manualAnswerDraft, setManualAnswerDraft] = useState(followUp.manual_answer ?? "");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkLabel, setLinkLabel] = useState("");
+  const [deleteLinkIndex, setDeleteLinkIndex] = useState<number | null>(null);
+  const [isAiAnswerVisible, setIsAiAnswerVisible] = useState(false);
+
+  function startEditingQuestion() {
+    setQuestionDraft(followUp.question);
+    setIsEditingQuestion(true);
+  }
+
+  function saveQuestionText() {
+    if (!questionDraft.trim()) return;
+    updateFollowUp.mutate(
+      {
+        id: followUp.id,
+        body: {
+          question: questionDraft,
+          manual_answer: followUp.manual_answer,
+          reference_links: followUp.reference_links,
+        },
+      },
+      { onSuccess: () => setIsEditingQuestion(false) },
+    );
+  }
+
+  function startEditingAnswer() {
+    setManualAnswerDraft(followUp.manual_answer ?? "");
+    setIsEditingAnswer(true);
+  }
+
+  function saveManualAnswer() {
+    updateFollowUp.mutate(
+      {
+        id: followUp.id,
+        body: {
+          question: followUp.question,
+          manual_answer: manualAnswerDraft || null,
+          reference_links: followUp.reference_links,
+        },
+      },
+      { onSuccess: () => setIsEditingAnswer(false) },
+    );
+  }
+
+  function addLink(event: FormEvent) {
+    event.preventDefault();
+    if (!linkUrl.trim() || !linkLabel.trim()) return;
+    const nextLinks: ReferenceLink[] = [
+      ...followUp.reference_links,
+      { url: linkUrl.trim(), label: linkLabel.trim() },
+    ];
+    updateFollowUp.mutate({
+      id: followUp.id,
+      body: { question: followUp.question, manual_answer: followUp.manual_answer, reference_links: nextLinks },
+    });
+    setLinkUrl("");
+    setLinkLabel("");
+  }
+
+  function confirmRemoveLink() {
+    if (deleteLinkIndex === null) return;
+    const nextLinks = followUp.reference_links.filter((_, i) => i !== deleteLinkIndex);
+    updateFollowUp.mutate({
+      id: followUp.id,
+      body: { question: followUp.question, manual_answer: followUp.manual_answer, reference_links: nextLinks },
+    });
+    setDeleteLinkIndex(null);
+  }
+
+  return (
+    <div
+      id={`interview-question-${followUp.id}`}
+      className={cn(
+        "flex flex-col gap-2 rounded-md border border-border p-3",
+        index % 2 === 0 ? "bg-card" : "bg-muted",
+      )}
+    >
+      <div className="flex cursor-pointer items-start justify-between gap-3" onClick={onToggleOpen}>
+        <div className="flex items-start gap-2">
+          {isEditMode && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <MoveButtons
+                onMoveUp={() => onMove("up")}
+                onMoveDown={() => onMove("down")}
+                isFirst={index === 0}
+                isLast={index === total - 1}
+                disabled={moveDisabled}
+              />
+            </div>
+          )}
+          <p className="text-sm">
+            <span className="font-normal text-muted-foreground">Follow-up: </span>
+            {followUp.question}
+          </p>
+        </div>
+        <div
+          className={cn("flex shrink-0 items-center", ACTION_BUTTON_ROW_GAP)}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {isEditMode && (
+            <>
+              <Button variant="ghost" size="sm" onClick={startEditingQuestion}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onDelete}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+          <CollapseToggle isOpen={isOpen} onToggle={onToggleOpen} label={followUp.question} />
+        </div>
+      </div>
+
+      {isEditingQuestion && (
+        <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+          <Textarea
+            value={questionDraft}
+            onChange={(e) => setQuestionDraft(e.target.value)}
+            rows={2}
+          />
+          <div className={cn("flex", ACTION_BUTTON_ROW_GAP)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={saveQuestionText}
+              disabled={updateFollowUp.isPending}
+            >
+              {updateFollowUp.isPending ? "Saving..." : "Save"}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setIsEditingQuestion(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {isOpen && (
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Answer:
+              </p>
+              {!isEditingAnswer && (
+                <Button variant="ghost" size="sm" onClick={startEditingAnswer}>
+                  <Pencil className="h-4 w-4" />
+                  Edit
+                </Button>
+              )}
+            </div>
+            {isEditingAnswer ? (
+              <>
+                <RichTextEditor
+                  defaultValue={manualAnswerDraft}
+                  onChange={setManualAnswerDraft}
+                  placeholder="Write your own answer..."
+                  autoFocus
+                />
+                <div className={cn("flex", ACTION_BUTTON_ROW_GAP)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={saveManualAnswer}
+                    disabled={updateFollowUp.isPending}
+                  >
+                    {updateFollowUp.isPending ? "Saving..." : "Save answer"}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setIsEditingAnswer(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            ) : followUp.manual_answer ? (
+              <RichTextDisplay
+                html={followUp.manual_answer}
+                className="max-h-48 overflow-y-auto scrollbar-hide"
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">No answer yet — click Edit to add one.</p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                AI-Suggested Answer
+              </p>
+              <CollapseToggle
+                isOpen={isAiAnswerVisible}
+                onToggle={() => setIsAiAnswerVisible((v) => !v)}
+                label="AI-Suggested Answer"
+              />
+            </div>
+            {isAiAnswerVisible && (
+              <>
+                {followUp.ai_answer_status === "generated" && (
+                  <div className="max-h-48 overflow-y-auto whitespace-pre-line text-sm scrollbar-hide">
+                    {followUp.ai_answer}
+                  </div>
+                )}
+                {followUp.ai_answer_status === "failed" && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {followUp.ai_answer_error ?? "Something went wrong generating an answer."}
+                  </p>
+                )}
+                {!followUp.ai_answer_status && (
+                  <p className="text-sm text-muted-foreground">No AI answer generated yet.</p>
+                )}
+              </>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                generateAnswer.mutate(followUp.id, { onSuccess: () => setIsAiAnswerVisible(true) })
+              }
+              disabled={generateAnswer.isPending}
+              className="self-start"
+            >
+              {followUp.ai_answer_status ? (
+                <RefreshCw className="h-4 w-4" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {generateAnswer.isPending
+                ? "Generating..."
+                : followUp.ai_answer_status
+                  ? "Regenerate"
+                  : "Generate"}
+            </Button>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Reference Links
+            </p>
+            {followUp.reference_links.length > 0 && (
+              <ul className="flex flex-col gap-1">
+                {followUp.reference_links.map((link, i) => (
+                  <li key={`${link.url}-${i}`} className="flex items-center gap-2">
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm font-medium text-accent underline underline-offset-2 hover:text-accent/80"
+                    >
+                      {link.label}
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteLinkIndex(i)}
+                      aria-label={`Remove link "${link.label}"`}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <form className="flex flex-wrap items-center gap-2" onSubmit={addLink}>
+              <Input
+                value={linkLabel}
+                onChange={(e) => setLinkLabel(e.target.value)}
+                placeholder="Label"
+                className="w-40"
+              />
+              <Input
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https://..."
+                type="url"
+                className="w-64"
+              />
+              <Button type="submit" variant="ghost" size="sm" disabled={updateFollowUp.isPending}>
+                <Plus className="h-4 w-4" />
+                Add link
+              </Button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={deleteLinkIndex !== null}
+        onCancel={() => setDeleteLinkIndex(null)}
+        onConfirm={confirmRemoveLink}
+        title="Remove reference link?"
+        description={
+          deleteLinkIndex !== null
+            ? `Remove "${followUp.reference_links[deleteLinkIndex]?.label}"? This can't be undone.`
+            : ""
+        }
+        isPending={updateFollowUp.isPending}
       />
     </div>
   );

@@ -25,17 +25,33 @@ class FakeInterviewQuestionRepository:
         self.questions: dict[uuid.UUID, InterviewQuestion] = {}
         self.tags: dict[uuid.UUID, dict[uuid.UUID | None, int]] = {}
         self._order_counters: dict[tuple[uuid.UUID, uuid.UUID | None], int] = {}
+        # Follow-ups aren't scope-tagged (see this repository's real
+        # counterpart) — a separate order tracked per parent, mirroring
+        # SqlAlchemyInterviewQuestionRepository's plain display_order
+        # column rather than the tag-table simulation above.
+        self._follow_up_order: dict[uuid.UUID, int] = {}
+        self._follow_up_order_counters: dict[uuid.UUID, int] = {}
 
     def _next_order(self, user_id: uuid.UUID, target_role_id: uuid.UUID | None) -> int:
         key = (user_id, target_role_id)
         self._order_counters[key] = self._order_counters.get(key, 0) + 1
         return self._order_counters[key]
 
+    def _next_follow_up_order(self, parent_id: uuid.UUID) -> int:
+        self._follow_up_order_counters[parent_id] = (
+            self._follow_up_order_counters.get(parent_id, 0) + 1
+        )
+        return self._follow_up_order_counters[parent_id]
+
     async def create(self, question: InterviewQuestion) -> InterviewQuestion:
         self.questions[question.id] = question
         self.tags[question.id] = {
             rid: self._next_order(question.user_id, rid) for rid in question.scope_target_role_ids
         }
+        if question.parent_question_id is not None:
+            self._follow_up_order[question.id] = self._next_follow_up_order(
+                question.parent_question_id
+            )
         return question
 
     async def get_by_id(
@@ -61,6 +77,7 @@ class FakeInterviewQuestionRepository:
         matches.sort(key=lambda pair: pair[0])
         for _, question in matches:
             question.scope_target_role_ids = list(self.tags[question.id].keys())
+            question.follow_ups = await self.list_follow_ups(tenant_id, question.id)
         return [question for _, question in matches]
 
     async def update(self, question: InterviewQuestion) -> InterviewQuestion:
@@ -72,11 +89,14 @@ class FakeInterviewQuestionRepository:
                 del current[rid]
         for rid in desired - set(current.keys()):
             current[rid] = self._next_order(question.user_id, rid)
+        if question.parent_question_id is None:
+            question.follow_ups = await self.list_follow_ups(question.tenant_id, question.id)
         return question
 
     async def soft_delete(self, tenant_id: uuid.UUID, question_id: uuid.UUID) -> None:
         self.questions.pop(question_id, None)
         self.tags.pop(question_id, None)
+        self._follow_up_order.pop(question_id, None)
 
     async def remove_scope(
         self, tenant_id: uuid.UUID, question_id: uuid.UUID, target_role_id: uuid.UUID | None
@@ -102,6 +122,36 @@ class FakeInterviewQuestionRepository:
         self.tags[question_id][target_role_id], self.tags[neighbor_id][target_role_id] = (
             self.tags[neighbor_id][target_role_id],
             self.tags[question_id][target_role_id],
+        )
+
+    async def list_follow_ups(
+        self, tenant_id: uuid.UUID, parent_question_id: uuid.UUID
+    ) -> list[InterviewQuestion]:
+        matches = [
+            (self._follow_up_order.get(q.id, 0), q)
+            for q in self.questions.values()
+            if q.parent_question_id == parent_question_id and q.tenant_id == tenant_id
+        ]
+        matches.sort(key=lambda pair: pair[0])
+        return [q for _, q in matches]
+
+    async def move_follow_up(
+        self, tenant_id: uuid.UUID, follow_up_id: uuid.UUID, direction: str
+    ) -> None:
+        question = self.questions.get(follow_up_id)
+        if question is None or question.parent_question_id is None:
+            return
+        siblings = await self.list_follow_ups(tenant_id, question.parent_question_id)
+        index = next((i for i, s in enumerate(siblings) if s.id == follow_up_id), None)
+        if index is None:
+            return
+        neighbor_index = index - 1 if direction == "up" else index + 1
+        if neighbor_index < 0 or neighbor_index >= len(siblings):
+            return
+        neighbor_id = siblings[neighbor_index].id
+        self._follow_up_order[follow_up_id], self._follow_up_order[neighbor_id] = (
+            self._follow_up_order[neighbor_id],
+            self._follow_up_order[follow_up_id],
         )
 
 
@@ -544,3 +594,172 @@ class TestMove:
         master_ordered = await questions_repo.list_for_scope(tenant_id, user_id, None)
         assert [q.id for q in role_ordered] == [second.id, first.id]
         assert [q.id for q in master_ordered] == [first.id, second.id]
+
+
+class TestFollowUps:
+    async def test_add_follow_up_links_to_parent_with_no_scope_tags(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        questions_repo = FakeInterviewQuestionRepository()
+        parent = await questions_repo.create(_make_question(tenant_id, user_id))
+        service = InterviewQuestionService(questions_repo, FakeInterviewTopicRepository())
+
+        follow_up = await service.add_follow_up(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            parent_question_id=parent.id,
+            question="And how did that turn out?",
+        )
+
+        assert follow_up.parent_question_id == parent.id
+        assert follow_up.scope_target_role_ids == []
+        assert follow_up.topic_id is None
+        assert follow_up.category is None
+
+    async def test_add_follow_up_rejects_blank_question(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        questions_repo = FakeInterviewQuestionRepository()
+        parent = await questions_repo.create(_make_question(tenant_id, user_id))
+        service = InterviewQuestionService(questions_repo, FakeInterviewTopicRepository())
+
+        with pytest.raises(ValidationError):
+            await service.add_follow_up(
+                tenant_id=tenant_id, user_id=user_id, parent_question_id=parent.id, question="   "
+            )
+
+    async def test_add_follow_up_rejects_a_parent_owned_by_a_different_user(self) -> None:
+        tenant_id = uuid.uuid4()
+        owner_id, other_user_id = uuid.uuid4(), uuid.uuid4()
+        questions_repo = FakeInterviewQuestionRepository()
+        parent = await questions_repo.create(_make_question(tenant_id, owner_id))
+        service = InterviewQuestionService(questions_repo, FakeInterviewTopicRepository())
+
+        with pytest.raises(NotFoundError):
+            await service.add_follow_up(
+                tenant_id=tenant_id,
+                user_id=other_user_id,
+                parent_question_id=parent.id,
+                question="Follow-up?",
+            )
+
+    async def test_add_follow_up_rejects_nesting_under_another_follow_up(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        questions_repo = FakeInterviewQuestionRepository()
+        parent = await questions_repo.create(_make_question(tenant_id, user_id))
+        service = InterviewQuestionService(questions_repo, FakeInterviewTopicRepository())
+        follow_up = await service.add_follow_up(
+            tenant_id=tenant_id, user_id=user_id, parent_question_id=parent.id, question="Follow-up?"
+        )
+
+        with pytest.raises(ValidationError, match="follow-ups of its own"):
+            await service.add_follow_up(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                parent_question_id=follow_up.id,
+                question="Nested follow-up?",
+            )
+
+    async def test_list_for_scope_nests_follow_ups_under_their_parent(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        questions_repo = FakeInterviewQuestionRepository()
+        parent = await questions_repo.create(_make_question(tenant_id, user_id))
+        service = InterviewQuestionService(questions_repo, FakeInterviewTopicRepository())
+        follow_up = await service.add_follow_up(
+            tenant_id=tenant_id, user_id=user_id, parent_question_id=parent.id, question="Follow-up?"
+        )
+
+        top_level = await service.list_for_scope(tenant_id=tenant_id, user_id=user_id, target_role_id=None)
+
+        assert len(top_level) == 1
+        assert [f.id for f in top_level[0].follow_ups] == [follow_up.id]
+
+    async def test_update_follow_up_saves_answer_and_links_without_scope_validation(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        questions_repo = FakeInterviewQuestionRepository()
+        parent = await questions_repo.create(_make_question(tenant_id, user_id))
+        service = InterviewQuestionService(questions_repo, FakeInterviewTopicRepository())
+        follow_up = await service.add_follow_up(
+            tenant_id=tenant_id, user_id=user_id, parent_question_id=parent.id, question="Follow-up?"
+        )
+
+        updated = await service.update_follow_up(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            follow_up_id=follow_up.id,
+            question="Follow-up?",
+            manual_answer="<p>My answer.</p>",
+            reference_links=[ReferenceLink(url="https://example.com", label="Ref")],
+        )
+
+        assert updated.manual_answer == "<p>My answer.</p>"
+        assert updated.reference_links == [ReferenceLink(url="https://example.com", label="Ref")]
+
+    async def test_update_follow_up_clears_stale_ai_answer_on_text_change(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        questions_repo = FakeInterviewQuestionRepository()
+        parent = await questions_repo.create(_make_question(tenant_id, user_id))
+        service = InterviewQuestionService(questions_repo, FakeInterviewTopicRepository())
+        follow_up = await service.add_follow_up(
+            tenant_id=tenant_id, user_id=user_id, parent_question_id=parent.id, question="Follow-up?"
+        )
+        follow_up.ai_answer = "Stale answer."
+        follow_up.ai_answer_status = "generated"
+
+        updated = await service.update_follow_up(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            follow_up_id=follow_up.id,
+            question="Different follow-up?",
+            manual_answer=None,
+            reference_links=[],
+        )
+
+        assert updated.ai_answer is None
+        assert updated.ai_answer_status is None
+
+    async def test_update_follow_up_rejects_a_top_level_question_id(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        questions_repo = FakeInterviewQuestionRepository()
+        top_level = await questions_repo.create(_make_question(tenant_id, user_id))
+        service = InterviewQuestionService(questions_repo, FakeInterviewTopicRepository())
+
+        with pytest.raises(NotFoundError):
+            await service.update_follow_up(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                follow_up_id=top_level.id,
+                question="Not actually a follow-up",
+                manual_answer=None,
+                reference_links=[],
+            )
+
+    async def test_delete_follow_up_removes_only_the_follow_up(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        questions_repo = FakeInterviewQuestionRepository()
+        parent = await questions_repo.create(_make_question(tenant_id, user_id))
+        service = InterviewQuestionService(questions_repo, FakeInterviewTopicRepository())
+        follow_up = await service.add_follow_up(
+            tenant_id=tenant_id, user_id=user_id, parent_question_id=parent.id, question="Follow-up?"
+        )
+
+        await service.delete_follow_up(tenant_id=tenant_id, user_id=user_id, follow_up_id=follow_up.id)
+
+        assert follow_up.id not in questions_repo.questions
+        assert parent.id in questions_repo.questions
+
+    async def test_move_follow_up_reorders_among_siblings_only(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        questions_repo = FakeInterviewQuestionRepository()
+        parent = await questions_repo.create(_make_question(tenant_id, user_id))
+        service = InterviewQuestionService(questions_repo, FakeInterviewTopicRepository())
+        first = await service.add_follow_up(
+            tenant_id=tenant_id, user_id=user_id, parent_question_id=parent.id, question="First follow-up?"
+        )
+        second = await service.add_follow_up(
+            tenant_id=tenant_id, user_id=user_id, parent_question_id=parent.id, question="Second follow-up?"
+        )
+
+        siblings = await service.move_follow_up(
+            tenant_id=tenant_id, user_id=user_id, follow_up_id=second.id, direction="up"
+        )
+
+        assert [f.id for f in siblings] == [second.id, first.id]

@@ -19,7 +19,9 @@ from app.api.dependencies import (
     get_interview_question_service,
     get_interview_topic_service,
 )
+from app.api.v1.career_profile.schemas import MoveRequest
 from app.api.v1.interview_prep.schemas import (
+    AddFollowUpQuestionRequest,
     InterviewPrepMoveRequest,
     InterviewPrepScopeSummaryResponse,
     InterviewQuestionRequest,
@@ -29,6 +31,7 @@ from app.api.v1.interview_prep.schemas import (
     InterviewTopicResponse,
     InterviewTopicUpdateRequest,
     ReferenceLinkPayload,
+    UpdateFollowUpQuestionRequest,
 )
 from app.application.interview_prep.interview_answer_service import InterviewAnswerService
 from app.application.interview_prep.interview_prep_summary_service import (
@@ -75,6 +78,8 @@ def _question_response(question: InterviewQuestion) -> InterviewQuestionResponse
             ReferenceLinkPayload(url=link.url, label=link.label) for link in question.reference_links
         ],
         scope_target_role_ids=question.scope_target_role_ids,
+        parent_question_id=question.parent_question_id,
+        follow_ups=[_question_response(f) for f in question.follow_ups],
         created_at=question.created_at,
     )
 
@@ -311,6 +316,78 @@ async def generate_interview_answer(
         tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id), question_id=question_id
     )
     return _question_response(question)
+
+
+@router.post(
+    "/interview-prep/questions/{question_id}/follow-ups",
+    response_model=InterviewQuestionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_follow_up_question(
+    question_id: UUID,
+    request: AddFollowUpQuestionRequest,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: InterviewQuestionService = Depends(get_interview_question_service),
+) -> InterviewQuestionResponse:
+    follow_up = await service.add_follow_up(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        parent_question_id=question_id,
+        question=request.question,
+    )
+    return _question_response(follow_up)
+
+
+@router.patch(
+    "/interview-prep/follow-up-questions/{follow_up_id}", response_model=InterviewQuestionResponse
+)
+async def update_follow_up_question(
+    follow_up_id: UUID,
+    request: UpdateFollowUpQuestionRequest,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: InterviewQuestionService = Depends(get_interview_question_service),
+) -> InterviewQuestionResponse:
+    follow_up = await service.update_follow_up(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        follow_up_id=follow_up_id,
+        question=request.question,
+        manual_answer=request.manual_answer,
+        reference_links=[ReferenceLink(url=link.url, label=link.label) for link in request.reference_links],
+    )
+    return _question_response(follow_up)
+
+
+@router.delete(
+    "/interview-prep/follow-up-questions/{follow_up_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_follow_up_question(
+    follow_up_id: UUID,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: InterviewQuestionService = Depends(get_interview_question_service),
+) -> None:
+    await service.delete_follow_up(
+        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id), follow_up_id=follow_up_id
+    )
+
+
+@router.post(
+    "/interview-prep/follow-up-questions/{follow_up_id}/move",
+    response_model=list[InterviewQuestionResponse],
+)
+async def move_follow_up_question(
+    follow_up_id: UUID,
+    request: MoveRequest,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: InterviewQuestionService = Depends(get_interview_question_service),
+) -> list[InterviewQuestionResponse]:
+    siblings = await service.move_follow_up(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        follow_up_id=follow_up_id,
+        direction=request.direction,
+    )
+    return [_question_response(f) for f in siblings]
 
 
 @router.get("/interview-prep/summary", response_model=list[InterviewPrepScopeSummaryResponse])

@@ -57,3 +57,13 @@ class InterviewQuestionRepository(Protocol):
     async def move(
         self, tenant_id: UUID, question_id: UUID, target_role_id: UUID | None, direction: Direction
     ) -> None: ...
+    #: Follow-up questions aren't scope-tagged (see
+    #: app/domain/interview_prep/entities.py's InterviewQuestion
+    #: docstring) — these three operate on parent_question_id +
+    #: display_order directly, not the scope-tag table.
+    async def list_follow_ups(
+        self, tenant_id: UUID, parent_question_id: UUID
+    ) -> list[InterviewQuestion]: ...
+    async def move_follow_up(
+        self, tenant_id: UUID, follow_up_id: UUID, direction: Direction
+    ) -> None: ...

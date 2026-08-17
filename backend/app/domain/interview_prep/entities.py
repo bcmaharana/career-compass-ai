@@ -84,6 +84,22 @@ class InterviewQuestion:
     a plain free-text grouping label with no separate entity of its
     own — same "just a string on each item" pattern
     InterviewTopic.section already established for grouping Topics.
+
+    A follow-up question (`parent_question_id` set) is the SAME entity
+    shape, deliberately reused rather than a separate type — it gets a
+    manual answer, AI-suggested answer, and reference links exactly like
+    a top-level question, for free. Single level only (enforced by
+    InterviewQuestionService: a question that already has a
+    parent_question_id can't itself be given one) — a follow-up has no
+    `category`/`topic_id` of its own (always None, no UI for either) and
+    is NOT independently scope-tagged (`scope_target_role_ids` is always
+    empty for it): it's visible wherever its parent is, inheriting the
+    parent's scopes entirely rather than tracking its own tag rows. Its
+    `display_order` (unlike a top-level question's, which lives in
+    InterviewQuestionScopeTagModel since ordering is per-scope) is a
+    plain column on the row itself, scoped among siblings sharing the
+    same parent_question_id — a follow-up has exactly one list to sit
+    in, not one per scope, so per-scope ordering doesn't apply to it.
     """
 
     id: UUID
@@ -94,7 +110,8 @@ class InterviewQuestion:
     updated_at: datetime
     #: Every scope this question is tagged into and visible under — see
     #: this module's own docstring. Always non-empty for a persisted
-    #: question (enforced by InterviewQuestionService, not here).
+    #: top-level question (enforced by InterviewQuestionService); always
+    #: empty for a follow-up (parent_question_id is not None).
     scope_target_role_ids: list[UUID | None] = field(default_factory=list)
     topic_id: UUID | None = None
     category: str | None = None
@@ -105,4 +122,13 @@ class InterviewQuestion:
     ai_answer_error: str | None = None
     ai_answer_generated_at: datetime | None = None
     reference_links: list[ReferenceLink] = field(default_factory=list)
+    #: None for a top-level question. Set to the parent's id for a
+    #: follow-up — see this class's own docstring.
+    parent_question_id: UUID | None = None
+    #: Populated by InterviewQuestionRepository.list_for_scope() (and by
+    #: create()/update() for a top-level question) — never persisted
+    #: itself, and always empty on a follow-up's own InterviewQuestion
+    #: (single level only, so a follow-up never has follow_ups of its
+    #: own).
+    follow_ups: list[InterviewQuestion] = field(default_factory=list)
     deleted_at: datetime | None = None

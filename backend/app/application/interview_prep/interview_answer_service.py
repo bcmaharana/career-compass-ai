@@ -56,6 +56,25 @@ class InterviewAnswerService:
                 "Interview question not found.", code="INTERVIEW_QUESTION_NOT_FOUND"
             )
 
+        # A follow-up isn't scope-tagged and has no topic_id of its own
+        # (see app/domain/interview_prep/entities.py's InterviewQuestion
+        # docstring) — ground it in its parent's scopes/topic instead of
+        # its own (always empty) ones, so a follow-up under a
+        # role-tagged question doesn't silently regress to generic
+        # Master-profile grounding.
+        grounding_source = question
+        parent_question_text: str | None = None
+        if question.parent_question_id is not None:
+            parent = await self._questions.get_by_id(tenant_id, question.parent_question_id)
+            if parent is not None:
+                grounding_source = parent
+                parent_question_text = parent.question
+        parent_question_context = (
+            f'This is a follow-up to the earlier question: "{parent_question_text}"\n\n'
+            if parent_question_text
+            else ""
+        )
+
         # A question can now be tagged to more than one scope — ground
         # against the first real Target Role it's tagged to (in tag
         # order, i.e. whichever was added first), falling back to the
@@ -64,7 +83,7 @@ class InterviewAnswerService:
         # would be more "complete" but adds real complexity for a
         # single generated answer that doesn't need it.
         target_role_id = next(
-            (rid for rid in question.scope_target_role_ids if rid is not None), None
+            (rid for rid in grounding_source.scope_target_role_ids if rid is not None), None
         )
         role_context = ""
         if target_role_id is not None:
@@ -87,8 +106,8 @@ class InterviewAnswerService:
         )
 
         topic_context = ""
-        if question.topic_id is not None:
-            topic = await self._topics.get_by_id(tenant_id, question.topic_id)
+        if grounding_source.topic_id is not None:
+            topic = await self._topics.get_by_id(tenant_id, grounding_source.topic_id)
             if topic is not None and topic.discussion:
                 topic_context = f"Notes on this topic from the candidate's own prep:\n{topic.discussion}\n"
 
@@ -100,6 +119,7 @@ class InterviewAnswerService:
                     "role_context": role_context,
                     "profile_context": profile_context,
                     "topic_context": topic_context,
+                    "parent_question_context": parent_question_context,
                 },
                 tenant_id=tenant_id,
                 user_id=user_id,

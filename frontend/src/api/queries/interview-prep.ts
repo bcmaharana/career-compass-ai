@@ -9,6 +9,8 @@ type InterviewQuestionResponse = components["schemas"]["InterviewQuestionRespons
 type InterviewQuestionRequest = components["schemas"]["InterviewQuestionRequest"];
 type InterviewQuestionUpdateRequest = components["schemas"]["InterviewQuestionUpdateRequest"];
 type InterviewPrepScopeSummaryResponse = components["schemas"]["InterviewPrepScopeSummaryResponse"];
+type AddFollowUpQuestionRequest = components["schemas"]["AddFollowUpQuestionRequest"];
+type UpdateFollowUpQuestionRequest = components["schemas"]["UpdateFollowUpQuestionRequest"];
 
 type MoveDirection = "up" | "down";
 
@@ -22,6 +24,29 @@ function scopeKey(scope: Scope): string {
 
 function withScope(path: string, scope: Scope): string {
   return scope ? `${path}?target_role_id=${scope}` : path;
+}
+
+/** Writes a question or follow-up question response back into a cached
+ * top-level questions list — a top-level question is replaced in place,
+ * a follow-up is replaced inside its parent's `follow_ups` array (found
+ * via `data.parent_question_id`, since a follow-up never appears as its
+ * own top-level entry in this list). Shared by every mutation whose
+ * response could be either shape: generate-answer (same endpoint for
+ * both), and every follow-up-specific mutation below. */
+function replaceQuestionInCache(
+  old: InterviewQuestionResponse[] | undefined,
+  data: InterviewQuestionResponse,
+): InterviewQuestionResponse[] {
+  if (data.parent_question_id === null) {
+    if (!old) return [data];
+    return old.map((q) => (q.id === data.id ? data : q));
+  }
+  if (!old) return [];
+  return old.map((q) =>
+    q.id === data.parent_question_id
+      ? { ...q, follow_ups: q.follow_ups.map((f) => (f.id === data.id ? data : f)) }
+      : q,
+  );
 }
 
 const KEYS = {
@@ -248,10 +273,91 @@ export function useGenerateInterviewAnswer(scope: Scope = null) {
         `/api/v1/interview-prep/questions/${id}/generate-answer`,
       ),
     onSuccess: (data) => {
+      // `id` here can be either a top-level question or a follow-up's —
+      // the endpoint is shared, see replaceQuestionInCache's own doc.
+      queryClient.setQueryData(KEYS.questions(scope), (old: InterviewQuestionResponse[] | undefined) =>
+        replaceQuestionInCache(old, data),
+      );
+    },
+  });
+}
+
+// --- Follow-up questions ---
+//
+// The same InterviewQuestionResponse shape as a top-level question,
+// nested under its parent's `follow_ups` — see
+// app/domain/interview_prep/entities.py's InterviewQuestion docstring
+// for the full "why". Not independently scope-tagged, so unlike every
+// mutation above these never need to reason about "is it still in this
+// scope" — a follow-up is visible wherever its parent is, full stop.
+
+export function useAddFollowUpQuestion(scope: Scope = null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ parentQuestionId, body }: { parentQuestionId: string; body: AddFollowUpQuestionRequest }) =>
+      apiClient.post<InterviewQuestionResponse>(
+        `/api/v1/interview-prep/questions/${parentQuestionId}/follow-ups`,
+        body,
+      ),
+    onSuccess: (data, { parentQuestionId }) => {
       queryClient.setQueryData(
         KEYS.questions(scope),
         (old: InterviewQuestionResponse[] | undefined) =>
-          old?.map((q) => (q.id === data.id ? data : q)) ?? [data],
+          old?.map((q) =>
+            q.id === parentQuestionId ? { ...q, follow_ups: [...q.follow_ups, data] } : q,
+          ) ?? [],
+      );
+      queryClient.invalidateQueries({ queryKey: KEYS.summary() });
+    },
+  });
+}
+
+export function useUpdateFollowUpQuestion(scope: Scope = null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateFollowUpQuestionRequest }) =>
+      apiClient.patch<InterviewQuestionResponse>(`/api/v1/interview-prep/follow-up-questions/${id}`, body),
+    onSuccess: (data) => {
+      queryClient.setQueryData(KEYS.questions(scope), (old: InterviewQuestionResponse[] | undefined) =>
+        replaceQuestionInCache(old, data),
+      );
+    },
+  });
+}
+
+export function useDeleteFollowUpQuestion(scope: Scope = null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: string; parentQuestionId: string }) =>
+      apiClient.delete(`/api/v1/interview-prep/follow-up-questions/${id}`),
+    onSuccess: (_data, { id, parentQuestionId }) => {
+      queryClient.setQueryData(
+        KEYS.questions(scope),
+        (old: InterviewQuestionResponse[] | undefined) =>
+          old?.map((q) =>
+            q.id === parentQuestionId
+              ? { ...q, follow_ups: q.follow_ups.filter((f) => f.id !== id) }
+              : q,
+          ) ?? [],
+      );
+      queryClient.invalidateQueries({ queryKey: KEYS.summary() });
+    },
+  });
+}
+
+export function useMoveFollowUpQuestion(scope: Scope = null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, direction }: { id: string; direction: MoveDirection; parentQuestionId: string }) =>
+      apiClient.post<InterviewQuestionResponse[]>(
+        `/api/v1/interview-prep/follow-up-questions/${id}/move`,
+        { direction },
+      ),
+    onSuccess: (siblings, { parentQuestionId }) => {
+      queryClient.setQueryData(
+        KEYS.questions(scope),
+        (old: InterviewQuestionResponse[] | undefined) =>
+          old?.map((q) => (q.id === parentQuestionId ? { ...q, follow_ups: siblings } : q)) ?? [],
       );
     },
   });

@@ -66,6 +66,20 @@ class FakeInterviewQuestionRepository:
     ) -> None:
         pass
 
+    async def list_follow_ups(
+        self, tenant_id: uuid.UUID, parent_question_id: uuid.UUID
+    ) -> list[InterviewQuestion]:
+        return [
+            q
+            for q in self.questions.values()
+            if q.parent_question_id == parent_question_id and q.tenant_id == tenant_id
+        ]
+
+    async def move_follow_up(
+        self, tenant_id: uuid.UUID, follow_up_id: uuid.UUID, direction: str
+    ) -> None:
+        raise NotImplementedError("not exercised by these tests")
+
 
 class FakeInterviewTopicRepository:
     def __init__(self) -> None:
@@ -326,6 +340,81 @@ class TestGenerateAnswer:
 
         assert llm.last_input_variables is not None
         assert "consistency and availability" in llm.last_input_variables["topic_context"]
+
+    async def test_follow_up_grounds_in_its_parents_role_and_topic_not_its_own(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        role = _make_target_role(tenant_id, user_id, "Staff Engineer")
+        topics_repo = FakeInterviewTopicRepository()
+        topic = await topics_repo.create(
+            InterviewTopic(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                user_id=user_id,
+                name="System Design",
+                discussion="Focus on trade-offs between consistency and availability.",
+                scope_target_role_ids=[None],
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
+        questions_repo = FakeInterviewQuestionRepository()
+        parent = await questions_repo.create(
+            _make_question(
+                tenant_id,
+                user_id,
+                question="How do you approach system design?",
+                scope_target_role_ids=[role.id],
+                topic_id=topic.id,
+            )
+        )
+        # A follow-up has no scope tags/topic_id of its own — this is the
+        # real shape InterviewQuestionService.add_follow_up() produces.
+        follow_up = await questions_repo.create(
+            _make_question(
+                tenant_id,
+                user_id,
+                question="Can you go deeper on that trade-off?",
+                scope_target_role_ids=[],
+                parent_question_id=parent.id,
+            )
+        )
+        career_profile = CareerProfileService(
+            FakeCareerProfileRepository(), FakeCareerProfileVersionRepository()
+        )
+        target_roles = TargetRoleService(FakeTargetRoleRepository({role.id: role}))
+        llm = FakeLLMService()
+
+        service = InterviewAnswerService(questions_repo, topics_repo, career_profile, target_roles, llm)
+        await service.generate_answer(tenant_id=tenant_id, user_id=user_id, question_id=follow_up.id)
+
+        assert llm.last_input_variables is not None
+        assert "Staff Engineer" in llm.last_input_variables["role_context"]
+        assert "consistency and availability" in llm.last_input_variables["topic_context"]
+        assert (
+            'This is a follow-up to the earlier question: "How do you approach system design?"'
+            in llm.last_input_variables["parent_question_context"]
+        )
+        # The literal question sent to the model is still the follow-up's
+        # own text, not the parent's.
+        assert llm.last_input_variables["question"] == "Can you go deeper on that trade-off?"
+
+    async def test_top_level_question_has_no_parent_question_context(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        questions_repo = FakeInterviewQuestionRepository()
+        question = await questions_repo.create(_make_question(tenant_id, user_id))
+        career_profile = CareerProfileService(
+            FakeCareerProfileRepository(), FakeCareerProfileVersionRepository()
+        )
+        target_roles = TargetRoleService(FakeTargetRoleRepository({}))
+        llm = FakeLLMService()
+
+        service = InterviewAnswerService(
+            questions_repo, FakeInterviewTopicRepository(), career_profile, target_roles, llm
+        )
+        await service.generate_answer(tenant_id=tenant_id, user_id=user_id, question_id=question.id)
+
+        assert llm.last_input_variables is not None
+        assert llm.last_input_variables["parent_question_context"] == ""
 
     async def test_failure_persists_failed_status_without_erasing_a_prior_answer(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()

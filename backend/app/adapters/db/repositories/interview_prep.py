@@ -24,7 +24,7 @@ from app.adapters.db.models import (
     InterviewTopicModel,
     InterviewTopicScopeTagModel,
 )
-from app.adapters.db.reorder import Direction, next_display_order
+from app.adapters.db.reorder import Direction, move_item, next_display_order
 from app.domain.interview_prep.entities import InterviewQuestion, InterviewTopic, ReferenceLink
 
 
@@ -258,7 +258,9 @@ class SqlAlchemyInterviewTopicRepository:
 
 
 def _question_to_domain(
-    model: InterviewQuestionModel, scope_target_role_ids: list[UUID | None]
+    model: InterviewQuestionModel,
+    scope_target_role_ids: list[UUID | None],
+    follow_ups: list[InterviewQuestion] | None = None,
 ) -> InterviewQuestion:
     return InterviewQuestion(
         id=model.id,
@@ -274,6 +276,8 @@ def _question_to_domain(
         ai_answer_generated_at=model.ai_answer_generated_at,
         reference_links=_links_to_domain(model.reference_links),
         scope_target_role_ids=scope_target_role_ids,
+        parent_question_id=model.parent_question_id,
+        follow_ups=follow_ups or [],
         created_at=model.created_at,
         updated_at=model.updated_at,
         deleted_at=model.deleted_at,
@@ -306,11 +310,26 @@ class SqlAlchemyInterviewQuestionRepository:
         return by_question
 
     async def create(self, question: InterviewQuestion) -> InterviewQuestion:
+        display_order = 0
+        if question.parent_question_id is not None:
+            # A follow-up isn't scope-tagged (see this repository's own
+            # module docstring) — its position is a flat per-row column,
+            # scoped among siblings sharing the same parent, computed the
+            # same way every scope-tag row's own display_order already is.
+            display_order = await next_display_order(
+                self._session,
+                InterviewQuestionModel,
+                tenant_id=question.tenant_id,
+                scope_filter=InterviewQuestionModel.parent_question_id
+                == question.parent_question_id,
+            )
         model = InterviewQuestionModel(
             id=question.id,
             tenant_id=question.tenant_id,
             user_id=question.user_id,
             topic_id=question.topic_id,
+            parent_question_id=question.parent_question_id,
+            display_order=display_order,
             question=question.question,
             category=question.category,
             manual_answer=question.manual_answer,
@@ -357,6 +376,30 @@ class SqlAlchemyInterviewQuestionRepository:
             return None
         return _question_to_domain(model, await self._tags_for(question_id))
 
+    async def _follow_ups_for_many(
+        self, parent_ids: list[UUID]
+    ) -> dict[UUID, list[InterviewQuestion]]:
+        """Batched, not one query per parent — follow-ups have no scope
+        tags of their own (see this repository's own module docstring),
+        so this is a plain query on parent_question_id, not the
+        scope-tag join list_for_scope()/get_by_id() use for top-level
+        questions."""
+        by_parent: dict[UUID, list[InterviewQuestion]] = {pid: [] for pid in parent_ids}
+        if not parent_ids:
+            return by_parent
+        result = await self._session.execute(
+            select(InterviewQuestionModel)
+            .where(
+                InterviewQuestionModel.parent_question_id.in_(parent_ids),
+                InterviewQuestionModel.deleted_at.is_(None),
+            )
+            .order_by(InterviewQuestionModel.display_order.asc())
+        )
+        for model in result.scalars().all():
+            assert model.parent_question_id is not None
+            by_parent[model.parent_question_id].append(_question_to_domain(model, []))
+        return by_parent
+
     async def list_for_scope(
         self, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None
     ) -> list[InterviewQuestion]:
@@ -374,9 +417,16 @@ class SqlAlchemyInterviewQuestionRepository:
             )
             .order_by(InterviewQuestionScopeTagModel.display_order.asc())
         )
+        # The join above naturally excludes follow-ups (they have no
+        # scope-tag rows of their own) — this list is top-level
+        # questions only, each with its own follow_ups nested in.
         models = list(result.scalars().all())
         tags_by_question = await self._tags_for_many([m.id for m in models])
-        return [_question_to_domain(m, tags_by_question[m.id]) for m in models]
+        follow_ups_by_parent = await self._follow_ups_for_many([m.id for m in models])
+        return [
+            _question_to_domain(m, tags_by_question[m.id], follow_ups_by_parent[m.id])
+            for m in models
+        ]
 
     async def update(self, question: InterviewQuestion) -> InterviewQuestion:
         model = await self._session.get(InterviewQuestionModel, question.id)
@@ -424,7 +474,16 @@ class SqlAlchemyInterviewQuestionRepository:
 
         await self._session.flush()
         await self._session.refresh(model)
-        return _question_to_domain(model, list(question.scope_target_role_ids))
+        # A top-level question already has follow-ups by the time it's
+        # being edited — omitting them here would make the returned
+        # object (which callers write straight into the frontend cache)
+        # silently drop them until the next full list refetch. A
+        # follow-up itself never has follow_ups of its own (single level
+        # only), so this is a no-op query for that case.
+        follow_ups: list[InterviewQuestion] = []
+        if model.parent_question_id is None:
+            follow_ups = (await self._follow_ups_for_many([model.id]))[model.id]
+        return _question_to_domain(model, list(question.scope_target_role_ids), follow_ups)
 
     async def soft_delete(self, tenant_id: UUID, question_id: UUID) -> None:
         result = await self._session.execute(
@@ -486,3 +545,28 @@ class SqlAlchemyInterviewQuestionRepository:
             current_tag.display_order,
         )
         await self._session.flush()
+
+    async def list_follow_ups(
+        self, tenant_id: UUID, parent_question_id: UUID
+    ) -> list[InterviewQuestion]:
+        return (await self._follow_ups_for_many([parent_question_id]))[parent_question_id]
+
+    async def move_follow_up(
+        self, tenant_id: UUID, follow_up_id: UUID, direction: Direction
+    ) -> None:
+        model = await self._session.get(InterviewQuestionModel, follow_up_id)
+        if model is None or model.deleted_at is not None or model.parent_question_id is None:
+            return
+        # A follow-up's ordering is a plain column on the row itself,
+        # scoped among siblings sharing the same parent — reuses the
+        # same centralized swap logic every other orderable entity in
+        # this app delegates to, unlike top-level questions' own
+        # bespoke, scope-tag-table-based move() above.
+        await move_item(
+            self._session,
+            InterviewQuestionModel,
+            tenant_id=tenant_id,
+            scope_filter=InterviewQuestionModel.parent_question_id == model.parent_question_id,
+            item_id=follow_up_id,
+            direction=direction,
+        )

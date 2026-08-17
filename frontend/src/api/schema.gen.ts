@@ -1616,6 +1616,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/interview-prep/questions/{question_id}/follow-ups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Follow Up Question */
+        post: operations["add_follow_up_question_api_v1_interview_prep_questions__question_id__follow_ups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interview-prep/follow-up-questions/{follow_up_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Follow Up Question */
+        delete: operations["delete_follow_up_question_api_v1_interview_prep_follow_up_questions__follow_up_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Follow Up Question */
+        patch: operations["update_follow_up_question_api_v1_interview_prep_follow_up_questions__follow_up_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/interview-prep/follow-up-questions/{follow_up_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move Follow Up Question */
+        post: operations["move_follow_up_question_api_v1_interview_prep_follow_up_questions__follow_up_id__move_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/interview-prep/summary": {
         parameters: {
             query?: never;
@@ -1637,6 +1689,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AddFollowUpQuestionRequest */
+        AddFollowUpQuestionRequest: {
+            /** Question */
+            question: string;
+        };
         /** AddRequiredSkillRequest */
         AddRequiredSkillRequest: {
             /** Name */
@@ -2398,6 +2455,13 @@ export interface components {
             reference_links: components["schemas"]["ReferenceLinkPayload"][];
             /** Scope Target Role Ids */
             scope_target_role_ids: (string | null)[];
+            /** Parent Question Id */
+            parent_question_id: string | null;
+            /**
+             * Follow Ups
+             * @default []
+             */
+            follow_ups: components["schemas"]["InterviewQuestionResponse"][];
             /**
              * Created At
              * Format: date-time
@@ -3406,6 +3470,18 @@ export interface components {
             linkedin_url?: string | null;
             /** Other Professional Url */
             other_professional_url?: string | null;
+        };
+        /** UpdateFollowUpQuestionRequest */
+        UpdateFollowUpQuestionRequest: {
+            /** Question */
+            question: string;
+            /** Manual Answer */
+            manual_answer?: string | null;
+            /**
+             * Reference Links
+             * @default []
+             */
+            reference_links: components["schemas"]["ReferenceLinkPayload"][];
         };
         /** UpdatePlatformAdminRequest */
         UpdatePlatformAdminRequest: {
@@ -7396,6 +7472,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InterviewQuestionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_follow_up_question_api_v1_interview_prep_questions__question_id__follow_ups_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddFollowUpQuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewQuestionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_follow_up_question_api_v1_interview_prep_follow_up_questions__follow_up_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                follow_up_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_follow_up_question_api_v1_interview_prep_follow_up_questions__follow_up_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                follow_up_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateFollowUpQuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewQuestionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_follow_up_question_api_v1_interview_prep_follow_up_questions__follow_up_id__move_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                follow_up_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewQuestionResponse"][];
                 };
             };
             /** @description Validation Error */

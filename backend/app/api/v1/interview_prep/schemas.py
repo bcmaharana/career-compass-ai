@@ -74,7 +74,32 @@ class InterviewQuestionResponse(BaseModel):
     ai_answer_generated_at: datetime | None
     reference_links: list[ReferenceLinkPayload]
     scope_target_role_ids: list[UUID | None]
+    #: None for a top-level question. Set for a follow-up — see
+    #: app/domain/interview_prep/entities.py's InterviewQuestion
+    #: docstring for the full "why" (single level only, no scope tags
+    #: or topic/category of its own).
+    parent_question_id: UUID | None
+    #: Always empty on a follow-up's own response (single level only).
+    #: Populated on a top-level question's response by
+    #: InterviewQuestionRepository.list_for_scope()/update().
+    follow_ups: list["InterviewQuestionResponse"] = []
     created_at: datetime
+
+
+#: Required for Pydantic v2 to resolve the self-reference in follow_ups
+#: above — a self-referencing model isn't safely usable in a FastAPI
+#: response_model without this explicit rebuild.
+InterviewQuestionResponse.model_rebuild()
+
+
+class AddFollowUpQuestionRequest(BaseModel):
+    question: str
+
+
+class UpdateFollowUpQuestionRequest(BaseModel):
+    question: str
+    manual_answer: str | None = None
+    reference_links: list[ReferenceLinkPayload] = []
 
 
 class InterviewPrepMoveRequest(BaseModel):

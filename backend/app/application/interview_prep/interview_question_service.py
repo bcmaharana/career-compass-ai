@@ -175,3 +175,99 @@ class InterviewQuestionService:
     ) -> None:
         await self.get_owned_or_raise(tenant_id=tenant_id, user_id=user_id, question_id=question_id)
         await self._questions.move(tenant_id, question_id, target_role_id, direction)
+
+    # --- Follow-up questions ---
+    #
+    # The same InterviewQuestion shape, linked via parent_question_id —
+    # see app/domain/interview_prep/entities.py's docstring for the full
+    # "why". Single level only: add_follow_up rejects a parent that is
+    # itself already a follow-up. Never scope-tagged, never given a
+    # topic_id/category of their own — no equivalent of add()'s
+    # scope/topic/category params here.
+
+    async def get_owned_follow_up_or_raise(
+        self, *, tenant_id: UUID, user_id: UUID, follow_up_id: UUID
+    ) -> InterviewQuestion:
+        follow_up = await self.get_owned_or_raise(
+            tenant_id=tenant_id, user_id=user_id, question_id=follow_up_id
+        )
+        if follow_up.parent_question_id is None:
+            raise NotFoundError(
+                "Interview question not found.", code="INTERVIEW_QUESTION_NOT_FOUND"
+            )
+        return follow_up
+
+    async def add_follow_up(
+        self, *, tenant_id: UUID, user_id: UUID, parent_question_id: UUID, question: str
+    ) -> InterviewQuestion:
+        trimmed = question.strip()
+        if not trimmed:
+            raise ValidationError("Question is required.", code="INTERVIEW_QUESTION_REQUIRED")
+
+        parent = await self.get_owned_or_raise(
+            tenant_id=tenant_id, user_id=user_id, question_id=parent_question_id
+        )
+        if parent.parent_question_id is not None:
+            raise ValidationError(
+                "A follow-up question can't have follow-ups of its own.",
+                code="FOLLOW_UP_NESTING_NOT_ALLOWED",
+            )
+
+        now = datetime.now(UTC)
+        return await self._questions.create(
+            InterviewQuestion(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                user_id=user_id,
+                question=trimmed,
+                parent_question_id=parent_question_id,
+                scope_target_role_ids=[],
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    async def update_follow_up(
+        self,
+        *,
+        tenant_id: UUID,
+        user_id: UUID,
+        follow_up_id: UUID,
+        question: str,
+        manual_answer: str | None,
+        reference_links: list[ReferenceLink],
+    ) -> InterviewQuestion:
+        trimmed = question.strip()
+        if not trimmed:
+            raise ValidationError("Question is required.", code="INTERVIEW_QUESTION_REQUIRED")
+
+        existing = await self.get_owned_follow_up_or_raise(
+            tenant_id=tenant_id, user_id=user_id, follow_up_id=follow_up_id
+        )
+        existing.manual_answer = sanitize_rich_text(manual_answer)
+        existing.reference_links = reference_links
+        if existing.question != trimmed:
+            existing.ai_answer = None
+            existing.ai_answer_status = None
+            existing.ai_answer_error = None
+            existing.ai_answer_generated_at = None
+        existing.question = trimmed
+        return await self._questions.update(existing)
+
+    async def delete_follow_up(
+        self, *, tenant_id: UUID, user_id: UUID, follow_up_id: UUID
+    ) -> None:
+        await self.get_owned_follow_up_or_raise(
+            tenant_id=tenant_id, user_id=user_id, follow_up_id=follow_up_id
+        )
+        await self._questions.soft_delete(tenant_id, follow_up_id)
+
+    async def move_follow_up(
+        self, *, tenant_id: UUID, user_id: UUID, follow_up_id: UUID, direction: Direction
+    ) -> list[InterviewQuestion]:
+        follow_up = await self.get_owned_follow_up_or_raise(
+            tenant_id=tenant_id, user_id=user_id, follow_up_id=follow_up_id
+        )
+        await self._questions.move_follow_up(tenant_id, follow_up_id, direction)
+        assert follow_up.parent_question_id is not None
+        return await self._questions.list_follow_ups(tenant_id, follow_up.parent_question_id)
