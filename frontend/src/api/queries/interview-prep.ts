@@ -67,11 +67,24 @@ export function useUpdateInterviewTopic(scope: Scope = null) {
     mutationFn: ({ id, body }: { id: string; body: InterviewTopicUpdateRequest }) =>
       apiClient.patch<InterviewTopicResponse>(`/api/v1/interview-prep/topics/${id}`, body),
     onSuccess: (data) => {
+      // ScopeTagSelector allows unchecking the scope currently being
+      // viewed (see its own docstring) — if that just happened, this
+      // item no longer belongs in this scope's cached list at all, not
+      // just updated in place.
+      const stillInScope = data.scope_target_role_ids.includes(scope);
       queryClient.setQueryData(
         KEYS.topics(scope),
-        (old: InterviewTopicResponse[] | undefined) =>
-          old?.map((t) => (t.id === data.id ? data : t)) ?? [data],
+        (old: InterviewTopicResponse[] | undefined) => {
+          if (!old) return stillInScope ? [data] : [];
+          return stillInScope
+            ? old.map((t) => (t.id === data.id ? data : t))
+            : old.filter((t) => t.id !== data.id);
+        },
       );
+      // A scope tag add/remove changes another scope's topic_count too
+      // (or this one's), which this scope's own cached list can't
+      // reflect on its own.
+      queryClient.invalidateQueries({ queryKey: KEYS.summary() });
     },
   });
 }
@@ -180,11 +193,19 @@ export function useUpdateInterviewQuestion(scope: Scope = null) {
     mutationFn: ({ id, body }: { id: string; body: InterviewQuestionUpdateRequest }) =>
       apiClient.patch<InterviewQuestionResponse>(`/api/v1/interview-prep/questions/${id}`, body),
     onSuccess: (data) => {
+      // Same "scope tags are freely editable, including the one
+      // currently being viewed" case as useUpdateInterviewTopic above.
+      const stillInScope = data.scope_target_role_ids.includes(scope);
       queryClient.setQueryData(
         KEYS.questions(scope),
-        (old: InterviewQuestionResponse[] | undefined) =>
-          old?.map((q) => (q.id === data.id ? data : q)) ?? [data],
+        (old: InterviewQuestionResponse[] | undefined) => {
+          if (!old) return stillInScope ? [data] : [];
+          return stillInScope
+            ? old.map((q) => (q.id === data.id ? data : q))
+            : old.filter((q) => q.id !== data.id);
+        },
       );
+      queryClient.invalidateQueries({ queryKey: KEYS.summary() });
     },
   });
 }

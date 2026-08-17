@@ -12,7 +12,13 @@ import { InterviewQuestionsSection } from "@/features/interview-prep/InterviewQu
 import { InterviewTopicsSection } from "@/features/interview-prep/InterviewTopicsSection";
 import { groupInterviewQuestionsByCategory } from "@/lib/group-interview-questions-by-category";
 import { groupInterviewTopicsBySection } from "@/lib/group-interview-topics-by-section";
-import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
+import {
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+  useEffect,
+  useState,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 
 /** "master" is a real stored value here (not just an absent key) so a
@@ -232,16 +238,12 @@ function TableOfContents({
                 {group.section && (
                   <p className="text-xs font-medium text-muted-foreground">{group.section}:</p>
                 )}
-                <ul className="flex list-disc flex-col gap-1 pl-5">
+                <ul className="list-disc space-y-1 pl-5">
                   {group.topics.map((topic) => (
                     <li key={topic.id}>
-                      <button
-                        type="button"
-                        onClick={() => onSelectTopic(topic.id)}
-                        className="text-left text-sm font-medium text-accent underline underline-offset-2 hover:text-accent/80"
-                      >
+                      <TocEntryLink onSelect={() => onSelectTopic(topic.id)}>
                         {topic.name}
-                      </button>
+                      </TocEntryLink>
                     </li>
                   ))}
                 </ul>
@@ -259,16 +261,12 @@ function TableOfContents({
                 {group.category && (
                   <p className="text-xs font-medium text-muted-foreground">{group.category}:</p>
                 )}
-                <ul className="flex list-disc flex-col gap-1 pl-5">
+                <ul className="list-disc space-y-1 pl-5">
                   {group.questions.map((question) => (
                     <li key={question.id}>
-                      <button
-                        type="button"
-                        onClick={() => onSelectQuestion(question.id)}
-                        className="truncate text-left text-sm font-medium text-accent underline underline-offset-2 hover:text-accent/80"
-                      >
+                      <TocEntryLink onSelect={() => onSelectQuestion(question.id)}>
                         {question.question}
-                      </button>
+                      </TocEntryLink>
                     </li>
                   ))}
                 </ul>
@@ -278,5 +276,39 @@ function TableOfContents({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** A `<span role="button">`, not a real `<button>` — confirmed live that a
+ * `<button>` inside a `<li>` misaligns the list's ::marker to the bottom
+ * of the item once its text wraps to multiple lines, in a way that
+ * persists even with `display: inline` and `appearance: none` forced via
+ * inline style (a Chromium quirk in how native form controls generate
+ * their box, independent of the `display` property). A plain inline
+ * element sidesteps it entirely, so this restores real button semantics
+ * by hand (role, tabIndex, Enter/Space activation) rather than fighting
+ * the browser's own button rendering. */
+function TocEntryLink({
+  onSelect,
+  children,
+}: {
+  onSelect: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className="cursor-pointer text-left text-sm font-medium text-accent underline underline-offset-2 hover:text-accent/80"
+    >
+      {children}
+    </span>
   );
 }
