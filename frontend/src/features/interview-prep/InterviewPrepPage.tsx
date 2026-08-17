@@ -110,6 +110,16 @@ export function InterviewPrepPage() {
     });
   };
 
+  // A separate, single-open accordion for follow-up questions —
+  // "closed automatically when other [follow-up] cards are clicked,
+  // similar behavior as primary question" (direct user request). Kept
+  // independent from expandedItem above rather than folded into it: a
+  // follow-up only ever renders while its own parent question is
+  // already open, so there's no "does opening this follow-up need to
+  // close a Topic" case to reconcile the way Topic vs. Question does —
+  // it only ever needs to close whichever *other* follow-up was open.
+  const [expandedFollowUpId, setExpandedFollowUpId] = useState<string | null>(null);
+
   function handleScopeChange(value: string) {
     if (value) setSearchParams({ role: value });
     else setSearchParams({});
@@ -191,6 +201,8 @@ export function InterviewPrepPage() {
         targetRoles={targetRoles ?? []}
         expandedId={expandedQuestionId}
         setExpandedId={setExpandedQuestionId}
+        expandedFollowUpId={expandedFollowUpId}
+        setExpandedFollowUpId={setExpandedFollowUpId}
       />
     </div>
   );

@@ -56,6 +56,8 @@ export function InterviewQuestionsSection({
   targetRoles,
   expandedId,
   setExpandedId,
+  expandedFollowUpId,
+  setExpandedFollowUpId,
 }: {
   scope: string | null;
   topics: InterviewTopic[];
@@ -64,6 +66,12 @@ export function InterviewQuestionsSection({
   // comment in InterviewTopicsSection.tsx for why.
   expandedId: string | null;
   setExpandedId: Dispatch<SetStateAction<string | null>>;
+  // Same idea, one level down — a single follow-up open at a time,
+  // across every question's own follow-ups list (see
+  // InterviewPrepPage.tsx's own comment on why this is a separate
+  // piece of state rather than folded into expandedItem).
+  expandedFollowUpId: string | null;
+  setExpandedFollowUpId: Dispatch<SetStateAction<string | null>>;
 }) {
   const { data: questions, isLoading } = useInterviewQuestions(scope);
   const addQuestion = useCreateInterviewQuestion(scope);
@@ -195,6 +203,8 @@ export function InterviewQuestionsSection({
                   scope={scope}
                   isOpen={expandedId === question.id}
                   onToggleOpen={() => toggleExpanded(question.id)}
+                  expandedFollowUpId={expandedFollowUpId}
+                  setExpandedFollowUpId={setExpandedFollowUpId}
                 />
               );
             })}
@@ -327,6 +337,8 @@ function QuestionCard({
   scope,
   isOpen,
   onToggleOpen,
+  expandedFollowUpId,
+  setExpandedFollowUpId,
 }: {
   question: InterviewQuestion;
   topics: InterviewTopic[];
@@ -340,6 +352,10 @@ function QuestionCard({
   scope: string | null;
   isOpen: boolean;
   onToggleOpen: () => void;
+  // Lifted to InterviewPrepPage — see its own comment for why a
+  // follow-up's open/closed state isn't local to this card.
+  expandedFollowUpId: string | null;
+  setExpandedFollowUpId: Dispatch<SetStateAction<string | null>>;
 }) {
   const updateQuestion = useUpdateInterviewQuestion(scope);
   const generateAnswer = useGenerateInterviewAnswer(scope);
@@ -348,7 +364,6 @@ function QuestionCard({
   const deleteFollowUp = useDeleteFollowUpQuestion(scope);
 
   const [followUpDraft, setFollowUpDraft] = useState("");
-  const [expandedFollowUpId, setExpandedFollowUpId] = useState<string | null>(null);
   const [deleteFollowUpTarget, setDeleteFollowUpTarget] = useState<InterviewQuestion | null>(null);
 
   function addFollowUpQuestion(event: FormEvent) {
@@ -599,6 +614,48 @@ function QuestionCard({
         </div>
       </div>
 
+      <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Follow-up Questions
+        </p>
+        {question.follow_ups.length === 0 && (
+          <p className="text-sm text-muted-foreground">No follow-up questions yet.</p>
+        )}
+        <div className="flex flex-col gap-2">
+          {question.follow_ups.map((followUp, followUpIndex) => (
+            <FollowUpQuestionCard
+              key={followUp.id}
+              followUp={followUp}
+              scope={scope}
+              index={followUpIndex}
+              total={question.follow_ups.length}
+              isEditMode={isEditMode}
+              onMove={(direction) =>
+                moveFollowUp.mutate({ id: followUp.id, direction, parentQuestionId: question.id })
+              }
+              moveDisabled={moveFollowUp.isPending}
+              onDelete={() => setDeleteFollowUpTarget(followUp)}
+              isOpen={expandedFollowUpId === followUp.id}
+              onToggleOpen={() =>
+                setExpandedFollowUpId((prev) => (prev === followUp.id ? null : followUp.id))
+              }
+            />
+          ))}
+        </div>
+        <form className="flex flex-wrap items-center gap-2" onSubmit={addFollowUpQuestion}>
+          <Input
+            value={followUpDraft}
+            onChange={(e) => setFollowUpDraft(e.target.value)}
+            placeholder="Add a follow-up question..."
+            className="min-w-64 flex-1"
+          />
+          <Button type="submit" variant="ghost" size="sm" disabled={addFollowUp.isPending}>
+            <Plus className="h-4 w-4" />
+            Add follow-up
+          </Button>
+        </form>
+      </div>
+
       <div className="flex flex-col gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Reference Links
@@ -644,48 +701,6 @@ function QuestionCard({
           <Button type="submit" variant="ghost" size="sm" disabled={updateQuestion.isPending}>
             <Plus className="h-4 w-4" />
             Add link
-          </Button>
-        </form>
-      </div>
-
-      <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Follow-up Questions
-        </p>
-        {question.follow_ups.length === 0 && (
-          <p className="text-sm text-muted-foreground">No follow-up questions yet.</p>
-        )}
-        <div className="flex flex-col gap-2">
-          {question.follow_ups.map((followUp, followUpIndex) => (
-            <FollowUpQuestionCard
-              key={followUp.id}
-              followUp={followUp}
-              scope={scope}
-              index={followUpIndex}
-              total={question.follow_ups.length}
-              isEditMode={isEditMode}
-              onMove={(direction) =>
-                moveFollowUp.mutate({ id: followUp.id, direction, parentQuestionId: question.id })
-              }
-              moveDisabled={moveFollowUp.isPending}
-              onDelete={() => setDeleteFollowUpTarget(followUp)}
-              isOpen={expandedFollowUpId === followUp.id}
-              onToggleOpen={() =>
-                setExpandedFollowUpId((prev) => (prev === followUp.id ? null : followUp.id))
-              }
-            />
-          ))}
-        </div>
-        <form className="flex flex-wrap items-center gap-2" onSubmit={addFollowUpQuestion}>
-          <Input
-            value={followUpDraft}
-            onChange={(e) => setFollowUpDraft(e.target.value)}
-            placeholder="Add a follow-up question..."
-            className="min-w-64 flex-1"
-          />
-          <Button type="submit" variant="ghost" size="sm" disabled={addFollowUp.isPending}>
-            <Plus className="h-4 w-4" />
-            Add follow-up
           </Button>
         </form>
       </div>
@@ -850,7 +865,7 @@ function FollowUpQuestionCard({
               />
             </div>
           )}
-          <p className="text-sm">
+          <p className="text-sm font-medium md:text-base">
             <span className="font-normal text-muted-foreground">Follow-up: </span>
             {followUp.question}
           </p>
