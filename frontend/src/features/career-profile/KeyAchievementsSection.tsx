@@ -16,8 +16,8 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
+import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
@@ -210,7 +210,7 @@ export function KeyAchievementsSection({
                 </p>
               )}
               {achievement.description && (
-                <p className="mt-1 whitespace-pre-line text-sm">{achievement.description}</p>
+                <RichTextDisplay html={achievement.description} className="mt-1" />
               )}
             </div>
             <div className={cn("flex shrink-0", ACTION_BUTTON_ROW_GAP)}>
@@ -279,11 +279,10 @@ export function KeyAchievementsSection({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="achievement-description">Description</Label>
-            <Textarea
+            <RichTextEditor
               id="achievement-description"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              rows={3}
+              defaultValue={form.description}
+              onChange={(html) => setForm({ ...form, description: html })}
             />
           </div>
           <div className="flex flex-col gap-1.5">

@@ -11,6 +11,7 @@ from uuid import UUID
 
 from app.application.career_profile.career_profile_service import CareerProfileService
 from app.core.exceptions import NotFoundError
+from app.core.rich_text import sanitize_rich_text
 from app.domain.career_profile.entities import CareerHighlight
 from app.domain.career_profile.repositories import CareerHighlightRepository, Direction
 
@@ -59,7 +60,7 @@ class CareerHighlightService:
                 career_profile_id=profile.id,
                 title=title,
                 company=company,
-                description=description,
+                description=sanitize_rich_text(description),
                 occurred_on=occurred_on,
                 display_order=0,  # overwritten by the repository on create
                 created_at=now,
@@ -92,7 +93,7 @@ class CareerHighlightService:
         )
         highlight.title = title
         highlight.company = company
-        highlight.description = description
+        highlight.description = sanitize_rich_text(description)
         highlight.occurred_on = occurred_on
         highlight.include_in_resume = include_in_resume
         return await self._highlights.update(highlight)

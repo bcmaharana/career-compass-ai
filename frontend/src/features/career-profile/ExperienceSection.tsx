@@ -16,8 +16,8 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
+import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
@@ -62,56 +62,6 @@ function toFormState(experience: Experience): FormState {
     description: experience.description ?? "",
     include_in_resume: experience.include_in_resume,
   };
-}
-
-/**
- * Renders free-text description preserving the user's own line breaks,
- * with a line-by-line "• "-prefixed run rendered as a real <ul>/<li>
- * bulleted list and every other run as plain paragraphs — matching
- * whichever shape each line actually was in the source (resume
- * extraction now preserves Word's own bullet formatting as a literal
- * "• " prefix per line, see resume_text_extractor.py; a plain intro
- * sentence ahead of a role's bullets keeps no such prefix). Consecutive
- * same-type lines are grouped into one block so an intro sentence (or
- * two) renders above a single bulleted list, rather than alternating
- * <p>/<ul> per line.
- */
-function DescriptionText({ description }: { description: string | null }) {
-  if (!description) return null;
-  const lines = description.split("\n").filter((line) => line.trim());
-  if (lines.length === 0) return null;
-
-  const blocks: { bullet: boolean; lines: string[] }[] = [];
-  for (const rawLine of lines) {
-    const bullet = rawLine.trimStart().startsWith("• ");
-    const text = bullet ? rawLine.trimStart().slice(2) : rawLine;
-    const last = blocks[blocks.length - 1];
-    if (last && last.bullet === bullet) {
-      last.lines.push(text);
-    } else {
-      blocks.push({ bullet, lines: [text] });
-    }
-  }
-
-  return (
-    <div className="mt-2 space-y-1.5 text-sm">
-      {blocks.map((block, i) =>
-        block.bullet ? (
-          <ul key={i} className="list-disc space-y-1 pl-5">
-            {block.lines.map((line, j) => (
-              <li key={j}>{line}</li>
-            ))}
-          </ul>
-        ) : (
-          <div key={i} className="space-y-1">
-            {block.lines.map((line, j) => (
-              <p key={j}>{line}</p>
-            ))}
-          </div>
-        ),
-      )}
-    </div>
-  );
 }
 
 export function ExperienceSection({
@@ -298,8 +248,8 @@ export function ExperienceSection({
                 {formatDisplayDate(experience.start_date)} –{" "}
                 {experience.end_date ? formatDisplayDate(experience.end_date) : "Present"}
               </p>
-              {!collapsedDescriptionIds.has(experience.id) && (
-                <DescriptionText description={experience.description} />
+              {!collapsedDescriptionIds.has(experience.id) && experience.description && (
+                <RichTextDisplay html={experience.description} className="mt-2" />
               )}
             </div>
             <div className={cn("flex shrink-0", ACTION_BUTTON_ROW_GAP)}>
@@ -413,11 +363,10 @@ export function ExperienceSection({
           </label>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="exp-description">Description</Label>
-            <Textarea
+            <RichTextEditor
               id="exp-description"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              rows={3}
+              defaultValue={form.description}
+              onChange={(html) => setForm({ ...form, description: html })}
               placeholder="Line breaks are preserved as entered — add your own bullets if you want them"
             />
           </div>

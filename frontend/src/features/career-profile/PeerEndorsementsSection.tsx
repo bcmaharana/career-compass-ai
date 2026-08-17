@@ -17,7 +17,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
@@ -210,9 +210,11 @@ export function PeerEndorsementsSection({
             )}
             <div className="flex-1">
               <Quote className="h-4 w-4 text-accent" />
-              <p className="mt-1 whitespace-pre-line text-sm italic">
-                &ldquo;{endorsement.content}&rdquo;
-              </p>
+              <div className="mt-1 text-sm italic">
+                <span>&ldquo;</span>
+                <RichTextDisplay html={endorsement.content} className="inline-block align-baseline" />
+                <span>&rdquo;</span>
+              </div>
               <p className="mt-2 text-sm font-medium">{endorsement.recommender_name}</p>
               <p className="text-xs text-muted-foreground">
                 {[endorsement.recommender_title, endorsement.relationship]
@@ -278,12 +280,10 @@ export function PeerEndorsementsSection({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="rec-content">Recommendation</Label>
-            <Textarea
+            <RichTextEditor
               id="rec-content"
-              required
-              value={form.content}
-              onChange={(e) => setForm({ ...form, content: e.target.value })}
-              rows={4}
+              defaultValue={form.content}
+              onChange={(html) => setForm({ ...form, content: html })}
             />
           </div>
           <Button type="submit" disabled={isSaving}>

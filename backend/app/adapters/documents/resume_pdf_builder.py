@@ -37,13 +37,12 @@ from reportlab.platypus import (
 from app.adapters.documents.resume_data import (
     ResumeData,
     contact_line_parts,
-    description_lines,
     education_degree_line,
     format_date_range,
     group_competencies_by_category,
     resolve_resume_section_order,
-    strip_bullet_marker,
 )
+from app.adapters.documents.rich_text_export import RichBlock, parse_rich_text, plain_text
 
 
 def _esc(text: str) -> str:
@@ -79,14 +78,86 @@ _ATTRIBUTION_STYLE = ParagraphStyle(
 )
 
 
-def _description_flowable(
-    description: str | None, *, exclude: tuple[str | None, ...] = ()
-) -> Flowable | None:
-    lines = description_lines(description, exclude=exclude)
-    if not lines:
-        return None
-    items = [ListItem(Paragraph(_esc(strip_bullet_marker(line)), _BODY_STYLE)) for line in lines]
-    return ListFlowable(items, bulletType="bullet")
+def _block_markup(block: RichBlock) -> str:
+    """Builds reportlab Paragraph mini-markup for one block's runs —
+    nested <b>/<i>/<u>/<font color="..."> wrapped around each run's
+    escaped text, mirroring exactly how resume_docx_builder.py's
+    `_add_rich_blocks` applies the same per-run formatting to a docx
+    run. Rainbow runs carry no color (see rich_text_export.py's module
+    docstring — gradient text has no Word/PDF equivalent), so they fall
+    straight through as plain escaped text."""
+    parts = []
+    for run in block.runs:
+        text = _esc(run.text)
+        if run.color:
+            text = f'<font color="{run.color}">{text}</font>'
+        if run.bold:
+            text = f"<b>{text}</b>"
+        if run.italic:
+            text = f"<i>{text}</i>"
+        if run.underline:
+            text = f"<u>{text}</u>"
+        parts.append(text)
+    return "".join(parts)
+
+
+def _quoted_rich_markup(html: str | None) -> str:
+    """Recommendations' testimonial text wrapped in curly quotes — kept
+    as one Paragraph (blocks joined with `<br/>`, reportlab's own
+    mini-markup line break) rather than routed through
+    `_rich_blocks_flowables`' bullet-grouping machinery, since a
+    testimonial is realistically always a short block of prose, never a
+    bulleted list, and this way the quote marks can simply wrap the
+    whole rendered text."""
+    blocks = parse_rich_text(html)
+    if not blocks:
+        return ""
+    body = "<br/>".join(_block_markup(block) for block in blocks)
+    return f"“{body}”"
+
+
+def _rich_blocks_flowables(
+    html: str | None,
+    *,
+    exclude: tuple[str | None, ...] = (),
+    style: ParagraphStyle = _BODY_STYLE,
+) -> list[Flowable]:
+    """Renders sanitized rich-text HTML (see rich_text_export.py) into
+    reportlab Flowables — consecutive bullet blocks are grouped into one
+    ListFlowable (matching resume_docx_builder.py's per-block "List
+    Bullet" style), non-bullet blocks become individual Paragraphs.
+    `exclude` mirrors `_add_rich_blocks` in that module — drops a block
+    whose flattened text exactly duplicates a reference string (e.g.
+    Education's own constructed degree line, see resume_data.py's
+    description_lines docstring for why)."""
+    excluded = {ref.strip().casefold() for ref in exclude if ref}
+    flowables: list[Flowable] = []
+    pending_bullets: list[ListItem] = []
+
+    def flush_bullets() -> None:
+        if pending_bullets:
+            flowables.append(ListFlowable(list(pending_bullets), bulletType="bullet"))
+            pending_bullets.clear()
+
+    for block in parse_rich_text(html):
+        block_text = "".join(run.text for run in block.runs).strip()
+        if block_text.casefold() in excluded:
+            continue
+        markup = _block_markup(block)
+        if block.bullet:
+            pending_bullets.append(ListItem(Paragraph(markup, style)))
+            continue
+        flush_bullets()
+        block_style = style
+        if block.indent:
+            block_style = ParagraphStyle(
+                f"{style.name}Indent",
+                parent=style,
+                leftIndent=(style.leftIndent or 0) + 18,
+            )
+        flowables.append(Paragraph(markup, block_style))
+    flush_bullets()
+    return flowables
 
 
 def _render_core_competencies(story: list[Flowable], data: ResumeData) -> None:
@@ -110,9 +181,7 @@ def _render_experience(story: list[Flowable], data: ResumeData) -> None:
         story.append(
             Paragraph(_esc(format_date_range(exp.start_date, exp.end_date)), _ITALIC_STYLE)
         )
-        desc_flowable = _description_flowable(exp.description)
-        if desc_flowable is not None:
-            story.append(desc_flowable)
+        story.extend(_rich_blocks_flowables(exp.description))
 
 
 def _render_education(story: list[Flowable], data: ResumeData) -> None:
@@ -129,9 +198,7 @@ def _render_education(story: list[Flowable], data: ResumeData) -> None:
             story.append(
                 Paragraph(_esc(format_date_range(edu.start_date, edu.end_date)), _ITALIC_STYLE)
             )
-        desc_flowable = _description_flowable(edu.description, exclude=(degree_line,))
-        if desc_flowable is not None:
-            story.append(desc_flowable)
+        story.extend(_rich_blocks_flowables(edu.description, exclude=(degree_line,)))
 
 
 def _render_certifications(story: list[Flowable], data: ResumeData) -> None:
@@ -160,14 +227,11 @@ def _render_key_achievements(story: list[Flowable], data: ResumeData) -> None:
     if not data.key_achievements:
         return
     story.append(Paragraph("Key Achievements", _HEADING_STYLE))
-    achievement_items = []
     for achievement in data.key_achievements:
         prefix = f"{_esc(achievement.company)} — " if achievement.company else ""
         text = f"<b>{prefix}{_esc(achievement.title)}</b>"
-        if achievement.description:
-            text += f": {_esc(achievement.description)}"
-        achievement_items.append(ListItem(Paragraph(text, _BODY_STYLE)))
-    story.append(ListFlowable(achievement_items, bulletType="bullet"))
+        story.append(ListFlowable([ListItem(Paragraph(text, _BODY_STYLE))], bulletType="bullet"))
+        story.extend(_rich_blocks_flowables(achievement.description))
 
 
 def _render_career_goals(story: list[Flowable], data: ResumeData) -> None:
@@ -179,8 +243,7 @@ def _render_career_goals(story: list[Flowable], data: ResumeData) -> None:
         if goal.target_date:
             line += f" (Target: {_esc(goal.target_date.strftime('%b %Y'))})"
         story.append(Paragraph(line, _BODY_STYLE))
-        if goal.description:
-            story.append(Paragraph(_esc(goal.description), _BODY_STYLE))
+        story.extend(_rich_blocks_flowables(goal.description))
 
 
 def _render_recommendations(story: list[Flowable], data: ResumeData) -> None:
@@ -188,7 +251,7 @@ def _render_recommendations(story: list[Flowable], data: ResumeData) -> None:
         return
     story.append(Paragraph("Recommendations", _HEADING_STYLE))
     for endorsement in data.recommendations:
-        story.append(Paragraph(f"“{_esc(endorsement.content)}”", _QUOTE_STYLE))
+        story.append(Paragraph(_quoted_rich_markup(endorsement.content), _QUOTE_STYLE))
         detail_parts = [
             part for part in (endorsement.recommender_title, endorsement.relationship) if part
         ]
@@ -225,7 +288,7 @@ def build_resume_pdf(data: ResumeData) -> bytes:
         Paragraph(_esc(data.user.display_name or data.user.email), _NAME_STYLE)
     ]
 
-    subtitle_parts = [part for part in (data.role_label, data.profile.headline) if part]
+    subtitle_parts = [part for part in (data.role_label, plain_text(data.profile.headline)) if part]
     if subtitle_parts:
         story.append(Paragraph(_esc(" — ".join(subtitle_parts)), _SUBTITLE_STYLE))
 
@@ -237,7 +300,7 @@ def build_resume_pdf(data: ResumeData) -> bytes:
 
     if data.profile.summary:
         story.append(Paragraph("Summary", _HEADING_STYLE))
-        story.append(Paragraph(_esc(data.profile.summary), _BODY_STYLE))
+        story.extend(_rich_blocks_flowables(data.profile.summary))
 
     for section_key in resolve_resume_section_order(data.profile.section_order):
         _SECTION_RENDERERS[section_key](story, data)

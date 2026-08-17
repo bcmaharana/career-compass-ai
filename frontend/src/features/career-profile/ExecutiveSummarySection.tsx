@@ -4,7 +4,7 @@ import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollapseToggle } from "@/components/ui/collapse-toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
@@ -113,11 +113,10 @@ export function ExecutiveSummarySection() {
         <CardContent>
           {isEditing ? (
             <div className="flex flex-col gap-3">
-              <Textarea
-                value={summary}
-                onChange={(e) => setSummary(e.target.value)}
+              <RichTextEditor
+                defaultValue={summary}
+                onChange={setSummary}
                 placeholder="A short overview of your professional background"
-                rows={5}
                 autoFocus
               />
               <div className="flex gap-2">
@@ -134,9 +133,11 @@ export function ExecutiveSummarySection() {
                 </p>
               )}
             </div>
+          ) : profile?.summary ? (
+            <RichTextDisplay html={profile.summary} className="text-muted-foreground" />
           ) : (
-            <p className="whitespace-pre-line text-sm text-muted-foreground">
-              {profile?.summary || "No summary yet — add one to help your AI coach get to know you."}
+            <p className="text-sm text-muted-foreground">
+              No summary yet — add one to help your AI coach get to know you.
             </p>
           )}
         </CardContent>

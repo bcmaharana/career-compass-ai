@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 from uuid import UUID
 
 from app.core.exceptions import CareerCompassError, ConflictError, ValidationError
+from app.core.rich_text import sanitize_rich_text
 from app.domain.career_profile.entities import CareerProfile, CareerProfileVersion, CoreCompetency
 from app.domain.career_profile.repositories import (
     CareerProfileRepository,
@@ -165,8 +166,8 @@ class CareerProfileService:
         )
         await self._snapshot_and_bump(profile, change_reason="profile_updated")
 
-        profile.headline = headline
-        profile.summary = summary
+        profile.headline = sanitize_rich_text(headline)
+        profile.summary = sanitize_rich_text(summary)
         if core_competencies is not None:
             profile.core_competencies = core_competencies
         if section_order is not None:

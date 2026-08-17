@@ -130,7 +130,7 @@ class TestEducationDegreeDeduplication:
 
     def test_a_description_bullet_matching_the_degree_line_is_dropped(self) -> None:
         education = _make_education(
-            description="• BE in Electronics and Communication Engineering"
+            description="<ul><li>BE in Electronics and Communication Engineering</li></ul>"
         )
         data = ResumeData(
             profile=_make_profile(),
@@ -158,8 +158,8 @@ class TestEducationDegreeDeduplication:
     def test_a_genuinely_distinct_bullet_is_kept_alongside_a_redundant_one(self) -> None:
         education = _make_education(
             description=(
-                "• BE in Electronics and Communication Engineering\n"
-                "• Graduated with honors, GPA 3.9"
+                "<ul><li>BE in Electronics and Communication Engineering</li>"
+                "<li>Graduated with honors, GPA 3.9</li></ul>"
             )
         )
         data = ResumeData(
@@ -182,7 +182,7 @@ class TestEducationDegreeDeduplication:
 
     def test_pdf_builder_does_not_raise_for_the_same_redundant_description(self) -> None:
         education = _make_education(
-            description="• BE in Electronics and Communication Engineering"
+            description="<ul><li>BE in Electronics and Communication Engineering</li></ul>"
         )
         data = ResumeData(
             profile=_make_profile(),

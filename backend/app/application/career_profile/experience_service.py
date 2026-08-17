@@ -18,6 +18,7 @@ from uuid import UUID
 
 from app.application.career_profile.career_profile_service import CareerProfileService
 from app.core.exceptions import NotFoundError
+from app.core.rich_text import sanitize_rich_text
 from app.domain.career_profile.entities import Experience
 from app.domain.career_profile.repositories import Direction, ExperienceRepository
 
@@ -74,7 +75,7 @@ class ExperienceService:
                 location=location,
                 start_date=start_date,
                 end_date=end_date,
-                description=description,
+                description=sanitize_rich_text(description),
                 display_order=0,  # overwritten by the repository on create
                 created_at=now,
                 updated_at=now,
@@ -111,7 +112,7 @@ class ExperienceService:
         experience.location = location
         experience.start_date = start_date
         experience.end_date = end_date
-        experience.description = description
+        experience.description = sanitize_rich_text(description)
         experience.include_in_resume = include_in_resume
         return await self._experiences.update(experience)
 

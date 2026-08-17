@@ -19,6 +19,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
+import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Select } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/errors";
 import { RefreshCw } from "lucide-react";
@@ -185,7 +186,9 @@ export function LearningIntelligencePage() {
                 {item.provider && (
                   <p className="text-sm text-muted-foreground">{item.provider}</p>
                 )}
-                {item.notes && <p className="text-xs text-muted-foreground">{item.notes}</p>}
+                {item.notes && (
+                  <RichTextDisplay html={item.notes} className="text-xs text-muted-foreground" />
+                )}
               </div>
               <div className={`flex shrink-0 ${ACTION_BUTTON_ROW_GAP}`}>
                 <Button variant="ghost" size="sm" onClick={() => openEditDialog(item)}>
@@ -332,10 +335,10 @@ export function LearningIntelligencePage() {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="li-notes">Notes</Label>
-            <Input
+            <RichTextEditor
               id="li-notes"
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              defaultValue={form.notes}
+              onChange={(html) => setForm({ ...form, notes: html })}
             />
           </div>
           <Button type="submit" disabled={isSaving}>

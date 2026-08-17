@@ -83,6 +83,39 @@ export function RichTextEditor({
     onChange(editorRef.current?.innerHTML ?? "");
   }
 
+  /** The "rainbow" swatch is a genuine multi-color gradient fill, which
+   * document.execCommand('foreColor', ...) can't produce — that command
+   * only ever accepts a single solid color. Applied instead by directly
+   * wrapping the current Selection's Range in a `<span
+   * data-rainbow="true">` marker; the actual gradient lives in a
+   * stylesheet rule (globals.css's `[data-rainbow="true"]`), not in
+   * anything generated here, so the sanitizer only has to trust one
+   * fixed attribute+value rather than arbitrary CSS. `surroundContents`
+   * throws for a range that partially selects a non-text node (e.g. a
+   * selection spanning across an existing <b> boundary) — extractContents
+   * + re-insert handles any selection shape, at the cost of losing node
+   * identity for whatever was selected, which doesn't matter here since
+   * nothing tracks node references across an edit. */
+  function applyRainbow() {
+    editorRef.current?.focus();
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (range.collapsed) return;
+    if (!editorRef.current?.contains(range.commonAncestorContainer)) return;
+
+    const span = document.createElement("span");
+    span.setAttribute("data-rainbow", "true");
+    try {
+      range.surroundContents(span);
+    } catch {
+      const contents = range.extractContents();
+      span.appendChild(contents);
+      range.insertNode(span);
+    }
+    onChange(editorRef.current?.innerHTML ?? "");
+  }
+
   return (
     <div className={cn("flex flex-col gap-0", className)}>
       <div className="flex items-center gap-1 rounded-t-md border border-b-0 border-border bg-muted/40 p-1">
@@ -116,6 +149,18 @@ export function RichTextEditor({
             style={{ backgroundColor: color }}
           />
         ))}
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={applyRainbow}
+          aria-label="Text color rainbow"
+          title="Rainbow (select text first)"
+          className="h-5 w-5 rounded-full border border-border"
+          style={{
+            background:
+              "linear-gradient(90deg, #a855f7 12.5%, #3b82f6 37.5%, #22c55e 58.33%, #fdba74 75%, #fca5a5 91.67%)",
+          }}
+        />
         <div className="mx-1 h-4 w-px bg-border" />
         <button
           type="button"
@@ -178,12 +223,28 @@ const RICH_TEXT_CONTENT_CLASSES =
  * RichTextEditor. Trusts the HTML it's given (dangerouslySetInnerHTML)
  * because every write path re-sanitizes server-side before persisting
  * (app/core/rich_text.py) — this component is never itself the
- * sanitization boundary. */
+ * sanitization boundary.
+ *
+ * `whitespace-pre-line` is a defensive addition, not load-bearing for
+ * real HTML content (already broken into block-level <p>/<div>/<li>
+ * elements, which don't need it) — it exists for the one case where a
+ * field can legitimately hold *tag-free* plain text with real `\n`
+ * characters: Resume Intelligence's AI-extracted descriptions are
+ * deliberately left as plain text on merge (see
+ * resume_merge_service.py's own docstring), and bare `\n` is otherwise
+ * ignorable whitespace in HTML — without this, a multi-line merged
+ * description would collapse into one run-on paragraph instead of
+ * preserving line breaks the way every plain-text field in this app
+ * already did before rich text existed. */
 export function RichTextDisplay({ html, className }: { html: string; className?: string }) {
   return (
     <div
       dangerouslySetInnerHTML={{ __html: html }}
-      className={cn("text-sm [&_span]:inline", RICH_TEXT_CONTENT_CLASSES, className)}
+      className={cn(
+        "whitespace-pre-line text-sm [&_span]:inline",
+        RICH_TEXT_CONTENT_CLASSES,
+        className,
+      )}
     />
   );
 }

@@ -13,6 +13,7 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from app.core.exceptions import NotFoundError, ValidationError
+from app.core.rich_text import sanitize_rich_text
 from app.domain.learning_intelligence.entities import LearningItem
 from app.domain.learning_intelligence.repositories import Direction, LearningItemRepository
 
@@ -57,7 +58,7 @@ class LearningItemService:
                 provider=provider,
                 url=url,
                 status="planned",
-                notes=notes,
+                notes=sanitize_rich_text(notes),
                 display_order=0,  # overwritten by the repository on create
                 created_at=now,
                 updated_at=now,
@@ -99,7 +100,7 @@ class LearningItemService:
         item.url = url
         item.status = status
         item.target_role_id = target_role_id
-        item.notes = notes
+        item.notes = sanitize_rich_text(notes)
         item.started_at = started_at
         item.completed_at = completed_at
         return await self._items.update(item)

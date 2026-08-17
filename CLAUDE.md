@@ -3043,6 +3043,273 @@ Known environment gotchas already solved, don't reintroduce:
   Target-Role-scoped list's order changed while the Master-scoped
   list's order was completely unaffected — independent per-scope
   reordering confirmed through the real UI, not just the API.
+- **RichTextEditor: rainbow gradient text-color swatch** (2026-08-17,
+  same day) — done, verified live in dev; prod not yet deployed. User
+  asked for two things together: rolling the rich-text editor out to
+  every "edit" field in the app, and adding a rainbow option to its
+  color palette. On investigation, the first was scoped back after
+  presenting the real tradeoff to the user: the other 7 multi-line
+  description fields (Experience, Education, Career Goals, Career
+  Highlights, Key Achievements, Peer Endorsements, Executive Summary)
+  all use a plain-text "• " bullet convention that the resume-extraction
+  AI prompt, `DescriptionText`'s renderer, and both Word/PDF resume
+  export builders all depend on — converting them to HTML would mean
+  reworking all three of those consumers, not just swapping the input
+  control. User chose to leave that rollout for a separate future pass
+  and scope this round to the color palette only.
+  **The rainbow swatch itself required a different mechanism than the
+  other swatches**, not just another entry in the color array:
+  `document.execCommand('foreColor', ...)` only ever accepts a single
+  solid CSS color — there's no way to hand it a gradient. Implemented
+  as a genuinely different code path in
+  `frontend/src/components/ui/rich-text-editor.tsx`'s new
+  `applyRainbow()`: reads the live `window.getSelection()`/`Range`
+  directly (bypassing `execCommand` entirely) and wraps it in a plain
+  `<span data-rainbow="true">` marker — `Range.surroundContents()` first
+  (the common case), falling back to `extractContents()` + re-`insertNode()`
+  when the selection's boundaries partially cross an existing element
+  (`surroundContents` throws in that case; the fallback handles any
+  selection shape). The actual gradient lives entirely in a new
+  `[data-rainbow="true"]` rule in `globals.css` (`background:
+  linear-gradient(...)` + `background-clip: text` + `color: transparent`,
+  the standard CSS gradient-text technique) — same literal gradient
+  string as `.rainbow-border`/`RAINBOW_GRADIENT_BG` elsewhere in this
+  app, duplicated again since CSS can't import a JS/TS constant.
+  **Deliberate security choice, decided with the user up front**: rather
+  than allow the client to send arbitrary gradient/background CSS
+  through the rich-text sanitizer (which would mean trusting
+  client-supplied `url()` values), `app/core/rich_text.py`'s allowlist
+  only grew by one fixed attribute — `data-rainbow` on `span` — with the
+  gradient itself defined once in the stylesheet, never in anything a
+  request body carries. 2 new backend unit tests
+  (`test_rainbow_marker_span_survives`,
+  `test_rainbow_attribute_only_allowed_on_span_not_other_tags`), full
+  419-test backend suite passing, mypy clean across all 235 `app/`
+  source files. Frontend `typecheck`/`lint`/`build` all clean. Verified
+  live via a real headless-Chromium Playwright session against a
+  throwaway Enterprise account: confirmed the swatch button renders in
+  the toolbar, selecting text and clicking it wraps the selection in a
+  real `<span data-rainbow="true">` (not just asserted — the DOM was
+  inspected directly), confirmed via `getComputedStyle` that the
+  rendered color is genuinely transparent and `background-clip` is
+  genuinely `text` (not just that the attribute exists), and confirmed
+  the marker survives a real save → sanitize → re-fetch → readonly-render
+  round trip through the actual API — zero console errors throughout.
+- **Rich-text editor rollout: Career Profile + Learning Log**
+  (2026-08-17, same day) — done, verified live in dev; prod not yet
+  deployed. User asked for `RichTextEditor` (previously Interview Prep
+  -only) on every user-editable multi-line field: Career Profile's
+  Headline, Executive Summary, Experience/Education/Career Highlights/
+  Key Achievements descriptions, Peer Endorsements' testimonial
+  (`content`), and Learning Intelligence's Learning Log `notes` (which
+  was a single-line `<Input>`, not even a `<Textarea>`, before this —
+  upgraded to a genuine multi-line rich control, not just a swap).
+  Entered plan mode for this one (unlike the palette-only round above)
+  because a full codebase survey surfaced two real, non-obvious
+  dependencies a simple Textarea→RichTextEditor swap would have broken
+  silently: existing data is plain text (some of it using the
+  hand-rolled "a line starting with `• ` is a bullet" convention
+  `ExperienceSection.tsx`'s `DescriptionText` and the resume-extraction
+  AI prompt both already established), and the Word/PDF resume export
+  builders read these exact fields as plain text with that same
+  convention — switching storage to HTML without addressing either
+  would have silently collapsed every multi-line description into one
+  run-on paragraph (bare `\n` is ignorable whitespace in HTML) and left
+  the exporters bullet-blind. Three explicit decisions confirmed with
+  the user before writing code: Headline is included despite being a
+  short line (not left plain); existing plain-text data gets a
+  one-time migration to equivalent HTML (not a permanent dual-format
+  detection path living in the display component and both export
+  builders forever); Resume Intelligence's AI-merged descriptions stay
+  plain text, unchanged (a merged item looks unformatted until the user
+  reformats it by hand — accepted tradeoff, not silently "fixed" by
+  auto-converting AI output the user never reviewed as final).
+
+  **Backend — sanitize on write**: `sanitize_rich_text()` (already
+  built for Interview Prep) added to `add()`/`update()` on
+  `experience_service.py`, `education_service.py`,
+  `career_goal_service.py`, `career_highlight_service.py`,
+  `key_achievement_service.py`, `peer_endorsement_service.py` (`content`
+  is a required, non-`Optional` `str` here — unlike every other field —
+  so `sanitize_rich_text(content) or ""` coerces the `str | None`
+  return back to the field's actual type), and
+  `career_profile_service.py`'s `update()` for both `headline` and
+  `summary` (previously unconditional overwrites with no `is not None`
+  guard, per that method's existing shape — unchanged, sanitize just
+  wraps the assignment).
+
+  **Backend — plain-text → HTML converter**: new
+  `plain_text_to_rich_html()` in `app/core/rich_text.py` reimplements
+  `DescriptionText`'s exact grouping logic in Python (split on `\n`,
+  drop blank lines, detect the `• ` prefix, group consecutive same-type
+  lines into blocks, emit `<ul><li>` for bullet blocks / `<p>` per line
+  otherwise, HTML-escape then run through `sanitize_rich_text()`) — a
+  no-op (returns the value unchanged) on anything that already contains
+  a `<`, which is what makes the migration script below safe to re-run.
+
+  **Backend — one-time migration**: new
+  `backend/scripts/migrate_plain_text_descriptions_to_html.py`, run
+  once per environment, converting every existing plain-text value
+  across `career_profiles.headline`/`.summary`, `experiences.description`,
+  `educations.description`, `career_goals.description`,
+  `career_highlights.description`, `key_achievements.description`,
+  `peer_endorsements.content`, and `learning_items.notes`.
+  **A real, unanticipated privilege error caught live, not guessed**:
+  the script's first version used the shared `async_session_factory`
+  (`app/adapters/db/base.py`, pinned to the restricted `compass_app`
+  runtime role) and failed outright —
+  `psycopg.errors.InsufficientPrivilege: must be owner of table
+  career_profiles` — the moment it tried
+  `ALTER TABLE ... DISABLE ROW LEVEL SECURITY`; only the table owner can
+  run that statement, and (unlike what this file's own earlier RLS
+  notes might imply) the app's runtime role is deliberately *not* the
+  owner, specifically so `FORCE ROW LEVEL SECURITY` has teeth against
+  it. Fixed by building a dedicated engine/session from
+  `migrations_database_url` (the `compass` superuser/owner role
+  Alembic itself already uses, per `alembic/env.py`) instead — same
+  fallback-to-`database_url`-if-unset behavior, and the module still
+  imports `app.adapters.db.base` once for its Windows-event-loop-policy
+  side effect even though it doesn't use that module's engine.
+  **A second real discovery from actually running it, not assumed**: an
+  earlier same-session check of these tables via a plain unscoped
+  `psql -U compass_app` connection had shown 0 rows everywhere,
+  which read as "dev DB is empty" — actually just RLS silently hiding
+  every real row from a session with no `app.tenant_id` context set
+  (`current_setting(..., true)` returns NULL, and `tenant_id = NULL` is
+  never true in SQL's three-valued logic). The real migration —
+  running with RLS explicitly disabled for its own duration — found
+  179 experiences, 53 key achievements, 34 educations, and more: this
+  session's own accumulated real historical data, not empty at all.
+  Verified idempotent live: a second run immediately after reported
+  `rows_updated=0` for every field. Spot-checked via direct SQL as the
+  owner role afterward: real bullet lines correctly became `<ul><li>`,
+  a line with irregular whitespace after the `•` character (`"•    Advising..."`,
+  multiple spaces/tabs instead of the exact `"• "` the detection checks
+  for) fell through to a plain `<p>` instead of a bullet — confirmed
+  this exactly matches the *pre-existing* frontend/export behavior for
+  that same malformed convention, not a new regression introduced by
+  the migration.
+
+  **Backend — resume export, a real HTML→document renderer, not a
+  bullet-prefix check**: new
+  `app/adapters/documents/rich_text_export.py` — a small hand-rolled
+  walker on Python's stdlib `html.parser.HTMLParser` (no new dependency;
+  the sanitizer's own allowlist is narrow enough that a full HTML/XML
+  library wasn't needed) turning sanitized rich-text HTML into a flat
+  list of `RichBlock` (bullet/indent flags + a list of `RichRun`:
+  text/bold/italic/underline/color). `<br>` is handled without ever
+  pushing a stack entry for it, specifically because it has no matching
+  end tag to pop — an earlier draft that pushed/popped indiscriminately
+  for every tag would have desynced the color stack the first time a
+  `<br>` appeared. A `data-rainbow="true"` span is walked like any other
+  span but deliberately produces `color=None` — gradient text has no
+  Word/PDF equivalent, so it renders as plain default-color text in
+  both exported formats rather than erroring or approximating a solid
+  color. `resume_docx_builder.py`'s old `description_lines()`
+  /`strip_bullet_marker()` plain-text logic (`resume_data.py`) is
+  replaced by a new `_add_rich_blocks()` (bullet blocks → `"List
+  Bullet"` paragraph style, runs → real per-run `.bold`/`.italic`/
+  `.underline`/`RGBColor` on each `document.add_run()`) used everywhere
+  a description/summary/content field is rendered — Experience,
+  Education (dedup `exclude` still works, now comparing a block's
+  flattened text against the reference string), Key Achievements
+  (title stays its own bullet line, description now renders as its own
+  block(s) below it rather than appended inline after a colon — a
+  necessary layout change once descriptions can be multi-line/
+  multi-block), Career Goals, Recommendations (`default_style="Intense
+  Quote"` for non-bullet blocks), and the header's Summary section.
+  `resume_pdf_builder.py` gets the equivalent `_rich_blocks_flowables()`
+  — reportlab's `Paragraph` mini-markup already natively understands
+  `<b>`/`<i>`/`<u>`/`<font color="...">`, so `_block_markup()` is a
+  near-direct translation rather than a from-scratch renderer;
+  consecutive bullet blocks are grouped into one `ListFlowable` the
+  same way the docx builder groups them into one "List Bullet" run of
+  paragraphs. Recommendations' curly-quote wrapping
+  (`_quoted_rich_markup()`) joins a testimonial's blocks with reportlab's
+  own `<br/>` inside one `Paragraph` rather than reusing the bullet
+  -grouping machinery, since a testimonial is realistically always
+  prose, never a list. **A real, pre-existing behavioral inconsistency
+  between the two builders — that the PDF builder bulleted every
+  description line including non-`• `-prefixed ones, while the docx
+  builder and the frontend both correctly distinguished bullet vs.
+  plain lines — is fixed as a natural side effect** of both builders
+  now driving off real semantic HTML (`<li>` vs. plain block) instead
+  of each independently re-implementing a per-line text heuristic.
+  Both builders' `headline` usage in the name/role subtitle line goes
+  through a new `plain_text()` helper (flattens to unformatted text,
+  concatenating runs within a block with no added spaces, joining
+  blocks with one space) rather than trying to preserve inline
+  formatting inside a joined `"{role_label} — {headline}"` string — a
+  deliberate, low-stakes simplification, not an oversight.
+  `resume_data.py`'s now-dead `description_lines()`/`strip_bullet_marker()`
+  were deleted entirely (confirmed zero remaining callers anywhere,
+  including tests, before removing) rather than left as unused code.
+  **A real, necessary test-fixture update, not a regression**: 2 of 14
+  existing `test_resume_document_builders.py` tests fed raw plain text
+  with literal `"• "` markers straight into `ResumeData` fixtures,
+  which no longer represents valid stored data under this new
+  architecture — updated to pass the equivalent `<ul><li>` HTML instead
+  (matching what the migration script / a real rich-text edit would
+  now actually produce), confirmed passing again. 47 new backend unit
+  tests total (`test_rich_text.py`'s new `TestPlainTextToRichHtml`
+  class, and a new `test_rich_text_export.py` covering
+  `parse_rich_text()`/`plain_text()` — bare untagged text, `<div>`-per
+  -line, nested list bullets, blockquote indent, bold/italic/underline/
+  color extraction and normalization from Chromium's real `rgb(...)`
+  output, the rainbow-carries-no-color case, `<br>`'s no-matching-end
+  -tag handling, empty-block dropping) — full 450-test backend suite
+  passing, mypy clean across all 236 `app/` source files.
+
+  **Frontend**: every field listed above had its `<Textarea>` (or, for
+  Headline and Learning Log notes, its `<Input>`) replaced by
+  `RichTextEditor`, and its readonly render replaced by
+  `RichTextDisplay` — inside whichever edit-affordance shape that field
+  already had (most are inside an existing Add/Edit `<Dialog>` form;
+  Executive Summary and Headline are inline edit-in-place). `RichTextDisplay`
+  gained a `whitespace-pre-line` class as a defensive addition — inert
+  for real HTML (already broken into block-level elements) but keeps
+  Resume Intelligence's deliberately-still-plain-text merged
+  descriptions from collapsing into one run-on line, per the "leave
+  merge as plain text" decision above. `ExperienceSection.tsx`'s
+  `DescriptionText` component (the bullet-grouping logic now duplicated
+  server-side as `plain_text_to_rich_html()`) is deleted entirely.
+  `EducationSection.tsx` gained a readonly `RichTextDisplay` block it
+  never had before — its description field was write-only from the UI
+  before this (created via the Add dialog, never once rendered
+  anywhere), confirmed by reading the actual pre-existing component
+  code, not assumed. Verified live via a real headless-Chromium
+  Playwright session against a throwaway Enterprise account: edited
+  Headline with bold and confirmed a real `<b>` renders; edited
+  Executive Summary with the color swatch and confirmed a real
+  `<span style="color:...">` renders; added an Experience with a real
+  bullet list (confirmed an actual `<li>` element, not just styled
+  text); added a Career Goal with italic (representative of the 4
+  sections sharing the identical simple pattern — Career Highlights/Key
+  Achievements/Peer Endorsements weren't each re-tested individually
+  given the code is structurally identical); added a Learning Log item
+  and confirmed its notes field — upgraded from a single-line `<Input>`
+  — now accepts and saves real multi-line rich content — zero console
+  errors throughout.
+
+  **Migration run live against the real dev database**: confirmed via
+  direct SQL as the `compass` owner role that real historical
+  descriptions now contain genuine `<ul><li>`/`<p>` HTML (not just
+  reasoned about), and idempotency confirmed via a real second run.
+
+  **Real resume download verification** (both formats, not just the
+  app UI): generated a profile with bold/italic/colored/bulleted/
+  rainbow content, downloaded the actual `.docx` and `.pdf` files, and
+  inspected them directly — `python-docx` confirmed exact run-level
+  `bold`/`italic`/`font.color.rgb` (`DC2626`) on the right substrings
+  and `"List Bullet"` paragraph style on the bullet items, with the
+  rainbow run correctly carrying no color; `pdfplumber` confirmed the
+  extracted text matches, the same substring's characters carry
+  `non_stroking_color = (0.862745, 0.14902, 0.14902)` (exactly `#dc2626`
+  normalized to 0–1), the rainbow substring carries no color entry at
+  all, and `Helvetica-Bold`/`Helvetica-Oblique` font variants are
+  present exactly where bold/italic text was expected — confirming the
+  shared `rich_text_export.py` walker renders correctly through both
+  independent document-generation pipelines, not just one.
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in

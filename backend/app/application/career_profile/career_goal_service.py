@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from app.core.exceptions import NotFoundError, ValidationError
+from app.core.rich_text import sanitize_rich_text
 from app.domain.career_profile.entities import CareerGoal
 from app.domain.career_profile.repositories import CareerGoalRepository, Direction
 
@@ -48,7 +49,7 @@ class CareerGoalService:
                 target_role=target_role,
                 target_date=target_date,
                 status="active",
-                description=description,
+                description=sanitize_rich_text(description),
                 display_order=0,  # overwritten by the repository on create
                 created_at=now,
                 updated_at=now,
@@ -79,7 +80,7 @@ class CareerGoalService:
         goal.target_role = target_role
         goal.target_date = target_date
         goal.status = status
-        goal.description = description
+        goal.description = sanitize_rich_text(description)
         goal.include_in_resume = include_in_resume
         return await self._goals.update(goal)
 

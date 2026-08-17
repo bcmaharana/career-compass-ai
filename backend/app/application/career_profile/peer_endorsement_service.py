@@ -13,6 +13,7 @@ from uuid import UUID
 
 from app.application.career_profile.career_profile_service import CareerProfileService
 from app.core.exceptions import NotFoundError
+from app.core.rich_text import sanitize_rich_text
 from app.domain.career_profile.entities import PeerEndorsement
 from app.domain.career_profile.repositories import Direction, PeerEndorsementRepository
 
@@ -55,7 +56,12 @@ class PeerEndorsementService:
                 recommender_name=recommender_name,
                 recommender_title=recommender_title,
                 relationship=relationship,
-                content=content,
+                # content is a required (non-optional) str, unlike every
+                # other rich-text field here — sanitize_rich_text's
+                # str | None return coerces back to "" in the (extreme
+                # edge case) situation where the sanitizer strips the
+                # input down to nothing, e.g. markup with no real text.
+                content=sanitize_rich_text(content) or "",
                 display_order=0,  # overwritten by the repository on create
                 created_at=now,
                 updated_at=now,
@@ -86,7 +92,7 @@ class PeerEndorsementService:
         endorsement.recommender_name = recommender_name
         endorsement.recommender_title = recommender_title
         endorsement.relationship = relationship
-        endorsement.content = content
+        endorsement.content = sanitize_rich_text(content) or ""
         endorsement.include_in_resume = include_in_resume
         return await self._endorsements.update(endorsement)
 

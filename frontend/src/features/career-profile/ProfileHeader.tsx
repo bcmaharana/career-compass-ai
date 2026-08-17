@@ -5,8 +5,8 @@ import {
 } from "@/api/queries/career-profile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { getErrorMessage } from "@/lib/errors";
 import { UserCircle } from "lucide-react";
@@ -169,19 +169,19 @@ export function ProfileHeader() {
               {isEditing ? (
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="headline">Headline / About</Label>
-                  <Input
+                  <RichTextEditor
                     id="headline"
-                    value={headline}
-                    onChange={(e) => setHeadline(e.target.value)}
+                    defaultValue={headline}
+                    onChange={setHeadline}
                     placeholder="e.g. Senior Product Manager"
                     autoFocus
                   />
                 </div>
+              ) : profile?.headline ? (
+                <RichTextDisplay html={profile.headline} className="text-sm font-medium md:text-base" />
               ) : (
-                <p className="text-sm font-medium md:text-base">
-                  {profile?.headline || (
-                    <span className="text-muted-foreground">No headline yet</span>
-                  )}
+                <p className="text-sm font-medium text-muted-foreground md:text-base">
+                  No headline yet
                 </p>
               )}
               {photoError && <p className="text-xs text-destructive">{photoError}</p>}

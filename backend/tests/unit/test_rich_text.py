@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.rich_text import sanitize_rich_text
+from app.core.rich_text import plain_text_to_rich_html, sanitize_rich_text
 
 pytestmark = pytest.mark.unit
 
@@ -55,6 +55,19 @@ class TestSanitizeRichText:
         )
         assert sanitize_rich_text(html) == '<blockquote style="margin: 0 0 0 40px;">indented text</blockquote>'
 
+    def test_rainbow_marker_span_survives(self) -> None:
+        # RichTextEditor's rainbow swatch wraps a selection in this exact
+        # marker (see rich-text-editor.tsx's applyRainbow()) — the actual
+        # gradient lives in a globals.css rule keyed off this attribute,
+        # not in anything the client sends.
+        html = '<span data-rainbow="true">rainbow text</span>'
+        assert sanitize_rich_text(html) == html
+
+    def test_rainbow_attribute_only_allowed_on_span_not_other_tags(self) -> None:
+        # bleach strips a disallowed attribute but keeps the tag/text —
+        # data-rainbow was only ever added to span's allowlist.
+        assert sanitize_rich_text('<b data-rainbow="true">text</b>') == "<b>text</b>"
+
     def test_disallowed_font_tag_is_stripped_but_text_kept(self) -> None:
         # The exact class of bug this app hit live: Chromium's legacy
         # foreColor implementation (without styleWithCSS) emits <font
@@ -75,3 +88,54 @@ class TestSanitizeRichText:
 
     def test_javascript_href_is_stripped(self) -> None:
         assert sanitize_rich_text('<a href="javascript:alert(1)">click</a>') == "click"
+
+
+class TestPlainTextToRichHtml:
+    """plain_text_to_rich_html() reimplements ExperienceSection.tsx's
+    DescriptionText bullet-grouping logic in Python, for the one-time
+    scripts/migrate_plain_text_descriptions_to_html.py backfill."""
+
+    def test_none_passes_through(self) -> None:
+        assert plain_text_to_rich_html(None) is None
+
+    def test_whitespace_only_becomes_none(self) -> None:
+        assert plain_text_to_rich_html("   \n  ") is None
+
+    def test_already_html_is_a_no_op(self) -> None:
+        # Makes the migration script safe to re-run — anything that
+        # already contains a tag is assumed already migrated.
+        html = "<p>Already migrated</p>"
+        assert plain_text_to_rich_html(html) == html
+
+    def test_single_plain_line_becomes_a_paragraph(self) -> None:
+        assert plain_text_to_rich_html("Just one line") == "<p>Just one line</p>"
+
+    def test_multiple_plain_lines_become_separate_paragraphs(self) -> None:
+        assert (
+            plain_text_to_rich_html("First line\nSecond line")
+            == "<p>First line</p><p>Second line</p>"
+        )
+
+    def test_blank_lines_are_dropped(self) -> None:
+        assert (
+            plain_text_to_rich_html("First line\n\n\nSecond line")
+            == "<p>First line</p><p>Second line</p>"
+        )
+
+    def test_bullet_lines_become_a_real_list(self) -> None:
+        assert (
+            plain_text_to_rich_html("• First\n• Second")
+            == "<ul><li>First</li><li>Second</li></ul>"
+        )
+
+    def test_mixed_bullet_and_plain_lines_form_separate_blocks(self) -> None:
+        assert (
+            plain_text_to_rich_html("Intro line\n• First bullet\n• Second bullet\nOutro line")
+            == "<p>Intro line</p><ul><li>First bullet</li><li>Second bullet</li></ul><p>Outro line</p>"
+        )
+
+    def test_special_characters_are_html_escaped(self) -> None:
+        assert (
+            plain_text_to_rich_html("Reduced costs & increased revenue")
+            == "<p>Reduced costs &amp; increased revenue</p>"
+        )

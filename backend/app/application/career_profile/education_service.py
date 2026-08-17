@@ -10,6 +10,7 @@ from uuid import UUID
 
 from app.application.career_profile.career_profile_service import CareerProfileService
 from app.core.exceptions import NotFoundError
+from app.core.rich_text import sanitize_rich_text
 from app.domain.career_profile.entities import Education
 from app.domain.career_profile.repositories import Direction, EducationRepository
 
@@ -63,7 +64,7 @@ class EducationService:
                 field_of_study=field_of_study,
                 start_date=start_date,
                 end_date=end_date,
-                description=description,
+                description=sanitize_rich_text(description),
                 display_order=0,  # overwritten by the repository on create
                 created_at=now,
                 updated_at=now,
@@ -100,7 +101,7 @@ class EducationService:
         education.field_of_study = field_of_study
         education.start_date = start_date
         education.end_date = end_date
-        education.description = description
+        education.description = sanitize_rich_text(description)
         education.include_in_resume = include_in_resume
         return await self._educations.update(education)
 

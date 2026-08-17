@@ -280,6 +280,35 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none; /* Chrome, Safari, Chromium-based Edge */
   }
+
+  /*
+   * RichTextEditor's "rainbow" text color swatch — a genuine gradient
+   * fill on the glyphs themselves, not a solid color, so it can't go
+   * through document.execCommand('foreColor', ...) (browsers only
+   * accept a single solid color there). Applied by wrapping the current
+   * selection in `<span data-rainbow="true">` (see rich-text-editor.tsx's
+   * applyRainbow()) rather than an inline gradient style — keeps the
+   * server-side sanitizer's allowlist (app/core/rich_text.py) to one
+   * fixed attribute+value instead of having to trust arbitrary
+   * background/url() CSS coming from the client. Same gradient literal
+   * as .rainbow-border/RAINBOW_GRADIENT_BG above and in
+   * button-variants.ts — duplicated since CSS can't import a JS/TS
+   * constant, keep in sync if the gradient ever changes.
+   */
+  [data-rainbow="true"] {
+    background: linear-gradient(
+      90deg,
+      #a855f7 12.5%,
+      #3b82f6 37.5%,
+      #22c55e 58.33%,
+      #fdba74 75%,
+      #fca5a5 91.67%
+    );
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
 }
 
 /*

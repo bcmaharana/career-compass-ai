@@ -47,44 +47,6 @@ class ResumeData:
     role_label: str | None
 
 
-def description_lines(
-    description: str | None, *, exclude: tuple[str | None, ...] = ()
-) -> list[str]:
-    """Splits a stored description into display lines using the same
-    "a line starting with '• ' is a real bullet, everything else is a
-    plain paragraph line" rule the Career Profile page's own UI and the
-    resume-extraction prompt (seed_platform_defaults.py) both already
-    use — so a generated resume renders the same shape of content the
-    person already sees on their profile, not a re-interpretation of it.
-
-    `exclude` drops any line that's an exact (case/whitespace-insensitive,
-    bullet marker stripped) duplicate of one of the given reference
-    strings — e.g. Education's constructed "degree in field" line.
-    Observed live: a real profile's description repeated its own
-    degree/field_of_study as a bullet, so the generated resume printed
-    "Institution — BE in Electronics and Communication Engineering"
-    immediately followed by a bullet reading the exact same text. This
-    only catches an *exact* repeat, deliberately — anything looser
-    (e.g. a differently-worded paraphrase) risks dropping real, distinct
-    content, which is worse than an occasional harmless duplicate line.
-    """
-    if not description:
-        return []
-    excluded = {ref.strip().casefold() for ref in exclude if ref}
-    lines = []
-    for line in description.split("\n"):
-        if not line.strip():
-            continue
-        if strip_bullet_marker(line).strip().casefold() in excluded:
-            continue
-        lines.append(line)
-    return lines
-
-
-def strip_bullet_marker(line: str) -> str:
-    return line[2:] if line.startswith("• ") else line
-
-
 def group_competencies_by_category(
     competencies: list[CoreCompetency],
 ) -> list[tuple[str | None, list[CoreCompetency]]]:
