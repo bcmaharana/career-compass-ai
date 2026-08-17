@@ -117,7 +117,7 @@ export function RichTextEditor({
   }
 
   return (
-    <div className={cn("flex flex-col gap-0", className)}>
+    <div className="flex flex-col gap-0">
       <div className="flex items-center gap-1 rounded-t-md border border-b-0 border-border bg-muted/40 p-1">
         <button
           type="button"
@@ -205,6 +205,7 @@ export function RichTextEditor({
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           "empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]",
           RICH_TEXT_CONTENT_CLASSES,
+          className,
         )}
       />
     </div>
