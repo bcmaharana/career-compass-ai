@@ -163,7 +163,7 @@ async def move_interview_topic(
         user_id=user_id,
         topic_id=topic_id,
         target_role_id=request.target_role_id,
-        direction=request.direction,  # type: ignore[arg-type]
+        direction=request.direction,
     )
     topics = await service.list_for_scope(
         tenant_id=tenant_id, user_id=user_id, target_role_id=request.target_role_id
@@ -290,7 +290,7 @@ async def move_interview_question(
         user_id=user_id,
         question_id=question_id,
         target_role_id=request.target_role_id,
-        direction=request.direction,  # type: ignore[arg-type]
+        direction=request.direction,
     )
     questions = await service.list_for_scope(
         tenant_id=tenant_id, user_id=user_id, target_role_id=request.target_role_id

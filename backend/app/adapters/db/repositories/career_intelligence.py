@@ -16,6 +16,7 @@ that service's docstring).
 
 from __future__ import annotations
 
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import select
@@ -39,11 +40,15 @@ from app.adapters.db.models import (
 )
 from app.core.exceptions import NotFoundError
 from app.domain.career_intelligence.entities import (
+    AliasSource,
     CategoryParent,
     CikgRole,
     Competency,
+    ContentStatus,
     PrerequisiteOfEdge,
     RelatedSkill,
+    RelationshipStrength,
+    RequirementLevel,
     RoleProgressesToEdge,
     RoleRequiredSkill,
     Skill,
@@ -55,6 +60,31 @@ from app.domain.career_intelligence.entities import (
     SynonymOfEdge,
 )
 
+# --- Literal-narrowing helpers ---
+#
+# Every *_status/strength/requirement_level/source column below is a plain
+# str at the SQLAlchemy level but DB CHECK-constrained (see
+# app/adapters/db/models/career_intelligence.py) to exactly the values its
+# domain Literal type allows — these just name that trust once instead of
+# a `# type: ignore[arg-type]` repeated at every mapping call site.
+
+
+def _status(value: str) -> ContentStatus:
+    return cast(ContentStatus, value)
+
+
+def _strength(value: str) -> RelationshipStrength:
+    return cast(RelationshipStrength, value)
+
+
+def _requirement_level(value: str) -> RequirementLevel:
+    return cast(RequirementLevel, value)
+
+
+def _alias_source(value: str) -> AliasSource:
+    return cast(AliasSource, value)
+
+
 # --- Node mapping functions ---
 
 
@@ -63,7 +93,7 @@ def _category_to_domain(model: SkillCategoryModel) -> SkillCategory:
         id=model.id,
         name=model.name,
         description=model.description,
-        content_status=model.content_status,  # type: ignore[arg-type]
+        content_status=_status(model.content_status),
         source_attribution=model.source_attribution,
         created_at=model.created_at,
         updated_at=model.updated_at,
@@ -76,7 +106,7 @@ def _competency_to_domain(model: CompetencyModel) -> Competency:
         id=model.id,
         name=model.name,
         description=model.description,
-        content_status=model.content_status,  # type: ignore[arg-type]
+        content_status=_status(model.content_status),
         source_attribution=model.source_attribution,
         created_at=model.created_at,
         updated_at=model.updated_at,
@@ -89,7 +119,7 @@ def _skill_to_domain(model: SkillModel) -> Skill:
         id=model.id,
         name=model.name,
         description=model.description,
-        content_status=model.content_status,  # type: ignore[arg-type]
+        content_status=_status(model.content_status),
         source_attribution=model.source_attribution,
         created_at=model.created_at,
         updated_at=model.updated_at,
@@ -109,7 +139,7 @@ def _cikg_role_to_domain(model: CikgRoleModel) -> CikgRole:
         title=model.title,
         description=model.description,
         experience_level=model.experience_level,
-        content_status=model.content_status,  # type: ignore[arg-type]
+        content_status=_status(model.content_status),
         source_attribution=model.source_attribution,
         created_at=model.created_at,
         updated_at=model.updated_at,
@@ -125,7 +155,7 @@ def _category_parent_to_domain(model: CategoryParentModel) -> CategoryParent:
         id=model.id,
         child_category_id=model.child_category_id,
         parent_category_id=model.parent_category_id,
-        content_status=model.content_status,  # type: ignore[arg-type]
+        content_status=_status(model.content_status),
         source_attribution=model.source_attribution,
         created_at=model.created_at,
     )
@@ -138,7 +168,7 @@ def _skill_category_membership_to_domain(
         id=model.id,
         skill_id=model.skill_id,
         category_id=model.category_id,
-        content_status=model.content_status,  # type: ignore[arg-type]
+        content_status=_status(model.content_status),
         source_attribution=model.source_attribution,
         created_at=model.created_at,
     )
@@ -151,7 +181,7 @@ def _skill_competency_membership_to_domain(
         id=model.id,
         skill_id=model.skill_id,
         competency_id=model.competency_id,
-        content_status=model.content_status,  # type: ignore[arg-type]
+        content_status=_status(model.content_status),
         source_attribution=model.source_attribution,
         created_at=model.created_at,
     )
@@ -162,8 +192,8 @@ def _related_skill_to_domain(model: RelatedSkillModel) -> RelatedSkill:
         id=model.id,
         skill_a_id=model.skill_a_id,
         skill_b_id=model.skill_b_id,
-        strength=model.strength,  # type: ignore[arg-type]
-        content_status=model.content_status,  # type: ignore[arg-type]
+        strength=_strength(model.strength),
+        content_status=_status(model.content_status),
         source_attribution=model.source_attribution,
         created_at=model.created_at,
     )
@@ -174,8 +204,8 @@ def _role_required_skill_to_domain(model: RoleRequiredSkillModel) -> RoleRequire
         id=model.id,
         role_id=model.role_id,
         skill_id=model.skill_id,
-        requirement_level=model.requirement_level,  # type: ignore[arg-type]
-        content_status=model.content_status,  # type: ignore[arg-type]
+        requirement_level=_requirement_level(model.requirement_level),
+        content_status=_status(model.content_status),
         source_attribution=model.source_attribution,
         created_at=model.created_at,
     )
@@ -187,7 +217,7 @@ def _skill_alias_to_domain(model: SkillAliasModel) -> SkillAlias:
         skill_id=model.skill_id,
         alias_text=model.alias_text,
         normalized_text=model.normalized_text,
-        source=model.source,  # type: ignore[arg-type]
+        source=_alias_source(model.source),
         confidence=model.confidence,
         created_at=model.created_at,
     )
@@ -198,7 +228,7 @@ def _prerequisite_of_to_domain(model: PrerequisiteOfEdgeModel) -> PrerequisiteOf
         id=model.id,
         source_skill_id=model.source_skill_id,
         target_skill_id=model.target_skill_id,
-        content_status=model.content_status,  # type: ignore[arg-type]
+        content_status=_status(model.content_status),
         source_attribution=model.source_attribution,
         created_at=model.created_at,
     )
@@ -209,7 +239,7 @@ def _specializes_to_domain(model: SpecializesEdgeModel) -> SpecializesEdge:
         id=model.id,
         source_skill_id=model.source_skill_id,
         target_skill_id=model.target_skill_id,
-        content_status=model.content_status,  # type: ignore[arg-type]
+        content_status=_status(model.content_status),
         source_attribution=model.source_attribution,
         created_at=model.created_at,
     )
@@ -220,7 +250,7 @@ def _synonym_of_to_domain(model: SynonymOfEdgeModel) -> SynonymOfEdge:
         id=model.id,
         skill_a_id=model.skill_a_id,
         skill_b_id=model.skill_b_id,
-        content_status=model.content_status,  # type: ignore[arg-type]
+        content_status=_status(model.content_status),
         source_attribution=model.source_attribution,
         created_at=model.created_at,
     )
@@ -777,7 +807,7 @@ def _role_progresses_to_domain(model: RoleProgressesToEdgeModel) -> RoleProgress
         id=model.id,
         source_role_id=model.source_role_id,
         target_role_id=model.target_role_id,
-        content_status=model.content_status,  # type: ignore[arg-type]
+        content_status=_status(model.content_status),
         source_attribution=model.source_attribution,
         created_at=model.created_at,
     )

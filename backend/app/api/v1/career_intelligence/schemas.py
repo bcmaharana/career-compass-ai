@@ -13,6 +13,7 @@ with.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -113,7 +114,7 @@ class SkillAliasResponse(BaseModel):
 class CreateSkillAliasRequest(BaseModel):
     skill_id: UUID
     alias_text: str = Field(min_length=1, max_length=255)
-    source: str = Field(pattern="^(curated|ai_suggested|user_confirmed)$")
+    source: Literal["curated", "ai_suggested", "user_confirmed"]
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
@@ -149,7 +150,7 @@ class ProposeRevisionRequest(BaseModel):
         default=None, description="Null proposes a brand-new entity; set to edit an existing one."
     )
     proposed_data: dict[str, object]
-    source_attribution: str = Field(pattern="^(curated|ai_suggested|bulk_import)$")
+    source_attribution: Literal["curated", "ai_suggested", "bulk_import"]
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     import_batch_id: UUID | None = None
 

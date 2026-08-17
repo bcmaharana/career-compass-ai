@@ -41,7 +41,7 @@ def _to_e164(phone_number: str | None, country: str | None) -> str | None:
         return None
     if not phonenumbers.is_valid_number(parsed):
         return None
-    return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+    return str(phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164))
 
 
 class UpdateUserProfileService:

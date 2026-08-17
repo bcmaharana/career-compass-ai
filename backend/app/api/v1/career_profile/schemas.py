@@ -68,7 +68,7 @@ class UpdateCareerProfileRequest(BaseModel):
 class MoveRequest(BaseModel):
     """Shared by every reorderable entity's move endpoint."""
 
-    direction: str = Field(pattern="^(up|down)$")
+    direction: Literal["up", "down"]
 
 
 class ExperienceRequest(BaseModel):

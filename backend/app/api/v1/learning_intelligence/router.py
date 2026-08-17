@@ -127,7 +127,7 @@ async def move_learning_item(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         item_id=item_id,
-        direction=request.direction,  # type: ignore[arg-type]
+        direction=request.direction,
     )
     items = await service.list_for_current_user(
         tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)

@@ -376,7 +376,7 @@ async def move_experience(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         experience_id=experience_id,
-        direction=request.direction,  # type: ignore[arg-type]
+        direction=request.direction,
     )
     # target_role_id here is only for re-fetching the right list to
     # return — move() itself resolved ownership from the item's own
@@ -504,7 +504,7 @@ async def move_education(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         education_id=education_id,
-        direction=request.direction,  # type: ignore[arg-type]
+        direction=request.direction,
     )
     educations = await service.list_for_current_user(
         tenant_id=UUID(identity.tenant_id),
@@ -634,7 +634,7 @@ async def move_certification(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         certification_id=certification_id,
-        direction=request.direction,  # type: ignore[arg-type]
+        direction=request.direction,
     )
     certifications = await service.list_for_current_user(
         tenant_id=UUID(identity.tenant_id),
@@ -755,7 +755,7 @@ async def move_career_highlight(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         highlight_id=highlight_id,
-        direction=request.direction,  # type: ignore[arg-type]
+        direction=request.direction,
     )
     highlights = await service.list_for_current_user(
         tenant_id=UUID(identity.tenant_id),
@@ -879,7 +879,7 @@ async def move_key_achievement(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         achievement_id=achievement_id,
-        direction=request.direction,  # type: ignore[arg-type]
+        direction=request.direction,
     )
     achievements = await service.list_for_current_user(
         tenant_id=UUID(identity.tenant_id),
@@ -992,7 +992,7 @@ async def move_peer_endorsement(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         endorsement_id=endorsement_id,
-        direction=request.direction,  # type: ignore[arg-type]
+        direction=request.direction,
     )
     endorsements = await service.list_for_current_user(
         tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
@@ -1091,7 +1091,7 @@ async def move_career_goal(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         goal_id=goal_id,
-        direction=request.direction,  # type: ignore[arg-type]
+        direction=request.direction,
     )
     goals = await service.list_for_current_user(
         tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)

@@ -221,6 +221,17 @@ def _extract_reset_token(message: EmailMessage) -> str:
     return match.group(1)
 
 
+#: Real US area codes, paired with the reserved 555-01XX line-number
+#: block below, to get a larger pool of libphonenumber-valid fictional
+#: numbers than a single hardcoded area code allows — confirmed live
+#: that phonenumbers.is_valid_number() accepts 555-0100..0199 under
+#: every one of these (the reserved block isn't tied to one NPA).
+_TEST_PHONE_AREA_CODES = (
+    "415", "212", "305", "312", "404", "602", "617", "702", "206", "214",
+    "512", "615", "919", "480", "303", "813", "410", "916", "801", "503",
+)
+
+
 def _unique_test_phone_number() -> str:
     """A fresh, libphonenumber-valid US number per call — the 555-01XX
     block (555-0100 through 555-0199) is reserved for fictional use and
@@ -232,9 +243,18 @@ def _unique_test_phone_number() -> str:
     later test runs to collide with rows a prior run had already
     committed and never cleaned up, since this test file deliberately
     doesn't truncate tables between tests/runs.
+
+    Only varying the last two digits (100 possible values, one fixed
+    area code) was a real, confirmed collision source once enough tests
+    used this helper — two tests failed in the same run from a genuine
+    duplicate. Spreading across 20 real, libphonenumber-valid area codes
+    on top of the same reserved suffix range multiplies the pool to
+    2,000 without changing which numbers are valid.
     """
-    suffix = 100 + (uuid.uuid4().int % 100)
-    return f"+14155550{suffix}"
+    token = uuid.uuid4().int
+    area_code = _TEST_PHONE_AREA_CODES[token % len(_TEST_PHONE_AREA_CODES)]
+    suffix = 100 + ((token // len(_TEST_PHONE_AREA_CODES)) % 100)
+    return f"+1{area_code}555{suffix:04d}"
 
 
 class FakePhoneVerifier:

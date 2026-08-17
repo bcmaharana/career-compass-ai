@@ -2034,8 +2034,11 @@ export interface components {
             skill_id: string;
             /** Alias Text */
             alias_text: string;
-            /** Source */
-            source: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "curated" | "ai_suggested" | "user_confirmed";
             /** Confidence */
             confidence?: number | null;
         };
@@ -2338,8 +2341,11 @@ export interface components {
          *     field is specific to this domain's multi-scope model.
          */
         InterviewPrepMoveRequest: {
-            /** Direction */
-            direction: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down";
             /** Target Role Id */
             target_role_id?: string | null;
         };
@@ -2735,8 +2741,11 @@ export interface components {
          * @description Shared by every reorderable entity's move endpoint.
          */
         MoveRequest: {
-            /** Direction */
-            direction: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down";
         };
         /** MyPlatformAdminResponse */
         MyPlatformAdminResponse: {
@@ -2908,8 +2917,11 @@ export interface components {
             proposed_data: {
                 [key: string]: unknown;
             };
-            /** Source Attribution */
-            source_attribution: string;
+            /**
+             * Source Attribution
+             * @enum {string}
+             */
+            source_attribution: "curated" | "ai_suggested" | "bulk_import";
             /** Confidence */
             confidence?: number | null;
             /** Import Batch Id */

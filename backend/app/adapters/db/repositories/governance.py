@@ -4,6 +4,7 @@ MVP 2B) — see app/adapters/db/models/governance.py's module docstring.
 
 from __future__ import annotations
 
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -11,19 +12,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.db.models import ContentHistoryModel, ContentRevisionModel
 from app.core.exceptions import NotFoundError
-from app.domain.career_intelligence.entities import ContentHistoryEntry, ContentRevision
+from app.domain.career_intelligence.entities import (
+    ContentHistoryEntry,
+    ContentRevision,
+    RevisionSourceAttribution,
+    RevisionStatus,
+)
 
 
 def _revision_to_domain(model: ContentRevisionModel) -> ContentRevision:
+    # model.status/.source_attribution are plain str at the SQLAlchemy
+    # level but DB CHECK-constrained to exactly RevisionStatus's/
+    # RevisionSourceAttribution's values (see models/governance.py).
     return ContentRevision(
         id=model.id,
         entity_type=model.entity_type,
         entity_id=model.entity_id,
         proposed_data=dict(model.proposed_data),
         revision_number=model.revision_number,
-        status=model.status,  # type: ignore[arg-type]
+        status=cast(RevisionStatus, model.status),
         confidence=float(model.confidence) if model.confidence is not None else None,
-        source_attribution=model.source_attribution,  # type: ignore[arg-type]
+        source_attribution=cast(RevisionSourceAttribution, model.source_attribution),
         import_batch_id=model.import_batch_id,
         reviewed_by=model.reviewed_by,
         review_notes=model.review_notes,

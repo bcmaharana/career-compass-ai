@@ -210,7 +210,7 @@ async def create_skill_alias(
     alias = await service.create(
         skill_id=request.skill_id,
         alias_text=request.alias_text,
-        source=request.source,  # type: ignore[arg-type]
+        source=request.source,
         confidence=request.confidence,
     )
     return SkillAliasResponse(
@@ -303,7 +303,7 @@ async def propose_revision(
         entity_type=request.entity_type,
         entity_id=request.entity_id,
         proposed_data=request.proposed_data,
-        source_attribution=request.source_attribution,  # type: ignore[arg-type]
+        source_attribution=request.source_attribution,
         confidence=request.confidence,
         import_batch_id=request.import_batch_id,
     )

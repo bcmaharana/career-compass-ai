@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class ReferenceLinkPayload(BaseModel):
@@ -84,7 +85,7 @@ class InterviewPrepMoveRequest(BaseModel):
     Not the shared career_profile.schemas.MoveRequest, since that extra
     field is specific to this domain's multi-scope model."""
 
-    direction: str = Field(pattern="^(up|down)$")
+    direction: Literal["up", "down"]
     target_role_id: UUID | None = None
 
 

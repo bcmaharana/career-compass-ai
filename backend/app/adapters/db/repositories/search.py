@@ -15,6 +15,7 @@ internal mapping, never interpolated from user input directly.
 
 from __future__ import annotations
 
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import select
@@ -62,9 +63,11 @@ def _embedding_model_to_domain(model: EmbeddingModelModel) -> EmbeddingModel:
 
 
 def _content_embedding_to_domain(model: ContentEmbeddingModel) -> ContentEmbedding:
+    # model.entity_type is plain str at the SQLAlchemy level but DB
+    # CHECK-constrained to EmbeddableEntityType's values.
     return ContentEmbedding(
         id=model.id,
-        entity_type=model.entity_type,  # type: ignore[arg-type]
+        entity_type=cast(EmbeddableEntityType, model.entity_type),
         entity_id=model.entity_id,
         embedding_model_id=model.embedding_model_id,
         embedding=list(model.embedding),
