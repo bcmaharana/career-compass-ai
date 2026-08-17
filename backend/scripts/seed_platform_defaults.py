@@ -399,13 +399,25 @@ MODEL_CATALOG: list[tuple[str, str, float]] = [
     ("ollama", "qwen2.5:3b", 0.0),
     ("ollama", "qwen2.5-coder:7b", 0.0),
     ("ollama", "qwen2.5-coder:3b", 0.0),
-    # Groq: hosted, free-tier (rate-limited, not metered/credit-based),
-    # confirmed model IDs from Groq's own docs. qwen/qwen3.6-27b is
-    # preview status per Groq (may be discontinued without notice) —
-    # kept selectable anyway since it's the specific Qwen variant asked
-    # for; its display name (ai_platform/schemas.py) flags "preview".
-    ("groq", "llama-3.3-70b-versatile", 0.0),
-    ("groq", "llama-3.1-8b-instant", 0.0),
+    # Groq: hosted, free-tier (rate-limited, not metered/credit-based).
+    # The original three model IDs here (llama-3.3-70b-versatile,
+    # llama-3.1-8b-instant) were silently removed from Groq's catalog
+    # entirely at some point — confirmed live (2026-08-17) via
+    # GET /openai/v1/models returning neither, and a direct chat-
+    # completions call against either 404ing with no other explanation.
+    # This is a real, standing risk with Groq's free tier generally (see
+    # qwen/qwen3.6-27b's own "preview, may be discontinued without
+    # notice" note below) — Groq gives no deprecation notice or redirect,
+    # a request just starts 404ing. Replaced with openai/gpt-oss-120b/20b,
+    # confirmed live working the same day. If this happens again, check
+    # GET /openai/v1/models with the real API key before assuming the
+    # bug is anywhere in this app's own code.
+    ("groq", "openai/gpt-oss-120b", 0.0),
+    ("groq", "openai/gpt-oss-20b", 0.0),
+    # qwen/qwen3.6-27b is preview status per Groq (may be discontinued
+    # without notice) — kept selectable anyway since it's the specific
+    # Qwen variant asked for; its display name (ai_platform/schemas.py)
+    # flags "preview".
     ("groq", "qwen/qwen3.6-27b", 0.0),
 ]
 

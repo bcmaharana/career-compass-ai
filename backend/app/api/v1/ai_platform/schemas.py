@@ -17,8 +17,8 @@ _DISPLAY_NAMES: dict[str, str] = {
     "qwen2.5:3b": "Qwen 2.5 3B (Local)",
     "qwen2.5-coder:7b": "Qwen 2.5 Coder 7B (Local)",
     "qwen2.5-coder:3b": "Qwen 2.5 Coder 3B (Local)",
-    "llama-3.3-70b-versatile": "Llama 3.3 70B (Groq)",
-    "llama-3.1-8b-instant": "Llama 3.1 8B (Groq)",
+    "openai/gpt-oss-120b": "GPT-OSS 120B (Groq)",
+    "openai/gpt-oss-20b": "GPT-OSS 20B (Groq)",
     "qwen/qwen3.6-27b": "Qwen 3.6 27B (Groq, preview)",
 }
 
