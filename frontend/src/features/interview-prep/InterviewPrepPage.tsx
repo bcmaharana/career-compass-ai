@@ -12,6 +12,7 @@ import { InterviewQuestionsSection } from "@/features/interview-prep/InterviewQu
 import { InterviewTopicsSection } from "@/features/interview-prep/InterviewTopicsSection";
 import { groupInterviewQuestionsByCategory } from "@/lib/group-interview-questions-by-category";
 import { groupInterviewTopicsBySection } from "@/lib/group-interview-topics-by-section";
+import { cn } from "@/lib/utils";
 import {
   type Dispatch,
   type ReactNode,
@@ -231,6 +232,15 @@ function scrollToAfterPaint(elementId: string) {
   });
 }
 
+/** "Content" for a question/follow-up is a prepared answer — either
+ * the user's own or a real generated one. Mirrors the exact same
+ * truthy checks InterviewQuestionsSection.tsx's own "No answer yet"/
+ * "No AI answer generated yet" empty states already use, just combined
+ * into one signal for the TOC's red-if-nothing-prepared highlight. */
+function questionHasContent(question: components["schemas"]["InterviewQuestionResponse"]): boolean {
+  return !!question.manual_answer || question.ai_answer_status === "generated";
+}
+
 function TableOfContents({
   topics,
   questions,
@@ -265,7 +275,10 @@ function TableOfContents({
                 <ul className="list-disc space-y-1 pl-5">
                   {group.topics.map((topic) => (
                     <li key={topic.id}>
-                      <TocEntryLink onSelect={() => onSelectTopic(topic.id)}>
+                      <TocEntryLink
+                        onSelect={() => onSelectTopic(topic.id)}
+                        hasContent={!!topic.discussion}
+                      >
                         {topic.name}
                       </TocEntryLink>
                     </li>
@@ -288,7 +301,10 @@ function TableOfContents({
                 <ul className="list-disc space-y-1 pl-5">
                   {group.questions.map((question) => (
                     <li key={question.id}>
-                      <TocEntryLink onSelect={() => onSelectQuestion(question.id)}>
+                      <TocEntryLink
+                        onSelect={() => onSelectQuestion(question.id)}
+                        hasContent={questionHasContent(question)}
+                      >
                         {question.question}
                       </TocEntryLink>
                       {question.follow_ups.length > 0 && (
@@ -297,6 +313,7 @@ function TableOfContents({
                             <li key={followUp.id}>
                               <TocEntryLink
                                 onSelect={() => onSelectFollowUp(followUp.id, question.id)}
+                                hasContent={questionHasContent(followUp)}
                               >
                                 {followUp.question}
                               </TocEntryLink>
@@ -328,9 +345,15 @@ function TableOfContents({
 function TocEntryLink({
   onSelect,
   children,
+  hasContent = true,
 }: {
   onSelect: () => void;
   children: ReactNode;
+  //: Renders in red (text-destructive, this app's standing error/
+  //: warning color) when false — a quick visual flag for "nothing
+  //: prepared here yet," direct user request. Defaults to true so
+  //: nothing has to opt in explicitly for the common, non-empty case.
+  hasContent?: boolean;
 }) {
   return (
     <span
@@ -343,7 +366,11 @@ function TocEntryLink({
           onSelect();
         }
       }}
-      className="cursor-pointer text-left text-sm font-medium text-accent underline underline-offset-2 hover:text-accent/80"
+      title={hasContent ? undefined : "No content yet"}
+      className={cn(
+        "cursor-pointer text-left text-sm font-medium underline underline-offset-2",
+        hasContent ? "text-accent hover:text-accent/80" : "text-destructive hover:text-destructive/80",
+      )}
     >
       {children}
     </span>
