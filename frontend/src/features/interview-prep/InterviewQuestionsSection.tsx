@@ -556,7 +556,7 @@ function QuestionCard({
           ) : question.manual_answer ? (
             <RichTextDisplay
               html={question.manual_answer}
-              className="max-h-48 overflow-y-auto scrollbar-hide"
+              className="max-h-[250px] overflow-y-auto scrollbar-hide"
             />
           ) : (
             <p className="text-sm text-muted-foreground">No answer yet — click Edit to add one.</p>
@@ -577,7 +577,7 @@ function QuestionCard({
           {isAiAnswerVisible && (
             <>
               {question.ai_answer_status === "generated" && (
-                <div className="max-h-48 overflow-y-auto whitespace-pre-line text-sm scrollbar-hide">
+                <div className="max-h-[250px] overflow-y-auto whitespace-pre-line text-sm scrollbar-hide">
                   {question.ai_answer}
                 </div>
               )}
@@ -950,7 +950,7 @@ function FollowUpQuestionCard({
             ) : followUp.manual_answer ? (
               <RichTextDisplay
                 html={followUp.manual_answer}
-                className="max-h-48 overflow-y-auto scrollbar-hide"
+                className="max-h-[250px] overflow-y-auto scrollbar-hide"
               />
             ) : (
               <p className="text-sm text-muted-foreground">No answer yet — click Edit to add one.</p>
@@ -971,7 +971,7 @@ function FollowUpQuestionCard({
             {isAiAnswerVisible && (
               <>
                 {followUp.ai_answer_status === "generated" && (
-                  <div className="max-h-48 overflow-y-auto whitespace-pre-line text-sm scrollbar-hide">
+                  <div className="max-h-[250px] overflow-y-auto whitespace-pre-line text-sm scrollbar-hide">
                     {followUp.ai_answer}
                   </div>
                 )}
