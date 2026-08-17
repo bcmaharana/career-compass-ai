@@ -1,14 +1,15 @@
 import { cn } from "@/lib/utils";
-import { Bold, IndentDecrease, IndentIncrease, Italic, List } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { Bold, IndentDecrease, IndentIncrease, Italic, List, Underline } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 /**
- * A small hand-rolled rich-text editor (Bold/Italic/text color only) —
- * not a real editor library. Matches this app's "no heavy UI kit"
- * convention (see Dialog's own docstring). Backed by a plain
+ * A small hand-rolled rich-text editor (Bold/Italic/Underline/text
+ * color) — not a real editor library. Matches this app's "no heavy UI
+ * kit" convention (see Dialog's own docstring). Backed by a plain
  * contenteditable div driven by the deprecated-but-still-universally-
  * supported document.execCommand — proportionate to "bold, color,
- * italics" as literally requested, not a general-purpose editor.
+ * italics, underline" as literally requested, not a general-purpose
+ * editor.
  *
  * Uncontrolled by design: `defaultValue` seeds the DOM exactly once, in
  * a mount-only effect (`el.innerHTML = ...`, not a `dangerouslySetInnerHTML`
@@ -52,12 +53,46 @@ export function RichTextEditor({
   const editorRef = useRef<HTMLDivElement>(null);
   const initialValueRef = useRef(defaultValue ?? "");
 
+  // Bold/Italic/Underline have no visible "this is currently active"
+  // state — confirmed live as the real driver behind a "bold sometimes
+  // applies, sometimes doesn't" report: execCommand's toggle is
+  // perfectly deterministic (queryCommandState('bold') at the current
+  // selection decides on/off), but a selection spanning a MIX of
+  // already-bold and not-bold text toggles the *entire* selection to
+  // whichever state it wasn't already fully in — a first click can make
+  // it all bold, and clicking again on that same (now fully bold)
+  // selection un-bolds it, which reads as "random" with zero visual cue
+  // beforehand about which way it's about to go. Tracking + highlighting
+  // the actual state turns that into predictable, visible behavior
+  // instead of trying to change execCommand's own (correct) semantics.
+  const [activeFormats, setActiveFormats] = useState({ bold: false, italic: false, underline: false });
+
+  function refreshActiveFormats() {
+    if (!editorRef.current) return;
+    const selection = window.getSelection();
+    // Only reflect this editor's own state — selectionchange is a
+    // document-global event, and a page can have several
+    // RichTextEditor instances open at once (see e.g. Interview Prep's
+    // per-question answer editors).
+    if (!selection || !editorRef.current.contains(selection.anchorNode)) return;
+    setActiveFormats({
+      bold: document.queryCommandState("bold"),
+      italic: document.queryCommandState("italic"),
+      underline: document.queryCommandState("underline"),
+    });
+  }
+
   useEffect(() => {
     if (editorRef.current) {
       editorRef.current.innerHTML = initialValueRef.current;
     }
     // Intentionally empty deps — see the component docstring on why
     // this must only ever run once, on mount.
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener("selectionchange", refreshActiveFormats);
+    return () => document.removeEventListener("selectionchange", refreshActiveFormats);
   }, []);
 
   function exec(command: string, value?: string) {
@@ -81,6 +116,7 @@ export function RichTextEditor({
     document.execCommand("styleWithCSS", false, command === "foreColor" ? "true" : "false");
     document.execCommand(command, false, value);
     onChange(editorRef.current?.innerHTML ?? "");
+    refreshActiveFormats();
   }
 
   /** The "rainbow" swatch is a genuine multi-color gradient fill, which
@@ -124,7 +160,14 @@ export function RichTextEditor({
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => exec("bold")}
           aria-label="Bold"
-          className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-pressed={activeFormats.bold}
+          title={activeFormats.bold ? "Bold (currently on for this selection)" : "Bold"}
+          className={cn(
+            "rounded p-1.5 hover:bg-muted",
+            activeFormats.bold
+              ? "bg-muted text-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          )}
         >
           <Bold className="h-4 w-4" />
         </button>
@@ -133,9 +176,32 @@ export function RichTextEditor({
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => exec("italic")}
           aria-label="Italic"
-          className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-pressed={activeFormats.italic}
+          title={activeFormats.italic ? "Italic (currently on for this selection)" : "Italic"}
+          className={cn(
+            "rounded p-1.5 hover:bg-muted",
+            activeFormats.italic
+              ? "bg-muted text-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          )}
         >
           <Italic className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => exec("underline")}
+          aria-label="Underline"
+          aria-pressed={activeFormats.underline}
+          title={activeFormats.underline ? "Underline (currently on for this selection)" : "Underline"}
+          className={cn(
+            "rounded p-1.5 hover:bg-muted",
+            activeFormats.underline
+              ? "bg-muted text-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Underline className="h-4 w-4" />
         </button>
         <div className="mx-1 h-4 w-px bg-border" />
         {RICH_TEXT_COLOR_SWATCHES.map((color) => (
