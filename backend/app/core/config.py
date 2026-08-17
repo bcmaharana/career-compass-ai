@@ -12,9 +12,15 @@ through `get_settings()` so there is a single, typed source of truth.
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+#: jwt_secret_key's placeholder default (below) — deliberately checked
+#: against by identity, not just "is it set at all," so a genuine but
+#: still-default value can never silently sign production tokens.
+_PLACEHOLDER_JWT_SECRET_KEY = "change-me-in-every-environment"
 
 
 class Settings(BaseSettings):
@@ -86,7 +92,7 @@ class Settings(BaseSettings):
     object_storage_resumes_bucket: str = Field(default="career-compass-resumes-dev")
 
     # --- Auth ---
-    jwt_secret_key: str = Field(default="change-me-in-every-environment")
+    jwt_secret_key: str = Field(default=_PLACEHOLDER_JWT_SECRET_KEY)
     jwt_access_token_expire_minutes: int = Field(default=60)
     jwt_algorithm: str = Field(default="HS256")
 
@@ -197,6 +203,24 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @model_validator(mode="after")
+    def _reject_placeholder_jwt_secret_in_production(self) -> Self:
+        """The placeholder default is intentionally usable in dev/local
+        (it's what lets a script mint a JWT locally without touching a
+        real secret — see CLAUDE.md's account-recovery investigation),
+        but it's plaintext in this public repo — if APP_ENV=production
+        were ever reached with JWT_SECRET_KEY unset/misconfigured, the
+        app would otherwise silently start and sign/verify tokens with
+        a value anyone can read, letting a caller forge a token for any
+        tenant/user. Fail fast at settings-construction time instead.
+        """
+        if self.is_production and self.jwt_secret_key == _PLACEHOLDER_JWT_SECRET_KEY:
+            raise ValueError(
+                "JWT_SECRET_KEY is still the placeholder default in a production "
+                "environment (APP_ENV=production) — set a real, unique secret."
+            )
+        return self
 
 
 @lru_cache
