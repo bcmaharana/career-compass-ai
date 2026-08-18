@@ -3310,6 +3310,186 @@ Known environment gotchas already solved, don't reintroduce:
   present exactly where bold/italic text was expected — confirming the
   shared `rich_text_export.py` walker renders correctly through both
   independent document-generation pipelines, not just one.
+- **Tech debt + security hardening pass** (2026-08-17) — done, deployed
+  to both dev and prod. Two audit-then-fix rounds, both delegated to a
+  background investigation first so the fix list was evidence-based
+  rather than guessed.
+  **Tech debt**: no loose `TODO`/`FIXME` markers exist anywhere in this
+  codebase (confirmed, not assumed). Fixed the two real things found:
+  (1) `_unique_test_phone_number()` in `test_identity_flow.py` only drew
+  from 100 possible values (one fixed area code) — confirmed live that
+  this was a real, currently-firing flaky-test source (2 failures in a
+  552-test run), not just a theoretical risk; widened to 2,000
+  combinations (20 real, libphonenumber-valid area codes × the reserved
+  555-01XX block). (2) ~29 `# type: ignore[arg-type]` suppressions
+  across CIKG repositories and every reorder endpoint, all one root
+  cause (SQLAlchemy `Column[str]` assigned into a domain `Literal[...]`
+  with no runtime narrowing) — eliminated by typing the underlying
+  Pydantic request fields as real `Literal`s (`direction`, alias
+  `source`, revision `source_attribution`) instead of pattern-validated
+  `str`, and by naming the remaining DB-CHECK-constrained trust once
+  per file via a small `cast()` helper instead of repeating the ignore
+  at every mapping call site — mirrors the existing centralization
+  precedent in `app/adapters/db/reorder.py`. Two ignores were
+  deliberately left alone (`resume_intelligence` router's JSON-column
+  mapping, `content_revision_service`'s untyped revision-payload
+  casts) — genuinely untyped external data, not a DB-constrained
+  column, different root cause.
+  **Security**: full-codebase audit (hardcoded secrets, plaintext
+  password handling, SQL injection/XSS, authz gaps on the newest
+  domains, CORS/deploy config, dependency CVEs) came back clean on
+  everything except two real, fixable items. (1) `Settings.jwt_secret_key`'s
+  dev-convenience placeholder default (`"change-me-in-every-environment"`,
+  plaintext in this public repo) had no guard against reaching
+  production — confirmed prod's real `.env` already has a proper
+  secret (not currently exploited), but a future misconfigured deploy
+  could have silently signed real tokens with a value anyone can read.
+  Closed with a Pydantic `model_validator` that hard-fails at
+  `Settings` construction time if `app_env=production` and the secret
+  is still the placeholder; dev/local (which intentionally relies on
+  the known placeholder for local JWT minting, e.g. the account-
+  recovery investigation technique documented elsewhere in this file)
+  is unaffected. (2) Known-CVE dependencies: `npm audit fix` patched
+  `nanoid` (HIGH, infinite loop) and `brace-expansion`/`js-yaml`
+  (HIGH); backend `cryptography`/`h2` upgraded to clear their CVEs
+  (local-venv-only — the Docker image already builds fresh from
+  unpinned `pyproject.toml`). `react-router`'s open-redirect CVE and
+  `esbuild`/`vite`'s dev-server CVE were deliberately left unfixed —
+  both only have fixes via a major version bump (6→7, 5→8), real
+  breaking-change risk to core routing/build tooling that deserves its
+  own separately-tested upgrade, not one folded into an audit pass.
+- **Groq model 404 fix** (2026-08-17) — done, deployed. User-reported
+  error generating an Interview Prep AI-Suggested Answer: `Groq request
+  failed: 404 Not Found`. Root cause confirmed live via a direct
+  `GET /openai/v1/models` call with the real API key: Groq silently
+  removed `llama-3.3-70b-versatile` and `llama-3.1-8b-instant` from
+  their catalog entirely, no deprecation notice. `llama-3.3-70b-versatile`
+  was also prod's actual `AI_DEFAULT_MODEL` (Anthropic's API key is
+  unset there, so the whole platform runs on Groq's free tier by
+  design), which is why this hit broadly rather than only affecting
+  users who'd manually picked one of the two dead models. Replaced both
+  with `openai/gpt-oss-120b`/`20b` (confirmed live working) in the
+  model catalog, display-name map, and prod's `AI_DEFAULT_MODEL` env
+  value; since seeding is additive-only, also ran a direct, in-place
+  `model_name` UPDATE against both the dev and prod `model_versions`
+  tables (preserves each row's `id`, so `ai_invocations` history and
+  any user's `preferred_model_version_id` stay intact). Verified
+  end-to-end against the real Groq API through the app's actual code
+  path, not just the raw API.
+- **Interview Preparation: follow-up questions** (2026-08-17) — done,
+  deployed. Requested directly by the user: the ability to attach one
+  or more follow-up questions to any Interview Question. Two design
+  questions were asked and answered up front: follow-ups get full
+  Manual Answer + AI-Suggested Answer support (not just plain text),
+  and nesting is single-level only (a follow-up can't itself have
+  follow-ups).
+  A follow-up is the SAME `InterviewQuestion` entity, not a new one —
+  a nullable, self-referential `parent_question_id` (migration
+  `f4b8c92e6a17`, `ON DELETE CASCADE`, since a follow-up has no
+  independent meaning once its parent is gone) gets a manual answer,
+  AI-generated answer, and reference links for free. Deliberately NOT
+  scope-tagged like a top-level question — no
+  `InterviewQuestionScopeTagModel` rows, no `ScopeTagSelector` in its
+  UI — it's visible wherever its parent is, inheriting the parent's
+  scopes entirely. Its ordering among siblings is a plain
+  `display_order` column on the row itself (re-added after an earlier
+  migration had dropped it), reordered via
+  `app/adapters/db/reorder.py`'s centralized `move_item`/
+  `next_display_order` helper rather than the scope-tag-table-based
+  swap logic top-level questions use.
+  `InterviewQuestionRepository.list_for_scope()`/`update()`
+  batch-attach each top-level question's follow-ups (one extra query,
+  not N+1) into a new transient `follow_ups` field, so the API embeds
+  them nested — `InterviewQuestionResponse` is genuinely
+  self-referential (Pydantic v2 `model_rebuild()`), one level deep.
+  `InterviewAnswerService.generate_answer()` grounds a follow-up's AI
+  answer in its PARENT's role/topic context (a follow-up's own
+  `scope_target_role_ids`/`topic_id` are always empty) rather than
+  silently regressing to generic Master-profile grounding, and the
+  prompt template gained a `parent_question_context` variable so the
+  model answers in the actual conversational context
+  (`interview_answer_generation` prompt bumped to v2). New endpoints:
+  `POST .../questions/{id}/follow-ups`, `PATCH`/`DELETE`/`POST-move
+  .../follow-up-questions/{id}`. Frontend: a new "Follow-up Questions"
+  sub-card per question and a `FollowUpQuestionCard` component — a
+  leaner sibling of `QuestionCard` reusing the same Answer/AI-Answer/
+  Reference-Links shape without category/topic/scope concerns.
+  28 new backend unit tests, 566 total passing, mypy clean.
+  **Same-day follow-on polish, all from direct live feedback**: (1)
+  the Follow-up Questions sub-card moved above Reference Links
+  (was below); (2) a follow-up's question text now renders bold,
+  matching the parent's weight (was accidentally left normal); (3)
+  follow-up cards now accordion against each other app-wide — opening
+  one closes whichever other follow-up was open, previously only
+  scoped within one parent's own list, lifted to a new
+  `expandedFollowUpId` in `InterviewPrepPage.tsx` (kept separate from
+  the existing Topic/Question `expandedItem` state, since a follow-up
+  only ever renders while its own parent is already open, so there's
+  no "does opening this close a Topic" case to reconcile); (4)
+  follow-ups now appear in the Table of Contents, nested one indent
+  level under their parent (a second `list-disc <ul>` inside the
+  parent's `<li>`) — selecting one from the TOC force-opens both the
+  parent and the follow-up together, since a follow-up can't render
+  otherwise; (5) an empty Topic/Question/follow-up (no discussion, no
+  manual or AI answer) now renders in red (`text-destructive`) in the
+  TOC instead of the normal accent color — mirrors the exact same
+  emptiness checks the page's own "No discussion yet"/"No answer yet"
+  states already use. All verified live via real headless-Chromium
+  Playwright sessions against throwaway Enterprise accounts.
+- **Interview Prep Answer box height + RichTextEditor fixes**
+  (2026-08-17) — done, deployed. User asked for the Answer box taller;
+  took three rounds to land correctly, each round's miss instructive:
+  round 1 (+30%, 192px→250px) and round 2 (→400px) only raised the
+  READONLY display's `max-height` — invisible for short content, since
+  a box only grows past its natural size once content actually
+  overflows the cap, and neither round touched the box actually typed
+  into at all. Round 3 tried fixing the edit box specifically via a
+  `className="min-h-[400px]"` prop — but `RichTextEditor` had a real,
+  latent bug: `className` landed on the *outer* wrapper (toolbar +
+  editable area together), never on the actual `contentEditable`
+  element being measured (confirmed live: edit box height stayed
+  100px regardless). Fixed by moving `className` onto the
+  `contentEditable` div's own `cn()` call (last, so `tailwind-merge`
+  lets it override the default `min-h-[100px]`) — safe since no other
+  caller anywhere in the app (confirmed via full grep — Career
+  Profile's several `RichTextEditor` usages) passes `className` at
+  all. **Then corrected per explicit user feedback** ("I didn't want
+  400px box regardless of content length... only when content goes
+  beyond certain length... for both view and edit mode"): removed the
+  `min-h-[400px]` floor everywhere it had just been added, keeping
+  only `max-h-[400px] overflow-y-auto` — natural sizing up to the cap,
+  scrolling past it, in both modes. Final verified state: empty edit
+  box ~100px, short saved answer ~20px, long content in both modes
+  caps at ~400px and is genuinely scrollable (`scrollHeight` >
+  `clientHeight`).
+  **Separately, two RichTextEditor fixes from a follow-up bug report +
+  feature request** (still 2026-08-17): (1) "bold sometimes applies,
+  sometimes doesn't" — root-caused live, not guessed:
+  `execCommand('bold')`'s toggle is fully deterministic
+  (`queryCommandState('bold')` at the current selection decides on/off),
+  but a selection spanning a MIX of already-bold and not-bold text
+  toggles the *entire* selection to whichever state it wasn't already
+  fully in — confirmed via a real reproduction (bold "gamma" alone,
+  select "beta gamma delta", click Bold → whole range goes bold; click
+  Bold again on that now-fully-bold range → whole range un-bolds).
+  Correct execCommand behavior, but the Bold/Italic buttons had zero
+  visual indicator of the *current* selection's state, so the outcome
+  read as arbitrary. Fixed by tracking real active-format state (a
+  `selectionchange` listener, scoped per editor instance via
+  `editorRef.current.contains(selection.anchorNode)` since a page can
+  have several `RichTextEditor`s mounted at once, calling
+  `queryCommandState` for bold/italic/underline) and highlighting the
+  matching toolbar button — toggling is now predictable because it's
+  visible, not because the underlying semantics changed. (2) Added
+  Underline (`execCommand('underline')`, same `styleWithCSS=false`
+  treatment as bold/italic) — the backend sanitizer
+  (`app/core/rich_text.py`) already allowed the `<u>` tag from this
+  component's original design, so only the missing toolbar button
+  needed adding, no backend change. Verified live: underlining
+  produces a genuine `<u>` tag that survives a real save→sanitize→
+  re-fetch round trip; `aria-pressed` correctly reads independently
+  per format (selecting underlined-but-not-bold text shows Bold
+  unpressed, Underline pressed, simultaneously).
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in
