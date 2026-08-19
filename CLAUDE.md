@@ -3490,6 +3490,115 @@ Known environment gotchas already solved, don't reintroduce:
   re-fetch round trip; `aria-pressed` correctly reads independently
   per format (selecting underlined-but-not-bold text shows Bold
   unpressed, Underline pressed, simultaneously).
+- **Interview Prep tabs + Coach headline HTML fix + app-wide card/button
+  density pass** (2026-08-18) — done, deployed to prod, verified live at
+  every step via real headless-Chromium Playwright sessions against
+  throwaway accounts. Four rounds of direct, iterative user feedback in
+  one long session, each round shipped only after the previous one was
+  confirmed working.
+  **(1) Interview Prep restructured into real tabs**: Topics and
+  Interview Questions were two stacked always-visible sections; now a
+  folder-style tab strip (`TabStrip` in `InterviewPrepPage.tsx` —
+  rounded-top-corner tabs, active tab gets a card-colored background
+  plus a rainbow-gradient bottom edge instead of an ordinary border,
+  reused for both the main Topics/Questions tabs and a second-level
+  sub-tab strip) shows one at a time, `?tab=` in the URL alongside the
+  existing `?role=` scope param. Each tab's Table of Contents is now
+  scoped to just that tab's content (previously one combined TOC above
+  both). A second-level sub-tab strip (only rendered once a scope has
+  2+ real section/category groups — a single group means nothing to
+  actually filter) filters both the TOC and the section's own card list
+  down to one section/category at a time, addressing "too many
+  questions to manage in one list" — `"all"` / a real value / `null`
+  (the ungrouped bucket, matching `groupInterviewTopicsBySection`/
+  `groupInterviewQuestionsByCategory`'s own convention) as the filter
+  states, reset to `"all"` on scope change. Iterated through several
+  rounds of visual feedback on the tab strip itself: pill/segmented
+  buttons → real folder tabs (rounded top corners) → a darker
+  `border-muted-foreground/30` line under the strip (the default
+  `border-border` read as "very light") → a tight `gap-2` wrapper
+  binding the main strip to its sub-strip instead of the page's normal
+  `gap-6` → smaller `size="sm"` text on sub-tabs specifically.
+  **(2) AI Career Coach headline rendering bug**: the "Your profile at a
+  glance" card rendered `profile.headline` as a raw React text node —
+  since Headline is rich-text HTML (see the RichTextEditor rollout
+  entry above), the user saw literal `<span style="color:...">` markup
+  on screen. Fixed with `RichTextDisplay` (same component
+  `ProfileHeader.tsx` already uses). A related bug in the same area:
+  `suggested-prompts.ts`'s "Improve my headline" chip embedded
+  `profile.headline` directly into the literal prompt text sent as the
+  user's own chat message on click — same raw-HTML leak, but into an
+  actual composed chat bubble and the LLM's own context. Fixed with a
+  new `frontend/src/lib/strip-html.ts` (`stripHtml()`, a detached
+  `<div>` + `.textContent`, safe since it never executes embedded
+  scripts on an unattached element and only ever runs on
+  already-server-sanitized content).
+  **(3) App-wide "reduce card/button margin" pass**, driven by several
+  rounds of the user pointing at specific pages: per-item list cards
+  (Experience/Education/Certifications/Career Goals/Career Highlights/
+  Key Achievements/Peer Endorsements, Learning Log, Resume History,
+  Opportunity Intelligence's job listings) got `p-4`/`p-3` → `px-4
+  py-2`/`px-3 py-2` (horizontal unchanged, vertical cut), and dropped
+  the `md:text-base` breakpoint bump on titles so they stay 14px at
+  every width. User then flagged that "sub cards" (the rows) had
+  shrunk but "main cards" (the section-level `Card` wrapper) hadn't —
+  correct: the shared `Card`/`CardHeader`/`CardContent`/`CardFooter`
+  (`components/ui/card.tsx`, used by ~33 files app-wide) still had
+  their original `p-6`, untouched by the per-row sweep. Fixed centrally
+  (`CardHeader`/`CardContent`/`CardFooter`: `p-6` → `px-6 py-4`/`px-6
+  pb-4 pt-0`), which cascaded the reduction to every page automatically
+  — Opportunity Intelligence's job-listing rows (previously skipped as
+  "just an `<a>` link, no action-button row") got the same per-row
+  treatment at the same time. Then a further request to shrink every
+  button (text and icon) app-wide "similar to" the Show/Hide icon
+  buttons already shrunk earlier in the session: the shared
+  `buttonVariants` (`components/ui/button-variants.ts`) `size` variants
+  were reduced (`sm`: `h-8`/14px text → `h-7`/12px text; `md`: `h-10` →
+  `h-9`; `lg`: `h-12` → `h-10`, no current callers but kept
+  proportional) — text size moved out of the cva base classes into each
+  size variant specifically, since cva joins base+variant with plain
+  clsx (not tailwind-merge), so two conflicting `text-*` utilities in
+  one generated string have no reliable last-wins guarantee the way a
+  `cn()` call would. This one change alone shrinks height/text for
+  every one of the app's ~140 buttons automatically. Icon glyphs
+  *inside* each button (Plus/Pencil/Trash2/Eraser/RefreshCw/Sparkles/X,
+  `h-4 w-4` → `h-3.5 w-3.5`) were then shrunk file-by-file across ~20
+  files to stay proportional — deliberately NOT touching icons outside
+  a `<Button>` (nav rail icons, the footer chat send button, mobile
+  menu icons, form checkboxes, decorative avatar/status icons), which
+  are either not "buttons" in the everyday sense or belong to the app
+  shell's separately-tuned fixed-size chrome (documented elsewhere in
+  this file). A background agent attempted this file-by-file icon
+  sweep first and hit a session/API limit mid-task with zero changes
+  made (confirmed via `git status` before continuing) — finished by
+  hand afterward, same scoping discipline, no shortcuts taken.
+  **A real second-order bug caught by live verification, not
+  review**: `MoveButtons` (`components/ui/move-buttons.tsx`) hardcoded
+  its own `h-8` rather than inheriting the shared `Button` `sm` default
+  — after the central `Button` change, per-item MoveButtons (28px via
+  an explicit `className="h-7 w-7 p-0"` override already added earlier
+  for a different reason) still worked, but *section-level* MoveButtons
+  (no override, relies on the component's own default) stayed 32px,
+  becoming taller than its now-28px neighboring Add/Edit/Clear/Collapse
+  buttons in the same header row. Fixed by changing the component's own
+  hardcoded default from `h-8` to `h-7` to track the shared default
+  going forward, plus shrinking its own `ChevronUp`/`ChevronDown` icons
+  to match. `CollapseToggle`/`MoveButtons` both gained an optional
+  `className` prop (merged onto their internal `Button`(s)) specifically
+  so per-item call sites could add a square `w-7 p-0` shape on top of
+  the new shared height, without a second, parallel size system.
+  Verified live throughout via real headless-Chromium Playwright
+  sessions against throwaway accounts (tab switching, sub-tab
+  filtering + TOC sync, the Coach headline round-tripping real
+  bold/color formatting with zero literal HTML text anywhere on the
+  page or in a sent chat message, measured padding/font-size/button
+  dimensions in px on Career Profile/Interview Prep/Learning
+  Intelligence/Opportunity Intelligence/Resume Intelligence/Dashboard/
+  Settings/Login, and confirmed app-shell nav chrome was untouched) —
+  every round typechecked/linted clean before being called done.
+  Committed (`e26ab92`, frontend-only, no migration) and deployed to
+  prod via `start-prod.ps1`; both `https://scaledbrain.com` and the
+  local prod port returned a real `200` afterward.
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in
