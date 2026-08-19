@@ -153,7 +153,7 @@ export function LearningIntelligencePage() {
         <CardHeader className="flex-row items-start justify-between space-y-0">
           <CardTitle>Learning Log</CardTitle>
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Add
           </Button>
         </CardHeader>
@@ -167,7 +167,7 @@ export function LearningIntelligencePage() {
           {items?.map((item, index) => (
             <div
               key={item.id}
-              className="flex items-start justify-between gap-4 rounded-md border border-border p-4"
+              className="flex items-start justify-between gap-4 rounded-md border border-border px-4 py-2"
             >
               <MoveButtons
                 onMoveUp={() => moveItem.mutate({ id: item.id, direction: "up" })}
@@ -175,10 +175,11 @@ export function LearningIntelligencePage() {
                 isFirst={index === 0}
                 isLast={index === items.length - 1}
                 disabled={moveItem.isPending}
+                className="h-7 w-7 p-0"
               />
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium md:text-base">{item.title}</p>
+                  <p className="text-sm font-medium">{item.title}</p>
                   <Badge variant={item.status === "completed" ? "accent" : "default"}>
                     {STATUS_LABELS[item.status] ?? item.status}
                   </Badge>
@@ -191,11 +192,21 @@ export function LearningIntelligencePage() {
                 )}
               </div>
               <div className={`flex shrink-0 ${ACTION_BUTTON_ROW_GAP}`}>
-                <Button variant="ghost" size="sm" onClick={() => openEditDialog(item)}>
-                  <Pencil className="h-4 w-4" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => openEditDialog(item)}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(item)}>
-                  <Trash2 className="h-4 w-4" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => setDeleteTarget(item)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
@@ -214,7 +225,7 @@ export function LearningIntelligencePage() {
                 onClick={() => regenerate.mutate(selectedRoleId)}
                 disabled={regenerate.isPending}
               >
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className="h-3.5 w-3.5" />
                 {regenerate.isPending ? "Regenerating..." : "Regenerate"}
               </Button>
             )}

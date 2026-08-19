@@ -182,7 +182,7 @@ export function CoreCompetenciesSection({
             label="the Core Competencies section"
           />
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Add
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
@@ -190,7 +190,7 @@ export function CoreCompetenciesSection({
           </Button>
           {competencies.length > 0 && (
             <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
-              <Eraser className="h-4 w-4" />
+              <Eraser className="h-3.5 w-3.5" />
               Clear
             </Button>
           )}

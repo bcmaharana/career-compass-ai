@@ -58,6 +58,7 @@ export function InterviewQuestionsSection({
   setExpandedId,
   expandedFollowUpId,
   setExpandedFollowUpId,
+  categoryFilter,
 }: {
   scope: string | null;
   topics: InterviewTopic[];
@@ -72,6 +73,9 @@ export function InterviewQuestionsSection({
   // piece of state rather than folded into expandedItem).
   expandedFollowUpId: string | null;
   setExpandedFollowUpId: Dispatch<SetStateAction<string | null>>;
+  // Which category's sub-tab is active — see InterviewTopicsSection.tsx's
+  // matching `sectionFilter` prop for the exact "all"/null/string meaning.
+  categoryFilter: string | null;
 }) {
   const { data: questions, isLoading } = useInterviewQuestions(scope);
   const addQuestion = useCreateInterviewQuestion(scope);
@@ -156,6 +160,10 @@ export function InterviewQuestionsSection({
     new Set((questions ?? []).map((q) => q.category?.trim()).filter((c): c is string => !!c)),
   );
   const questionGroups = groupInterviewQuestionsByCategory(questions ?? []);
+  const visibleGroups =
+    categoryFilter === "all"
+      ? questionGroups
+      : questionGroups.filter((group) => group.category === categoryFilter);
 
   return (
     <Card>
@@ -163,7 +171,7 @@ export function InterviewQuestionsSection({
         <CardTitle>Interview Questions</CardTitle>
         <div className={cn("flex items-center", ACTION_BUTTON_ROW_GAP)}>
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Add
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
@@ -178,7 +186,12 @@ export function InterviewQuestionsSection({
             No interview questions yet — add one to start practicing.
           </p>
         )}
-        {questionGroups.map((group) => (
+        {/* Same "sub-tab's own group emptied out while still selected"
+            edge case InterviewTopicsSection.tsx guards against. */}
+        {questions && questions.length > 0 && visibleGroups.length === 0 && (
+          <p className="text-sm text-muted-foreground">No questions in this category.</p>
+        )}
+        {visibleGroups.map((group) => (
           <div key={group.category ?? "__uncategorized"} className="flex flex-col gap-2">
             {group.category && (
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -468,7 +481,7 @@ function QuestionCard({
     <div
       id={`interview-question-${question.id}`}
       className={cn(
-        "flex flex-col gap-3 rounded-md border border-border p-4",
+        "flex flex-col gap-3 rounded-md border border-border px-4 py-2",
         index % 2 === 0 ? "bg-card" : "bg-muted",
       )}
     >
@@ -485,11 +498,12 @@ function QuestionCard({
                 isFirst={index === 0}
                 isLast={index === total - 1}
                 disabled={moveDisabled}
+                className="h-7 w-7 p-0"
               />
             </div>
           )}
           <div>
-            <p className="text-sm font-medium md:text-base">
+            <p className="text-sm font-medium">
               <span className="font-normal text-muted-foreground">Question: </span>
               {question.question}
             </p>
@@ -504,15 +518,20 @@ function QuestionCard({
         >
           {isEditMode && (
             <>
-              <Button variant="ghost" size="sm" onClick={onEdit}>
-                <Pencil className="h-4 w-4" />
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onEdit}>
+                <Pencil className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="ghost" size="sm" onClick={onDelete}>
-                <Trash2 className="h-4 w-4" />
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete}>
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </>
           )}
-          <CollapseToggle isOpen={isOpen} onToggle={onToggleOpen} label={question.question} />
+          <CollapseToggle
+            isOpen={isOpen}
+            onToggle={onToggleOpen}
+            label={question.question}
+            className="h-7 w-7 p-0"
+          />
         </div>
       </div>
 
@@ -526,7 +545,7 @@ function QuestionCard({
             </p>
             {!isEditingAnswer && (
               <Button variant="ghost" size="sm" onClick={startEditingAnswer}>
-                <Pencil className="h-4 w-4" />
+                <Pencil className="h-3.5 w-3.5" />
                 Edit
               </Button>
             )}
@@ -602,9 +621,9 @@ function QuestionCard({
             className="self-start"
           >
             {question.ai_answer_status ? (
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-3.5 w-3.5" />
             ) : (
-              <Sparkles className="h-4 w-4" />
+              <Sparkles className="h-3.5 w-3.5" />
             )}
             {generateAnswer.isPending
               ? "Generating..."
@@ -651,7 +670,7 @@ function QuestionCard({
             className="min-w-64 flex-1"
           />
           <Button type="submit" variant="ghost" size="sm" disabled={addFollowUp.isPending}>
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Add follow-up
           </Button>
         </form>
@@ -700,7 +719,7 @@ function QuestionCard({
             className="w-64"
           />
           <Button type="submit" variant="ghost" size="sm" disabled={updateQuestion.isPending}>
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Add link
           </Button>
         </form>
@@ -849,7 +868,7 @@ function FollowUpQuestionCard({
     <div
       id={`interview-question-${followUp.id}`}
       className={cn(
-        "flex flex-col gap-2 rounded-md border border-border p-3",
+        "flex flex-col gap-2 rounded-md border border-border px-3 py-2",
         index % 2 === 0 ? "bg-card" : "bg-muted",
       )}
     >
@@ -863,10 +882,11 @@ function FollowUpQuestionCard({
                 isFirst={index === 0}
                 isLast={index === total - 1}
                 disabled={moveDisabled}
+                className="h-7 w-7 p-0"
               />
             </div>
           )}
-          <p className="text-sm font-medium md:text-base">
+          <p className="text-sm font-medium">
             <span className="font-normal text-muted-foreground">Follow-up: </span>
             {followUp.question}
           </p>
@@ -877,15 +897,20 @@ function FollowUpQuestionCard({
         >
           {isEditMode && (
             <>
-              <Button variant="ghost" size="sm" onClick={startEditingQuestion}>
-                <Pencil className="h-4 w-4" />
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={startEditingQuestion}>
+                <Pencil className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="ghost" size="sm" onClick={onDelete}>
-                <Trash2 className="h-4 w-4" />
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete}>
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </>
           )}
-          <CollapseToggle isOpen={isOpen} onToggle={onToggleOpen} label={followUp.question} />
+          <CollapseToggle
+            isOpen={isOpen}
+            onToggle={onToggleOpen}
+            label={followUp.question}
+            className="h-7 w-7 p-0"
+          />
         </div>
       </div>
 
@@ -921,7 +946,7 @@ function FollowUpQuestionCard({
               </p>
               {!isEditingAnswer && (
                 <Button variant="ghost" size="sm" onClick={startEditingAnswer}>
-                  <Pencil className="h-4 w-4" />
+                  <Pencil className="h-3.5 w-3.5" />
                   Edit
                 </Button>
               )}
@@ -997,9 +1022,9 @@ function FollowUpQuestionCard({
               className="self-start"
             >
               {followUp.ai_answer_status ? (
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className="h-3.5 w-3.5" />
               ) : (
-                <Sparkles className="h-4 w-4" />
+                <Sparkles className="h-3.5 w-3.5" />
               )}
               {generateAnswer.isPending
                 ? "Generating..."
@@ -1052,7 +1077,7 @@ function FollowUpQuestionCard({
                 className="w-64"
               />
               <Button type="submit" variant="ghost" size="sm" disabled={updateFollowUp.isPending}>
-                <Plus className="h-4 w-4" />
+                <Plus className="h-3.5 w-3.5" />
                 Add link
               </Button>
             </form>

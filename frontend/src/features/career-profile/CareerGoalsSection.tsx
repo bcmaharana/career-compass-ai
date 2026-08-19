@@ -170,7 +170,7 @@ export function CareerGoalsSection({
             label="the Career Goals section"
           />
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Add
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
@@ -178,7 +178,7 @@ export function CareerGoalsSection({
           </Button>
           {!!goals?.length && (
             <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
-              <Eraser className="h-4 w-4" />
+              <Eraser className="h-3.5 w-3.5" />
               Clear
             </Button>
           )}
@@ -206,7 +206,7 @@ export function CareerGoalsSection({
           <div
             key={goal.id}
             className={cn(
-              "flex items-start justify-between gap-4 rounded-md border border-border p-4",
+              "flex items-start justify-between gap-4 rounded-md border border-border px-4 py-2",
               itemAlternateClass(cardBackground, index),
             )}
           >
@@ -217,11 +217,12 @@ export function CareerGoalsSection({
                 isFirst={index === 0}
                 isLast={index === goals.length - 1}
                 disabled={moveGoal.isPending}
+                className="h-7 w-7 p-0"
               />
             )}
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <p className="text-sm font-medium md:text-base">{goal.target_role}</p>
+                <p className="text-sm font-medium">{goal.target_role}</p>
                 <Badge variant={STATUS_VARIANT[goal.status as GoalStatus]}>{goal.status}</Badge>
               </div>
               {goal.target_date && (
@@ -240,11 +241,21 @@ export function CareerGoalsSection({
               />
               {isEditMode && (
                 <>
-                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(goal)}>
-                    <Pencil className="h-4 w-4" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => openEditDialog(goal)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(goal)}>
-                    <Trash2 className="h-4 w-4" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setDeleteTarget(goal)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </>
               )}

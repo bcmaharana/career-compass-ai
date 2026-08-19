@@ -98,7 +98,7 @@ export function ExecutiveSummarySection() {
           )}
           {!isEditing && !!profile?.summary && (
             <Button variant="ghost" size="sm" onClick={() => setClearOpen(true)}>
-              <Eraser className="h-4 w-4" />
+              <Eraser className="h-3.5 w-3.5" />
               Clear
             </Button>
           )}

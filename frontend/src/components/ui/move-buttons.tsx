@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp, type LucideIcon } from "lucide-react";
 
 interface MoveButtonsProps {
@@ -23,6 +24,14 @@ interface MoveButtonsProps {
    * ChevronDown (every existing caller). */
   upIcon?: LucideIcon;
   downIcon?: LucideIcon;
+  /** Size/spacing override merged onto both inner Buttons — e.g.
+   * shrinking a per-item row's MoveButtons to a square `w-7 p-0` icon
+   * button (height already matches the shared Button `sm` default, see
+   * `button-variants.ts`) rather than this component's own slightly
+   * wider `px-1` shape. Omitted by every section-level (whole-card, not
+   * per-item) usage, which already matches its neighboring Add/Edit/
+   * Clear/Collapse buttons via that same shared default. */
+  className?: string;
 }
 
 /**
@@ -47,6 +56,7 @@ export function MoveButtons({
   orientation = "horizontal",
   upIcon: UpIcon = ChevronUp,
   downIcon: DownIcon = ChevronDown,
+  className,
 }: MoveButtonsProps) {
   return (
     <div className={orientation === "horizontal" ? "flex flex-row gap-1" : "flex flex-col gap-1"}>
@@ -56,9 +66,9 @@ export function MoveButtons({
         onClick={onMoveUp}
         disabled={disabled || isFirst}
         aria-label={label ? `Move ${label} up` : "Move up"}
-        className="h-8 px-1"
+        className={cn("h-7 px-1", className)}
       >
-        <UpIcon className="h-4 w-4" />
+        <UpIcon className="h-3.5 w-3.5" />
       </Button>
       <Button
         variant="ghost"
@@ -66,9 +76,9 @@ export function MoveButtons({
         onClick={onMoveDown}
         disabled={disabled || isLast}
         aria-label={label ? `Move ${label} down` : "Move down"}
-        className="h-8 px-1"
+        className={cn("h-7 px-1", className)}
       >
-        <DownIcon className="h-4 w-4" />
+        <DownIcon className="h-3.5 w-3.5" />
       </Button>
     </div>
   );

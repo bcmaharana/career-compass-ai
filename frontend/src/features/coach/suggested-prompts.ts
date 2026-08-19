@@ -1,4 +1,5 @@
 import type { components } from "@/api/schema.gen";
+import { stripHtml } from "@/lib/strip-html";
 
 type CareerProfile = components["schemas"]["CareerProfileResponse"];
 type TargetRole = components["schemas"]["TargetRoleResponse"];
@@ -67,9 +68,14 @@ export function buildSuggestedPrompts(
   }
 
   if (personalized.length < MAX_PROMPTS && profile?.headline) {
+    // Headline is stored as rich-text HTML (see CLAUDE.md's "Rich-text
+    // editor rollout" entry) — stripped to plain text here since this
+    // string becomes both the literal chat message the user sends
+    // (composed verbatim into the thread on click) and the text the LLM
+    // itself reads, neither of which should show raw markup.
     personalized.push({
       label: "Improve my headline",
-      prompt: `My current career profile headline is "${profile.headline}". How can I make it stronger?`,
+      prompt: `My current career profile headline is "${stripHtml(profile.headline)}". How can I make it stronger?`,
     });
   }
 

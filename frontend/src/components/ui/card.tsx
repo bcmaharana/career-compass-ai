@@ -24,8 +24,15 @@ export const Card = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
 Card.displayName = "Card";
 
 export const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  // Vertical padding trimmed from the original p-6 (24px) to py-4
+  // (16px) — direct user feedback that "main cards" (this shared
+  // wrapper, used by every Card on every page) hadn't gotten the same
+  // margin reduction already applied to per-item list rows inside them.
+  // Horizontal padding (px-6) is deliberately left unchanged, matching
+  // every other card-margin fix so far (reduce top/bottom, keep
+  // left/right).
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("flex flex-col gap-1.5 p-6", className)} {...props} />
+    <div ref={ref} className={cn("flex flex-col gap-1.5 px-6 py-4", className)} {...props} />
   ),
 );
 CardHeader.displayName = "CardHeader";
@@ -59,15 +66,19 @@ export const CardDescription = forwardRef<HTMLParagraphElement, HTMLAttributes<H
 CardDescription.displayName = "CardDescription";
 
 export const CardContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  // Bottom padding trimmed from p-6 (24px) to pb-4 (16px), matching
+  // CardHeader's own reduction above — top stays 0 (a CardHeader
+  // already sits above almost every CardContent) and left/right stay
+  // at px-6, unchanged.
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+    <div ref={ref} className={cn("px-6 pb-4 pt-0", className)} {...props} />
   ),
 );
 CardContent.displayName = "CardContent";
 
 export const CardFooter = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("flex items-center p-6 pt-0", className)} {...props} />
+    <div ref={ref} className={cn("flex items-center px-6 pb-4 pt-0", className)} {...props} />
   ),
 );
 CardFooter.displayName = "CardFooter";

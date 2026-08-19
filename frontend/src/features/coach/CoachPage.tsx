@@ -1,6 +1,7 @@
 import { useCareerProfile, useTargetRoles } from "@/api/queries/career-profile";
 import { useGapAnalysis } from "@/api/queries/skill-intelligence";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RichTextDisplay } from "@/components/ui/rich-text-editor";
 import { buildSuggestedPrompts } from "@/features/coach/suggested-prompts";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
@@ -83,7 +84,11 @@ export function CoachPage() {
             <CardContent className="flex flex-wrap gap-x-8 gap-y-4 text-sm">
               <div>
                 <p className="text-muted-foreground">Headline</p>
-                <p className="font-medium">{profile?.headline || "Not set yet"}</p>
+                {profile?.headline ? (
+                  <RichTextDisplay html={profile.headline} className="font-medium" />
+                ) : (
+                  <p className="font-medium">Not set yet</p>
+                )}
               </div>
               <div>
                 <p className="text-muted-foreground">Target roles</p>

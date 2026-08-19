@@ -155,7 +155,7 @@ export function MySkillsSection({ cardBackground }: MySkillsSectionProps) {
         </CardTitle>
         <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Add
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>

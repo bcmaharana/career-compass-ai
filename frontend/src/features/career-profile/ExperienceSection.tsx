@@ -187,7 +187,7 @@ export function ExperienceSection({
             label="the Professional Experience section"
           />
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Add
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
@@ -195,7 +195,7 @@ export function ExperienceSection({
           </Button>
           {!!experiences?.length && (
             <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
-              <Eraser className="h-4 w-4" />
+              <Eraser className="h-3.5 w-3.5" />
               Clear
             </Button>
           )}
@@ -225,7 +225,7 @@ export function ExperienceSection({
           <div
             key={experience.id}
             className={cn(
-              "flex items-start justify-between gap-4 rounded-md border border-border p-4",
+              "flex items-start justify-between gap-4 rounded-md border border-border px-4 py-2",
               itemAlternateClass(cardBackground, index),
             )}
           >
@@ -236,10 +236,11 @@ export function ExperienceSection({
                 isFirst={index === 0}
                 isLast={index === experiences.length - 1}
                 disabled={moveExperience.isPending}
+                className="h-7 w-7 p-0"
               />
             )}
             <div className="flex-1">
-              <p className="text-sm font-medium md:text-base">{experience.title}</p>
+              <p className="text-sm font-medium">{experience.title}</p>
               <p className="text-sm text-muted-foreground">
                 <span className="font-bold">{experience.company}</span>
                 {experience.location ? ` · ${experience.location}` : ""}
@@ -263,14 +264,25 @@ export function ExperienceSection({
                 isOpen={!collapsedDescriptionIds.has(experience.id)}
                 onToggle={() => toggleDescription(experience.id)}
                 label={`${experience.title} description`}
+                className="h-7 w-7 p-0"
               />
               {isEditMode && (
                 <>
-                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(experience)}>
-                    <Pencil className="h-4 w-4" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => openEditDialog(experience)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(experience)}>
-                    <Trash2 className="h-4 w-4" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setDeleteTarget(experience)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </>
               )}

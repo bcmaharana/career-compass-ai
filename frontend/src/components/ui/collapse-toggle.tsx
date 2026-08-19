@@ -6,6 +6,12 @@ interface CollapseToggleProps {
   onToggle: () => void;
   /** Section name, for the accessible label only (e.g. "Career Goals"). */
   label: string;
+  /** Optional size/spacing override merged onto the inner Button (e.g.
+   * Interview Prep's Topic/Question rows shrinking it below the shared
+   * `size="sm"` default so the icon itself isn't the tallest thing in an
+   * otherwise-tightened row). Omitted everywhere else, so every existing
+   * usage is unaffected. */
+  className?: string;
 }
 
 /**
@@ -18,7 +24,7 @@ interface CollapseToggleProps {
  * MoveButtons), and reusing that shape here for a different action would
  * read as the same control doing two unrelated things.
  */
-export function CollapseToggle({ isOpen, onToggle, label }: CollapseToggleProps) {
+export function CollapseToggle({ isOpen, onToggle, label, className }: CollapseToggleProps) {
   return (
     <Button
       type="button"
@@ -27,8 +33,9 @@ export function CollapseToggle({ isOpen, onToggle, label }: CollapseToggleProps)
       onClick={onToggle}
       aria-expanded={isOpen}
       aria-label={isOpen ? `Hide ${label}` : `Show ${label}`}
+      className={className}
     >
-      {isOpen ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      {isOpen ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
     </Button>
   );
 }

@@ -148,7 +148,7 @@ export function CareerHighlightsSection({
             label="the Career Highlights section"
           />
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Add
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
@@ -156,7 +156,7 @@ export function CareerHighlightsSection({
           </Button>
           {!!highlights?.length && (
             <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
-              <Eraser className="h-4 w-4" />
+              <Eraser className="h-3.5 w-3.5" />
               Clear
             </Button>
           )}
@@ -187,7 +187,7 @@ export function CareerHighlightsSection({
           <div
             key={highlight.id}
             className={cn(
-              "flex items-start justify-between gap-4 rounded-md border border-border p-4",
+              "flex items-start justify-between gap-4 rounded-md border border-border px-4 py-2",
               itemAlternateClass(cardBackground, index),
             )}
           >
@@ -198,10 +198,11 @@ export function CareerHighlightsSection({
                 isFirst={index === 0}
                 isLast={index === highlights.length - 1}
                 disabled={moveHighlight.isPending}
+                className="h-7 w-7 p-0"
               />
             )}
             <div className="flex-1">
-              <p className="text-sm font-medium md:text-base">{highlight.title}</p>
+              <p className="text-sm font-medium">{highlight.title}</p>
               {highlight.company && (
                 <p className="text-sm text-muted-foreground">{highlight.company}</p>
               )}
@@ -223,11 +224,21 @@ export function CareerHighlightsSection({
               />
               {isEditMode && (
                 <>
-                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(highlight)}>
-                    <Pencil className="h-4 w-4" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => openEditDialog(highlight)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(highlight)}>
-                    <Trash2 className="h-4 w-4" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setDeleteTarget(highlight)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </>
               )}

@@ -101,9 +101,9 @@ export function OpportunityIntelligencePage() {
                     href={listing.redirect_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex flex-col gap-1 rounded-md border border-border p-4 transition-colors hover:bg-muted/50"
+                    className="flex flex-col gap-1 rounded-md border border-border px-4 py-2 transition-colors hover:bg-muted/50"
                   >
-                    <p className="text-sm font-medium md:text-base">{listing.title}</p>
+                    <p className="text-sm font-medium">{listing.title}</p>
                     <p className="text-sm text-muted-foreground">
                       {listing.company}
                       {listing.location ? ` — ${listing.location}` : ""}

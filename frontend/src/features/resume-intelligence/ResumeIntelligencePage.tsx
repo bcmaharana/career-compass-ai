@@ -125,10 +125,10 @@ export function ResumeIntelligencePage() {
           {resumes?.map((resume) => (
             <div
               key={resume.id}
-              className="flex items-center justify-between gap-4 rounded-md border border-border p-3"
+              className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2"
             >
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium md:text-base">
+                <p className="truncate text-sm font-medium">
                   {resume.original_filename}
                 </p>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -147,8 +147,13 @@ export function ResumeIntelligencePage() {
                 <Button variant="outline" size="sm" onClick={() => setActiveResumeId(resume.id)}>
                   {resume.status === "parsed" ? "Review" : "View error"}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(resume)}>
-                  <Trash2 className="h-4 w-4" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => setDeleteTarget(resume)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
@@ -340,7 +345,7 @@ function UploadCard({ onUploaded }: { onUploaded: (resumeId: string) => void }) 
                 onClick={handleCancel}
                 disabled={cancelUpload.isPending}
               >
-                <X className="h-4 w-4" />
+                <X className="h-3.5 w-3.5" />
                 {cancelUpload.isPending ? "Cancelling..." : "Cancel"}
               </Button>
             )}

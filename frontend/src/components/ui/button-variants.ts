@@ -61,8 +61,17 @@ const _INTERACTIVE_VARIANT = `${RAINBOW_GRADIENT_HOVER_BG} hover:text-primary re
 // hunt across every section file.
 export const ACTION_BUTTON_ROW_GAP = "gap-1";
 
+// Text size lives per-`size` variant below, not in these base classes —
+// direct user feedback that every button app-wide (text or icon-based)
+// needed a smaller footprint, "similar to" the h-7 icon-only buttons
+// already shrunk for per-item list rows (Interview Prep's Show/Hide,
+// Edit, Delete, MoveButtons). A single shared `text-sm` here would sit
+// underneath each size's own text utility and fight it unpredictably —
+// cva joins base+variant classes with plain clsx, not tailwind-merge,
+// so unlike a `cn()` call there's no last-wins guarantee between two
+// conflicting text-size utilities in the same generated string.
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium " +
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium " +
     "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
     "focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
   {
@@ -74,10 +83,21 @@ export const buttonVariants = cva(
         ghost: _INTERACTIVE_VARIANT,
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
       },
+      // sm: was h-8 px-3 (relying on the base text-sm) — now matches the
+      // h-7 height Interview Prep's per-item icon buttons already use,
+      // with px-2.5 down a notch to match and text-xs (was text-sm).
+      // md: was h-10 px-4 text-sm — the default for buttons that don't
+      // pass `size` at all (dialog Save/Cancel, auth forms, etc.), so
+      // this is the one most other pages actually inherit; shrunk
+      // proportionally but kept a step above `sm` since these are
+      // usually a form's one primary action, not a crowded action row.
+      // lg: was h-12 px-6 text-base — no current callers pass this
+      // explicitly (grep confirmed), shrunk to match anyway so the
+      // variant stays proportionally consistent if it's ever used.
       size: {
-        sm: "h-8 px-3",
-        md: "h-10 px-4",
-        lg: "h-12 px-6 text-base",
+        sm: "h-7 px-2.5 text-xs",
+        md: "h-9 px-3.5 text-sm",
+        lg: "h-10 px-5 text-sm",
       },
     },
     defaultVariants: {

@@ -191,7 +191,7 @@ export function SystemStatusCard() {
           disabled={isFetching}
           aria-label="Refresh system status"
         >
-          <RefreshCw className={isFetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+          <RefreshCw className={isFetching ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />
         </Button>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">

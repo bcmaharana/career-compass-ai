@@ -156,7 +156,7 @@ export function PeerEndorsementsSection({
             label="the Recommendations section"
           />
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Add
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
@@ -164,7 +164,7 @@ export function PeerEndorsementsSection({
           </Button>
           {!!endorsements?.length && (
             <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
-              <Eraser className="h-4 w-4" />
+              <Eraser className="h-3.5 w-3.5" />
               Clear
             </Button>
           )}
@@ -195,7 +195,7 @@ export function PeerEndorsementsSection({
           <div
             key={endorsement.id}
             className={cn(
-              "flex items-start justify-between gap-4 rounded-md border border-border p-4",
+              "flex items-start justify-between gap-4 rounded-md border border-border px-4 py-2",
               itemAlternateClass(cardBackground, index),
             )}
           >
@@ -206,6 +206,7 @@ export function PeerEndorsementsSection({
                 isFirst={index === 0}
                 isLast={index === endorsements.length - 1}
                 disabled={moveEndorsement.isPending}
+                className="h-7 w-7 p-0"
               />
             )}
             <div className="flex-1">
@@ -231,11 +232,21 @@ export function PeerEndorsementsSection({
               />
               {isEditMode && (
                 <>
-                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(endorsement)}>
-                    <Pencil className="h-4 w-4" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => openEditDialog(endorsement)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(endorsement)}>
-                    <Trash2 className="h-4 w-4" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setDeleteTarget(endorsement)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </>
               )}

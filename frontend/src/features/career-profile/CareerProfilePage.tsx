@@ -143,7 +143,7 @@ export function CareerProfilePage() {
             className="text-destructive hover:text-destructive"
             onClick={() => setClearProfileOpen(true)}
           >
-            <Eraser className="h-4 w-4" />
+            <Eraser className="h-3.5 w-3.5" />
             {activeRole ? "Clear This Target Role Profile" : "Clear Career Profile"}
           </Button>
         </div>

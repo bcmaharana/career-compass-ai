@@ -159,7 +159,7 @@ export function CertificationSection({
             label="the Certifications section"
           />
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Add
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
@@ -167,7 +167,7 @@ export function CertificationSection({
           </Button>
           {!!certifications?.length && (
             <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
-              <Eraser className="h-4 w-4" />
+              <Eraser className="h-3.5 w-3.5" />
               Clear
             </Button>
           )}
@@ -195,7 +195,7 @@ export function CertificationSection({
           <div
             key={certification.id}
             className={cn(
-              "flex items-start justify-between gap-4 rounded-md border border-border p-4",
+              "flex items-start justify-between gap-4 rounded-md border border-border px-4 py-2",
               itemAlternateClass(cardBackground, index),
             )}
           >
@@ -208,10 +208,11 @@ export function CertificationSection({
                 isFirst={index === 0}
                 isLast={index === certifications.length - 1}
                 disabled={moveCertification.isPending}
+                className="h-7 w-7 p-0"
               />
             )}
             <div className="flex-1">
-              <p className="text-sm font-medium md:text-base">{certification.name}</p>
+              <p className="text-sm font-medium">{certification.name}</p>
               <p className="text-sm text-muted-foreground">
                 {certification.issuing_organization}
               </p>
@@ -230,11 +231,21 @@ export function CertificationSection({
               />
               {isEditMode && (
                 <>
-                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(certification)}>
-                    <Pencil className="h-4 w-4" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => openEditDialog(certification)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(certification)}>
-                    <Trash2 className="h-4 w-4" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setDeleteTarget(certification)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </>
               )}

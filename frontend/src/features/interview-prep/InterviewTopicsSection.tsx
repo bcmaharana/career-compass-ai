@@ -56,6 +56,7 @@ export function InterviewTopicsSection({
   targetRoles,
   expandedId,
   setExpandedId,
+  sectionFilter,
 }: {
   scope: string | null;
   targetRoles: TargetRole[];
@@ -66,6 +67,13 @@ export function InterviewTopicsSection({
   // on the card itself.
   expandedId: string | null;
   setExpandedId: Dispatch<SetStateAction<string | null>>;
+  // Which section's sub-tab is active, lifted up to InterviewPrepPage so
+  // its sub-tab strip and Table of Contents stay in sync with what this
+  // card actually renders — `"all"` shows every group, `null` shows only
+  // topics with no section set (the same null-means-ungrouped convention
+  // groupInterviewTopicsBySection already uses), any other string shows
+  // only that one section's topics.
+  sectionFilter: string | null;
 }) {
   const { data: topics, isLoading } = useInterviewTopics(scope);
   const addTopic = useCreateInterviewTopic(scope);
@@ -149,6 +157,8 @@ export function InterviewTopicsSection({
     new Set((topics ?? []).map((t) => t.section?.trim()).filter((s): s is string => !!s)),
   );
   const groups = groupInterviewTopicsBySection(topics ?? []);
+  const visibleGroups =
+    sectionFilter === "all" ? groups : groups.filter((group) => group.section === sectionFilter);
 
   return (
     <Card>
@@ -156,7 +166,7 @@ export function InterviewTopicsSection({
         <CardTitle>Topics</CardTitle>
         <div className={cn("flex items-center", ACTION_BUTTON_ROW_GAP)}>
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
             Add
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
@@ -171,13 +181,20 @@ export function InterviewTopicsSection({
             No topics yet — add one to start building your study notes.
           </p>
         )}
+        {/* Only reachable if the sub-tab's own section was emptied out
+            (e.g. its last topic was edited into a different section)
+            while it stayed selected — the sub-tab strip itself doesn't
+            auto-switch away, so this avoids a silently blank card body. */}
+        {topics && topics.length > 0 && visibleGroups.length === 0 && (
+          <p className="text-sm text-muted-foreground">No topics in this section.</p>
+        )}
         {imageError && (
           <p role="alert" className="text-sm text-destructive">
             {imageError}
           </p>
         )}
 
-        {groups.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.section ?? "__ungrouped"} className="flex flex-col gap-2">
             {group.section && (
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -429,7 +446,7 @@ function TopicCard({
         scopeIndex % 2 === 0 ? "bg-card" : "bg-muted",
       )}
     >
-      <div className="flex cursor-pointer items-start justify-between gap-3 p-3" onClick={onToggleOpen}>
+      <div className="flex cursor-pointer items-start justify-between gap-3 px-3 py-2" onClick={onToggleOpen}>
         <div className="flex items-center gap-2">
           {isEditMode && (
             <div onClick={(e) => e.stopPropagation()}>
@@ -439,10 +456,11 @@ function TopicCard({
                 isFirst={scopeIndex === 0}
                 isLast={scopeIndex === total - 1}
                 disabled={moveDisabled}
+                className="h-7 w-7 p-0"
               />
             </div>
           )}
-          <p className="text-sm font-medium md:text-base">{topic.name}</p>
+          <p className="text-sm font-medium">{topic.name}</p>
         </div>
         <div
           className={cn("flex shrink-0 items-center", ACTION_BUTTON_ROW_GAP)}
@@ -450,15 +468,20 @@ function TopicCard({
         >
           {isEditMode && (
             <>
-              <Button variant="ghost" size="sm" onClick={onEdit}>
-                <Pencil className="h-4 w-4" />
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onEdit}>
+                <Pencil className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="ghost" size="sm" onClick={onDelete}>
-                <Trash2 className="h-4 w-4" />
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete}>
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </>
           )}
-          <CollapseToggle isOpen={isOpen} onToggle={onToggleOpen} label={topic.name} />
+          <CollapseToggle
+            isOpen={isOpen}
+            onToggle={onToggleOpen}
+            label={topic.name}
+            className="h-7 w-7 p-0"
+          />
         </div>
       </div>
 
@@ -471,7 +494,7 @@ function TopicCard({
               </p>
               {!isEditingDiscussion && (
                 <Button variant="ghost" size="sm" onClick={startEditingDiscussion}>
-                  <Pencil className="h-4 w-4" />
+                  <Pencil className="h-3.5 w-3.5" />
                   Edit
                 </Button>
               )}
@@ -527,7 +550,7 @@ function TopicCard({
                 onClick={() => fileInputRefs.current.get(topic.id)?.click()}
                 disabled={uploadImage.isPending}
               >
-                <Upload className="h-4 w-4" />
+                <Upload className="h-3.5 w-3.5" />
                 {uploadImage.isPending ? "Uploading..." : topic.image_url ? "Replace image" : "Add image"}
               </Button>
               {topic.image_url && (
@@ -596,7 +619,7 @@ function TopicCard({
                 className="w-64"
               />
               <Button type="submit" variant="ghost" size="sm" disabled={updateTopic.isPending}>
-                <Plus className="h-4 w-4" />
+                <Plus className="h-3.5 w-3.5" />
                 Add link
               </Button>
             </form>
