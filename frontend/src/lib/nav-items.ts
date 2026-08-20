@@ -1,6 +1,9 @@
 import {
   Bot,
   Briefcase,
+  ClipboardList,
+  Contact,
+  FileSearch,
   FileText,
   Gauge,
   GraduationCap,
@@ -69,6 +72,27 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Opportunity Intelligence",
     icon: Briefcase,
     purpose: "Discover matching job listings and see your career path forward.",
+    children: [
+      {
+        to: "/job-applications",
+        label: "Job Applications",
+        icon: ClipboardList,
+        purpose: "Track applications through your pipeline, with interview rounds logged per application.",
+      },
+      {
+        to: "/recruiter-contacts",
+        label: "Recruiter Contacts",
+        icon: Contact,
+        purpose: "Your address book of recruiters and hiring contacts.",
+      },
+      {
+        to: "/jd-tailoring",
+        label: "JD Tailoring",
+        icon: FileSearch,
+        purpose:
+          "Chat with the AI about a specific job description and generate a tailored resume.",
+      },
+    ],
   },
   {
     to: "/learning",

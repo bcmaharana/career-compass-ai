@@ -20,6 +20,9 @@ import { ResumeIntelligencePage } from "@/features/resume-intelligence/ResumeInt
 import { OpportunityIntelligencePage } from "@/features/opportunity-intelligence/OpportunityIntelligencePage";
 import { LearningIntelligencePage } from "@/features/learning-intelligence/LearningIntelligencePage";
 import { InterviewPrepPage } from "@/features/interview-prep/InterviewPrepPage";
+import { JdTailoringPage } from "@/features/jd-tailoring/JdTailoringPage";
+import { JobApplicationsPage } from "@/features/job-application-tracking/JobApplicationsPage";
+import { RecruiterContactsPage } from "@/features/recruiter-contacts/RecruiterContactsPage";
 import { NotFoundPage } from "@/routes/NotFound";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 import { SkillIntelligencePage } from "@/features/skill-intelligence/SkillIntelligencePage";
@@ -81,6 +84,9 @@ export const router = createBrowserRouter([
           { path: "profile", element: <CareerProfilePage /> },
           { path: "resumes", element: <ResumeIntelligencePage /> },
           { path: "opportunities", element: <OpportunityIntelligencePage /> },
+          { path: "jd-tailoring", element: <JdTailoringPage /> },
+          { path: "job-applications", element: <JobApplicationsPage /> },
+          { path: "recruiter-contacts", element: <RecruiterContactsPage /> },
           { path: "learning", element: <LearningIntelligencePage /> },
           { path: "interview-prep", element: <InterviewPrepPage /> },
           { path: "skills", element: <SkillIntelligencePage /> },

@@ -30,6 +30,10 @@ class TenantDeletionArtifacts:
     #: Private-bucket storage keys for every Interview Topic that had an
     #: image set — same bucket/adapter as resume_file_keys.
     interview_topic_image_keys: list[str]
+    #: Private-bucket storage keys (docx/pdf, one or both) for every
+    #: JD Tailoring session that had a tailored resume generated — same
+    #: bucket/adapter as resume_file_keys, different key prefix.
+    tailored_resume_file_keys: list[str]
 
 
 class AccountDeletionRepository(Protocol):

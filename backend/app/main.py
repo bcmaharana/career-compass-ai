@@ -17,10 +17,13 @@ from app.api.v1.chat.router import router as chat_router
 from app.api.v1.health import router as health_router
 from app.api.v1.identity.router import router as identity_router
 from app.api.v1.interview_prep.router import router as interview_prep_router
+from app.api.v1.jd_tailoring.router import router as jd_tailoring_router
+from app.api.v1.job_application_tracking.router import router as job_application_tracking_router
 from app.api.v1.learning_intelligence.router import router as learning_intelligence_router
 from app.api.v1.opportunity_intelligence.router import router as opportunity_intelligence_router
 from app.api.v1.platform_admin.router import router as platform_admin_router
 from app.api.v1.quotes.router import router as quotes_router
+from app.api.v1.recruiter_contacts.router import router as recruiter_contacts_router
 from app.api.v1.resume_intelligence.router import router as resume_intelligence_router
 from app.api.v1.skill_intelligence.router import router as skill_intelligence_router
 from app.api.v1.system_status.router import router as system_status_router
@@ -58,6 +61,9 @@ def create_app() -> FastAPI:
     app.include_router(opportunity_intelligence_router, prefix="/api/v1")
     app.include_router(learning_intelligence_router, prefix="/api/v1")
     app.include_router(interview_prep_router, prefix="/api/v1")
+    app.include_router(jd_tailoring_router, prefix="/api/v1")
+    app.include_router(job_application_tracking_router, prefix="/api/v1")
+    app.include_router(recruiter_contacts_router, prefix="/api/v1")
 
     logger.info("app_startup", app_env=settings.app_env)
     return app

@@ -64,6 +64,12 @@ from app.adapters.db.models.interview_prep import (
     InterviewTopicModel,
     InterviewTopicScopeTagModel,
 )
+from app.adapters.db.models.jd_tailoring import JdTailoringMessageModel, JdTailoringSessionModel
+from app.adapters.db.models.job_application_tracking import (
+    InterviewRoundModel,
+    JobApplicationModel,
+    RecruiterContactModel,
+)
 from app.adapters.db.models.learning_intelligence import (
     LearningItemModel,
     LearningRecommendationSetModel,
@@ -95,8 +101,12 @@ __all__ = [
     "FeatureFlagModel",
     "InterviewQuestionModel",
     "InterviewQuestionScopeTagModel",
+    "InterviewRoundModel",
     "InterviewTopicModel",
     "InterviewTopicScopeTagModel",
+    "JdTailoringMessageModel",
+    "JdTailoringSessionModel",
+    "JobApplicationModel",
     "JobListingCacheModel",
     "KeyAchievementModel",
     "LearningItemModel",
@@ -112,6 +122,7 @@ __all__ = [
     "PlatformSettingModel",
     "PrerequisiteOfEdgeModel",
     "PromptVersionModel",
+    "RecruiterContactModel",
     "RelatedSkillModel",
     "ResumeModel",
     "RoleModel",

@@ -15,14 +15,14 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
 
 from app.application.career_profile.resume_export_service import ResumeExportService
 from app.core.exceptions import NotFoundError
-from app.domain.career_profile.entities import CareerProfile, TargetRole
+from app.domain.career_profile.entities import CareerProfile, Experience, TargetRole
 from app.domain.identity.entities import User
 
 
@@ -78,6 +78,43 @@ class FakeEmptyChildRepository:
         # CareerGoal's entity docstring) — this method lets the same fake
         # stand in for it too, alongside the profile-scoped entities.
         return []
+
+
+class FakeExperienceRepository:
+    """A real (non-empty-only) stand-in for the Experience repository,
+    used by TestGatherResumeDataWithMasterFallback to prove the fallback
+    actually pulls Master's real experiences, not just an empty list
+    that happens to satisfy both branches.
+    """
+
+    def __init__(self) -> None:
+        self.by_profile: dict[uuid.UUID, list[Experience]] = {}
+
+    async def list_for_profile(
+        self, tenant_id: uuid.UUID, career_profile_id: uuid.UUID
+    ) -> list[Experience]:
+        return list(self.by_profile.get(career_profile_id, []))
+
+    async def list_for_user(self, tenant_id: uuid.UUID, user_id: uuid.UUID) -> list[Any]:
+        return []
+
+
+def _make_experience(*, tenant_id: uuid.UUID, career_profile_id: uuid.UUID) -> Experience:
+    now = datetime.now(UTC)
+    return Experience(
+        id=uuid.uuid4(),
+        tenant_id=tenant_id,
+        career_profile_id=career_profile_id,
+        title="Engineer",
+        company="Acme",
+        location=None,
+        start_date=date(2020, 1, 1),
+        end_date=None,
+        description="Built things.",
+        display_order=1,
+        created_at=now,
+        updated_at=now,
+    )
 
 
 class FakeTargetRoleRepository:
@@ -159,15 +196,15 @@ def _make_user(*, tenant_id: uuid.UUID) -> User:
     )
 
 
-def _build() -> tuple[
-    ResumeExportService, FakeCareerProfileRepository, FakeUserRepository, FakeStorage
-]:
+def _build(
+    experiences: Any = None,
+) -> tuple[ResumeExportService, FakeCareerProfileRepository, FakeUserRepository, FakeStorage]:
     profiles = FakeCareerProfileRepository()
     users = FakeUserRepository()
     storage = FakeStorage()
     service = ResumeExportService(
         profiles=profiles,
-        experiences=FakeEmptyChildRepository(),
+        experiences=experiences or FakeEmptyChildRepository(),
         educations=FakeEmptyChildRepository(),
         certifications=FakeEmptyChildRepository(),
         career_highlights=FakeEmptyChildRepository(),
@@ -269,6 +306,85 @@ class TestGenerate:
             await service.generate(
                 tenant_id=uuid.uuid4(), user_id=uuid.uuid4(), target_role_id=None, format="docx"
             )
+
+
+@pytest.mark.unit
+class TestGatherResumeDataWithMasterFallback:
+    async def test_falls_back_to_master_when_target_role_profile_is_unpopulated(self) -> None:
+        # Confirmed live (2026-08-19): JD Tailoring passes whichever
+        # target_role_id happened to be selected in Opportunity
+        # Intelligence's dropdown, which most users have never
+        # populated their own Experience into — silently grounding on
+        # that empty profile produced tailored resumes with only a
+        # header, and starved the chat's grounding entirely.
+        experiences = FakeExperienceRepository()
+        service, profiles, users, _storage = _build(experiences=experiences)
+        tenant_id = uuid.uuid4()
+        user = _make_user(tenant_id=tenant_id)
+        users.users[user.id] = user
+
+        master = _make_profile(tenant_id=tenant_id, user_id=user.id)
+        await profiles.create(master)
+        experiences.by_profile[master.id] = [
+            _make_experience(tenant_id=tenant_id, career_profile_id=master.id)
+        ]
+
+        role_id = uuid.uuid4()
+        role_profile = replace(
+            _make_profile(tenant_id=tenant_id, user_id=user.id, target_role_id=role_id),
+            headline=None,
+            summary=None,
+        )
+        await profiles.create(role_profile)
+        # role_profile's own experiences deliberately left empty.
+
+        profile, data = await service.gather_resume_data_with_master_fallback(
+            tenant_id=tenant_id, user_id=user.id, target_role_id=role_id
+        )
+
+        assert profile.id == master.id
+        assert len(data.experiences) == 1
+        assert data.experiences[0].company == "Acme"
+        # The target role's own label is still preserved for display.
+        assert data.role_label is None  # FakeTargetRoleRepository has no row for role_id
+
+    async def test_does_not_fall_back_when_the_target_role_profile_has_real_content(self) -> None:
+        experiences = FakeExperienceRepository()
+        service, profiles, users, _storage = _build(experiences=experiences)
+        tenant_id = uuid.uuid4()
+        user = _make_user(tenant_id=tenant_id)
+        users.users[user.id] = user
+
+        master = _make_profile(tenant_id=tenant_id, user_id=user.id)
+        await profiles.create(master)
+
+        role_id = uuid.uuid4()
+        role_profile = _make_profile(tenant_id=tenant_id, user_id=user.id, target_role_id=role_id)
+        await profiles.create(role_profile)
+        experiences.by_profile[role_profile.id] = [
+            _make_experience(tenant_id=tenant_id, career_profile_id=role_profile.id)
+        ]
+
+        profile, data = await service.gather_resume_data_with_master_fallback(
+            tenant_id=tenant_id, user_id=user.id, target_role_id=role_id
+        )
+
+        assert profile.id == role_profile.id
+        assert len(data.experiences) == 1
+
+    async def test_master_itself_is_never_redirected_anywhere(self) -> None:
+        service, profiles, users, _storage = _build()
+        tenant_id = uuid.uuid4()
+        user = _make_user(tenant_id=tenant_id)
+        users.users[user.id] = user
+        master = _make_profile(tenant_id=tenant_id, user_id=user.id)
+        await profiles.create(master)
+
+        profile, _data = await service.gather_resume_data_with_master_fallback(
+            tenant_id=tenant_id, user_id=user.id, target_role_id=None
+        )
+
+        assert profile.id == master.id
 
 
 @pytest.mark.unit

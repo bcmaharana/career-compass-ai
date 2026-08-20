@@ -44,6 +44,16 @@ _REQUEST_TIMEOUT_SECONDS = 60.0
 # actually knows about Groq's quirk, rather than in any caller.
 _SAFE_TOTAL_TOKEN_BUDGET = 11400  # 600-token margin under the real 12000 TPM cap
 _MIN_CLAMPED_MAX_TOKENS = 512
+#: Last-resort floor used only when the prompt itself has already eaten
+#: into _SAFE_TOTAL_TOKEN_BUDGET deeply enough that less than
+#: _MIN_CLAMPED_MAX_TOKENS of room remains (see the branch below) —
+#: deliberately smaller than that floor, so whenever real room is still
+#: available (even if under 512) this uses that actual room rather than
+#: forcing a bigger fixed value that would push the total over budget.
+#: Only when available room drops below even this does the total risk
+#: exceeding _SAFE_TOTAL_TOKEN_BUDGET — and even then, by far less than
+#: the old code's fixed-512 floor could.
+_ABSOLUTE_MIN_MAX_TOKENS = 256
 # Rough chars-per-token heuristic (no tokenizer dependency pulled in for
 # this) — good enough for a defensive clamp, not exact accounting;
 # the margin above absorbs the estimation error. Raised from
@@ -158,6 +168,29 @@ def _capture_rate_limit_snapshot(headers: httpx.Headers) -> None:
     )
 
 
+def _clamp_max_tokens(*, rendered_prompt_len: int, requested_max_tokens: int) -> int:
+    """Pure clamp math, pulled out of generate() so it's unit-testable
+    without mocking httpx (no existing test in this codebase exercises
+    GroqProvider at all otherwise).
+
+    Confirmed live (2026-08-19): a real, large resume-extraction prompt
+    still got a genuine Groq 413 despite this clamp already existing.
+    Root cause was the previous `max(_MIN_CLAMPED_MAX_TOKENS, ...)`
+    shape — it let the 512-token floor override the safety ceiling
+    whenever the prompt alone already used up most of the budget,
+    pushing the real total over Groq's hard 12000 cap. The floor is
+    only safe to apply when there's actually room left for it; below
+    that, give whatever headroom genuinely remains (down to a
+    last-resort minimum just to avoid a degenerate near-zero request)
+    rather than a fixed value that ignores the budget.
+    """
+    estimated_prompt_tokens = int(rendered_prompt_len // _CHARS_PER_TOKEN_ESTIMATE)
+    available_for_completion = _SAFE_TOTAL_TOKEN_BUDGET - estimated_prompt_tokens
+    if available_for_completion >= _MIN_CLAMPED_MAX_TOKENS:
+        return min(requested_max_tokens, available_for_completion)
+    return max(_ABSOLUTE_MIN_MAX_TOKENS, available_for_completion)
+
+
 class GroqProvider:
     """Implements LLMProviderInterface against Groq's Chat Completions API."""
 
@@ -171,10 +204,9 @@ class GroqProvider:
                 code="AI_PROVIDER_NOT_CONFIGURED",
             )
 
-        estimated_prompt_tokens = int(len(request.rendered_prompt) // _CHARS_PER_TOKEN_ESTIMATE)
-        clamped_max_tokens = max(
-            _MIN_CLAMPED_MAX_TOKENS,
-            min(request.max_tokens, _SAFE_TOTAL_TOKEN_BUDGET - estimated_prompt_tokens),
+        clamped_max_tokens = _clamp_max_tokens(
+            rendered_prompt_len=len(request.rendered_prompt),
+            requested_max_tokens=request.max_tokens,
         )
 
         body: dict[str, object] = {

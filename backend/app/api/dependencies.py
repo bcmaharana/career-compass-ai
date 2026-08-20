@@ -80,6 +80,15 @@ from app.adapters.db.repositories.interview_prep import (
     SqlAlchemyInterviewQuestionRepository,
     SqlAlchemyInterviewTopicRepository,
 )
+from app.adapters.db.repositories.jd_tailoring import (
+    SqlAlchemyJdTailoringMessageRepository,
+    SqlAlchemyJdTailoringSessionRepository,
+)
+from app.adapters.db.repositories.job_application_tracking import (
+    SqlAlchemyInterviewRoundRepository,
+    SqlAlchemyJobApplicationRepository,
+    SqlAlchemyRecruiterContactRepository,
+)
 from app.adapters.db.repositories.learning_intelligence import (
     SqlAlchemyLearningItemRepository,
     SqlAlchemyLearningRecommendationRepository,
@@ -151,6 +160,22 @@ from app.application.interview_prep.interview_prep_summary_service import (
 )
 from app.application.interview_prep.interview_question_service import InterviewQuestionService
 from app.application.interview_prep.interview_topic_service import InterviewTopicService
+from app.application.jd_tailoring.jd_extraction_service import JdExtractionService
+from app.application.jd_tailoring.jd_tailoring_intake_service import JdTailoringIntakeService
+from app.application.jd_tailoring.jd_tailoring_session_service import JdTailoringSessionService
+from app.application.jd_tailoring.tailored_resume_service import TailoredResumeService
+from app.application.job_application_tracking.interview_round_service import (
+    InterviewRoundService,
+)
+from app.application.job_application_tracking.job_application_service import (
+    JobApplicationService,
+)
+from app.application.job_application_tracking.job_application_summary_service import (
+    JobApplicationSummaryService,
+)
+from app.application.job_application_tracking.recruiter_contact_service import (
+    RecruiterContactService,
+)
 from app.application.learning_intelligence.learning_item_service import LearningItemService
 from app.application.learning_intelligence.learning_recommendation_service import (
     LearningRecommendationService,
@@ -1259,6 +1284,113 @@ def get_interview_prep_summary_service(
     target_roles: TargetRoleService = Depends(get_target_role_service),
 ) -> InterviewPrepSummaryService:
     return InterviewPrepSummaryService(topics, questions, target_roles)
+
+
+# --- JD Tailoring wiring ---
+
+
+def get_jd_tailoring_session_repository(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyJdTailoringSessionRepository:
+    return SqlAlchemyJdTailoringSessionRepository(session)
+
+
+def get_jd_tailoring_message_repository(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyJdTailoringMessageRepository:
+    return SqlAlchemyJdTailoringMessageRepository(session)
+
+
+# get_jd_tailoring_session_service depends on get_resume_export_service
+# and get_llm_service, both defined above — must come after both, same
+# Depends()-resolves-at-definition-time constraint noted elsewhere in
+# this file. Uses ResumeExportService (not CareerProfileService) so the
+# chat's grounding includes real Experience/Education/Certification
+# facts (via gather_resume_data_with_master_fallback), not just
+# headline + competency names — see that service's docstring for why.
+def get_jd_tailoring_session_service(
+    sessions: SqlAlchemyJdTailoringSessionRepository = Depends(get_jd_tailoring_session_repository),
+    messages: SqlAlchemyJdTailoringMessageRepository = Depends(get_jd_tailoring_message_repository),
+    resume_export: ResumeExportService = Depends(get_resume_export_service),
+    llm: LLMService = Depends(get_llm_service),
+) -> JdTailoringSessionService:
+    return JdTailoringSessionService(sessions, messages, resume_export, llm)
+
+
+def get_jd_extraction_service(
+    llm: LLMService = Depends(get_llm_service),
+) -> JdExtractionService:
+    return JdExtractionService(llm)
+
+
+# S3ObjectStorageRepository satisfies PrivateObjectStorageRepository
+# structurally (same instance get_object_storage already returns for
+# ResumeExportService/Interview Prep) — no new storage wiring needed.
+def get_tailored_resume_service(
+    sessions: SqlAlchemyJdTailoringSessionRepository = Depends(get_jd_tailoring_session_repository),
+    resume_export: ResumeExportService = Depends(get_resume_export_service),
+    storage: S3ObjectStorageRepository = Depends(get_object_storage),
+    llm: LLMService = Depends(get_llm_service),
+) -> TailoredResumeService:
+    return TailoredResumeService(sessions, resume_export, storage, llm)
+
+
+# --- Job Application Tracking wiring ---
+
+
+def get_recruiter_contact_repository(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyRecruiterContactRepository:
+    return SqlAlchemyRecruiterContactRepository(session)
+
+
+def get_job_application_repository(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyJobApplicationRepository:
+    return SqlAlchemyJobApplicationRepository(session)
+
+
+def get_interview_round_repository(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyInterviewRoundRepository:
+    return SqlAlchemyInterviewRoundRepository(session)
+
+
+def get_job_application_service(
+    applications: SqlAlchemyJobApplicationRepository = Depends(get_job_application_repository),
+    recruiters: SqlAlchemyRecruiterContactRepository = Depends(get_recruiter_contact_repository),
+) -> JobApplicationService:
+    return JobApplicationService(applications, recruiters)
+
+
+def get_interview_round_service(
+    rounds: SqlAlchemyInterviewRoundRepository = Depends(get_interview_round_repository),
+    applications: SqlAlchemyJobApplicationRepository = Depends(get_job_application_repository),
+) -> InterviewRoundService:
+    return InterviewRoundService(rounds, applications)
+
+
+def get_recruiter_contact_service(
+    contacts: SqlAlchemyRecruiterContactRepository = Depends(get_recruiter_contact_repository),
+) -> RecruiterContactService:
+    return RecruiterContactService(contacts)
+
+
+def get_job_application_summary_service(
+    applications: SqlAlchemyJobApplicationRepository = Depends(get_job_application_repository),
+) -> JobApplicationSummaryService:
+    return JobApplicationSummaryService(applications)
+
+
+# get_jd_tailoring_intake_service depends on get_jd_tailoring_session_service
+# and get_job_application_service, both defined above — must come after
+# both, same Depends()-resolves-at-definition-time constraint noted
+# elsewhere in this file.
+def get_jd_tailoring_intake_service(
+    sessions: JdTailoringSessionService = Depends(get_jd_tailoring_session_service),
+    job_applications: JobApplicationService = Depends(get_job_application_service),
+) -> JdTailoringIntakeService:
+    return JdTailoringIntakeService(sessions, job_applications)
 
 
 # --- Career Intelligence Knowledge Graph wiring (Phase 4.5.1 / MVP 1) ---

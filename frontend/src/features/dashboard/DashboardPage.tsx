@@ -4,6 +4,7 @@ import {
   useTargetRoles,
 } from "@/api/queries/career-profile";
 import { useInterviewPrepSummary } from "@/api/queries/interview-prep";
+import { useJobApplicationsSummary } from "@/api/queries/job-application-tracking";
 import { useLearningItems } from "@/api/queries/learning-intelligence";
 import { useCareerPath, useJobListings } from "@/api/queries/opportunity-intelligence";
 import { useResumeList } from "@/api/queries/resume-intelligence";
@@ -45,6 +46,7 @@ export function DashboardPage() {
       <SkillIntelligenceCard />
       <ResumeIntelligenceCard />
       <OpportunityIntelligenceCard />
+      <JobApplicationsCard />
       <LearningIntelligenceCard />
       <InterviewPrepCard />
     </div>
@@ -315,6 +317,69 @@ function OpportunityIntelligenceCard() {
         )}
         <InlineLink to="/opportunities" className="text-xs">
           Go to Opportunity Intelligence
+        </InlineLink>
+      </CardContent>
+    </Card>
+  );
+}
+
+const JOB_APPLICATION_STATUS_LABELS: Record<string, string> = {
+  considering: "Considering",
+  applied: "Applied",
+  phone_screen: "Phone Screen",
+  interview: "Interview",
+  offer: "Offer",
+  rejected: "Rejected",
+  withdrawn: "Withdrawn",
+  didnt_hear_back: "Didn't Hear Back",
+  other: "Other",
+};
+
+/** Status pipeline breakdown + soonest upcoming interview + a
+ * stuck-too-long nudge — all live-computed server-side
+ * (JobApplicationSummaryService), no client-side aggregation. */
+function JobApplicationsCard() {
+  const { data: summary, isLoading } = useJobApplicationsSummary();
+  const hasAnyApplications = (summary?.status_counts.length ?? 0) > 0;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Job Applications</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+        {!isLoading && !hasAnyApplications && (
+          <p className="text-sm text-muted-foreground">
+            No applications tracked yet — add one, or start a JD Tailoring session from a Job
+            Listing to have one created automatically.
+          </p>
+        )}
+        {!isLoading && hasAnyApplications && summary && (
+          <>
+            <div className="flex flex-wrap gap-2">
+              {summary.status_counts.map((sc) => (
+                <Badge key={sc.status} variant="default">
+                  {sc.count} {JOB_APPLICATION_STATUS_LABELS[sc.status] ?? sc.status}
+                </Badge>
+              ))}
+            </div>
+            {summary.next_interview && (
+              <p className="text-sm">
+                Next interview: {summary.next_interview.stage_label} at{" "}
+                {summary.next_interview.company} on{" "}
+                {formatDisplayDate(summary.next_interview.round_date)}
+              </p>
+            )}
+            {summary.stuck_count > 0 && (
+              <Badge variant="destructive">
+                {summary.stuck_count} need{summary.stuck_count === 1 ? "s" : ""} a follow-up
+              </Badge>
+            )}
+          </>
+        )}
+        <InlineLink to="/job-applications" className="text-xs">
+          Go to Job Applications
         </InlineLink>
       </CardContent>
     </Card>

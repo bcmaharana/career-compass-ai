@@ -388,6 +388,96 @@ solid general guidance for answering this kind of question well. Respond with th
 answer text only — no preamble, no meta-commentary, no markdown headers.
 """
 
+# {jd_text}/{profile_context}/{conversation_history}/{user_message} are
+# filled in by JdTailoringSessionService via str.format() —
+# profile_context is either a real block or an empty string, same
+# "template never branches" convention as INTERVIEW_ANSWER_GENERATION
+# above. conversation_history is rendered the same "Candidate: .../
+# Advisor: ..." way ChatService's own history rendering works, just a
+# separate per-session thread rather than this app's single ongoing
+# chat conversation.
+JD_TAILORING_CHAT_USE_CASE = "jd_tailoring_chat"
+JD_TAILORING_CHAT_PROMPT_TEMPLATE = """You are a job-search advisor inside Career Compass AI, \
+helping a candidate evaluate and tailor their application for a specific job posting.
+
+Job description the candidate is evaluating:
+{jd_text}
+
+{profile_context}Conversation so far:
+{conversation_history}
+
+Candidate: {user_message}
+
+Respond as the advisor — assess fit, flag gaps, and suggest concrete tailoring changes.
+
+Accuracy rules: only state specific facts about the candidate (employers, job \
+titles, dates, years of experience, certifications, project details, metrics) that \
+are explicitly given to you above in the candidate background or the conversation. \
+Never invent or estimate a specific number, employer name, credential, or project \
+detail that wasn't actually provided. If you don't have enough information about \
+the candidate to assess a specific requirement in the job description, say so \
+plainly and ask the candidate to share that detail — do not guess or assume.
+
+Formatting rules (the reply is shown as plain text, not rendered markdown): \
+never use markdown syntax — no #/## headers, no ** for bold, no markdown tables \
+(pipes/dashes), no horizontal rules. Write in plain prose paragraphs. If you have \
+several distinct points, put each on its own line prefixed with "- " instead of a \
+markdown list marker. Do not use any special characters purely for visual formatting.
+"""
+
+# {jd_text} is filled in by JdExtractionService via str.format() — the
+# literal JSON braces below are escaped as {{ }} for that reason, same
+# as every other structured-output template in this file.
+JD_EXTRACTION_USE_CASE = "jd_extraction"
+JD_EXTRACTION_PROMPT_TEMPLATE = """Extract the company name and role title from this job \
+description, if present. Respond with ONLY the raw JSON object below — no prose, no \
+markdown code fences. The very first character must be "{{" and the very last character \
+must be "}}".
+
+{jd_text}
+
+{{"company": string or null, "role_title": string or null}}
+"""
+
+# {jd_text}/{current_headline}/{current_summary}/{experiences_json} are
+# filled in by TailoredResumeService via str.format() — literal JSON
+# braces escaped as {{ }}, same as every other structured-output
+# template in this file. Asked for plain text using the "• " bullet
+# convention (app/core/rich_text.py's plain_text_to_rich_html), not raw
+# HTML — safer than trusting LLM-authored markup.
+JD_TAILORING_RESUME_GENERATION_USE_CASE = "jd_tailoring_resume_generation"
+JD_TAILORING_RESUME_GENERATION_PROMPT_TEMPLATE = """You are a resume-tailoring assistant \
+inside Career Compass AI. Rewrite the candidate's headline, summary, and per-role \
+experience bullet points to better match the job description below, without inventing \
+new facts — only rephrase/reprioritize what the candidate has actually done.
+
+Job description:
+{jd_text}
+
+Candidate's current headline: {current_headline}
+Candidate's current summary: {current_summary}
+Candidate's experience entries (JSON, each with a stable "id" you must echo back exactly):
+{experiences_json}
+
+Respond with ONLY the raw JSON object below — no prose, no markdown code fences. The very \
+first character must be "{{" and the very last character must be "}}". Use the "• " \
+prefix convention for each bullet (do not emit HTML or markdown).
+
+The response MUST be syntactically valid JSON: every individual string value (headline, \
+summary, each bullet) must be a single line with no literal line breaks inside it — a \
+bullet is one array element, never several bullets joined inside one string. Any \
+double-quote character that appears inside a string's text must be escaped as \\", and \
+every array/object element must be separated by a comma.
+
+{{
+  "headline": string,
+  "summary": string,
+  "experience_bullets": [
+    {{"id": string (must exactly match one of the given experience ids), "bullets": [string, ...]}}
+  ]
+}}
+"""
+
 # Catalog of selectable models (Settings > AI Model lets a user pick
 # among "active" rows). Adding a non-Anthropic/non-Ollama entry also
 # means registering its provider adapter in app/api/dependencies.py's
@@ -579,6 +669,17 @@ async def _seed_ai_platform_defaults(session: AsyncSession) -> None:
         session,
         use_case=INTERVIEW_ANSWER_GENERATION_USE_CASE,
         template=INTERVIEW_ANSWER_GENERATION_PROMPT_TEMPLATE,
+    )
+    await _seed_prompt_version(
+        session, use_case=JD_TAILORING_CHAT_USE_CASE, template=JD_TAILORING_CHAT_PROMPT_TEMPLATE
+    )
+    await _seed_prompt_version(
+        session, use_case=JD_EXTRACTION_USE_CASE, template=JD_EXTRACTION_PROMPT_TEMPLATE
+    )
+    await _seed_prompt_version(
+        session,
+        use_case=JD_TAILORING_RESUME_GENERATION_USE_CASE,
+        template=JD_TAILORING_RESUME_GENERATION_PROMPT_TEMPLATE,
     )
 
     result = await session.execute(select(ModelVersionModel))

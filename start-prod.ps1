@@ -27,12 +27,105 @@ $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $composeFile = "$root\infra\docker-compose.prod.yml"
 
+# Log everything to a file - see start-dev.ps1 for the full reasoning
+# (a hidden, scheduled-task-launched window has nobody watching it live,
+# so without this there is no way to tell after the fact whether the
+# Docker Desktop minimize logic actually ran or silently timed out).
+try {
+    Start-Transcript -Path "$env:USERPROFILE\career-compass-prod-start.log" -Append -ErrorAction Stop | Out-Null
+} catch {}
+
+# "Prod is ready" signal for start-dev.ps1, which staggers itself behind
+# this script on a fresh boot (both CareerCompassProdStart and
+# CareerCompassDevStart fire from the same logon trigger - prod should
+# finish starting, real users being more important than local dev,
+# before dev competes with it for Docker Desktop/WSL2 resources).
+# Cleared here at the start of every run so a stale marker from an
+# earlier successful run can never be mistaken for "prod is ready this
+# time" - only written back (further down) once frontend is confirmed
+# actually accepting connections.
+$prodReadyMarkerPath = "$env:USERPROFILE\career-compass-prod-ready.marker"
+Remove-Item -Path $prodReadyMarkerPath -Force -ErrorAction SilentlyContinue
+
+# Hide this script's own console window immediately. See start-dev.ps1
+# for the full explanation - the scheduled task's own "-WindowStyle
+# Hidden" flag alone was seen live to still leave a blank console window
+# visible briefly after a real reboot, so this hides the actual OS
+# window directly via the Win32 API as a second, more reliable layer.
+if (-not ("Native.ConsoleWindow" -as [type])) {
+    Add-Type -Name ConsoleWindow -Namespace Native -MemberDefinition @'
+[DllImport("kernel32.dll")]
+public static extern IntPtr GetConsoleWindow();
+[DllImport("user32.dll")]
+public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+'@
+}
+$selfHwnd = [Native.ConsoleWindow]::GetConsoleWindow()
+if ($selfHwnd -ne [IntPtr]::Zero) {
+    [Native.ConsoleWindow]::ShowWindow($selfHwnd, 0) | Out-Null  # SW_HIDE
+}
+
 function Write-Step($message) {
     Write-Host ""
     Write-Host "==> $message" -ForegroundColor Cyan
 }
 
 Write-Host "This brings up the PRODUCTION stack (real data, reachable via the Cloudflare Tunnel)." -ForegroundColor Yellow
+
+# See start-dev.ps1 for the full explanation and history of this logic,
+# including why a one-shot "find and minimize once" loop was replaced
+# with a watch-and-reminimize helper that also runs a second pass later
+# (below, after the stack is confirmed healthy) - a real reboot test on
+# 2026-08-19 showed Docker Desktop's window visible and un-minimized
+# despite the earlier one-shot version of this fix, most likely because
+# Docker Desktop's own startup sequence re-shows/restores its window
+# once it finishes initializing, after the one-shot loop had already
+# stopped watching.
+if (-not ("Native.Win32Window" -as [type])) {
+    Add-Type -Name Win32Window -Namespace Native -MemberDefinition @'
+[DllImport("user32.dll")]
+public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+[DllImport("user32.dll")]
+public static extern bool IsIconic(IntPtr hWnd);
+'@
+}
+
+function Watch-AndMinimize-DockerDesktop {
+    param(
+        [int]$MaxIterations,
+        [int]$StableIterationsToExit = 20  # 10s of "already minimized" before calling it settled
+    )
+    $foundOnce = $false
+    $stableCount = 0
+    for ($i = 0; $i -lt $MaxIterations; $i++) {
+        $dockerProc = Get-Process -Name "Docker Desktop" -ErrorAction SilentlyContinue |
+            Where-Object { $_.MainWindowHandle -ne 0 } |
+            Select-Object -First 1
+        if ($dockerProc -and -not [Native.Win32Window]::IsIconic($dockerProc.MainWindowHandle)) {
+            [Native.Win32Window]::ShowWindow($dockerProc.MainWindowHandle, 6) | Out-Null
+            if ($foundOnce) {
+                Write-Host "Docker Desktop window re-appeared (its own startup likely restored/focused it) - re-minimized"
+            } else {
+                Write-Host "Docker Desktop window found and minimized"
+            }
+            $foundOnce = $true
+            $stableCount = 0
+        } elseif ($foundOnce) {
+            $stableCount++
+            if ($stableCount -ge $StableIterationsToExit) {
+                return $true
+            }
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    return $foundOnce
+}
+
+Write-Step "Minimizing the Docker Desktop window (initial pass)"
+$dockerMinimized = Watch-AndMinimize-DockerDesktop -MaxIterations 240 -StableIterationsToExit 20  # up to 2 min
+if (-not $dockerMinimized) {
+    Write-Host "No visible Docker Desktop window found yet after 2 minutes - will check again once the stack is healthy" -ForegroundColor Yellow
+}
 
 Write-Step "Building and starting prod Docker services"
 docker compose -f $composeFile up -d --build
@@ -97,5 +190,20 @@ if (-not $frontendUp) {
 }
 Write-Host "frontend is accepting connections"
 
+# Signal start-dev.ps1 that it is safe to stop deferring to prod now -
+# written only once the stack is genuinely serving traffic, not merely
+# "docker compose up" returning.
+Get-Date -Format "o" | Out-File -FilePath $prodReadyMarkerPath -Encoding utf8 -NoNewline
+
+Write-Step "Re-checking the Docker Desktop window"
+# See the initial pass above and start-dev.ps1 for the full reasoning -
+# catches Docker Desktop re-showing/restoring its own window once its
+# WSL2/Hyper-V backend finishes initializing, which by now (stack
+# healthy, migrations applied, frontend accepting connections) it has
+# had several minutes to do.
+Watch-AndMinimize-DockerDesktop -MaxIterations 480 -StableIterationsToExit 20 | Out-Null  # up to 4 min
+
 Write-Step "Done"
 Write-Host "Frontend: http://127.0.0.1:8080 (and via the Cloudflare Tunnel's public URL)"
+
+try { Stop-Transcript | Out-Null } catch {}

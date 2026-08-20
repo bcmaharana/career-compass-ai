@@ -65,3 +65,10 @@ class DeleteAccountService:
                 await self._resume_storage.delete_private(key=image_key)
             except CareerCompassError:
                 logger.warning("account_deletion_interview_topic_image_cleanup_failed", key=image_key)
+
+        # Same private bucket/adapter as resumes.
+        for tailored_key in artifacts.tailored_resume_file_keys:
+            try:
+                await self._resume_storage.delete_private(key=tailored_key)
+            except CareerCompassError:
+                logger.warning("account_deletion_tailored_resume_cleanup_failed", key=tailored_key)

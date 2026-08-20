@@ -225,6 +225,56 @@ class ResumeExportService:
         )
         return profile, data
 
+    async def gather_resume_data(
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None
+    ) -> tuple[CareerProfile, ResumeData]:
+        """Public entry point for other services (TailoredResumeService)
+        that need the same real ResumeData a profile's own export would
+        use, as the base to layer AI-tailored overrides on top of —
+        already reflects the profile's own resume_section_toggles/
+        include_in_resume filtering, which a tailored resume correctly
+        inherits."""
+        return await self._gather(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
+
+    async def gather_resume_data_with_master_fallback(
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None
+    ) -> tuple[CareerProfile, ResumeData]:
+        """Same as gather_resume_data, but when target_role_id names a
+        Target Role Profile that's never actually been populated (no
+        headline/summary and no Experience entries — Target Role
+        Profiles are fully independent, nothing inherits from Master
+        automatically), falls back to the Master Profile's real data
+        instead of returning an effectively-empty resume.
+
+        Deliberately NOT the behavior of plain gather_resume_data (used
+        by the profile's own canonical "Download Resume," where a
+        person explicitly viewing an empty Target Role Profile should
+        see that it's empty) — JD Tailoring's target_role_id instead
+        arrives implicitly (whichever role happens to be selected in
+        Opportunity Intelligence's dropdown when a session starts), so
+        silently grounding on an empty profile is a real bug confirmed
+        live (2026-08-19): it produced tailored resumes with only a
+        header (and sometimes a summary) and nothing else, and
+        correspondingly starved the JD Tailoring chat's own grounding,
+        which contributed to the AI inventing quantified specifics
+        (years of experience, project budgets, certifications) no real
+        profile data ever supported. The target role's own role_label
+        is still preserved for display even when the substantive
+        content falls back to Master, since that's harmless and useful
+        context.
+        """
+        profile, data = await self._gather(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
+        if target_role_id is None or data.experiences or profile.headline or profile.summary:
+            return profile, data
+        master_profile, master_data = await self._gather(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=None
+        )
+        return master_profile, replace(master_data, role_label=data.role_label)
+
     async def generate(
         self,
         *,

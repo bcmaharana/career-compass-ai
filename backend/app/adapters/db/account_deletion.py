@@ -49,6 +49,12 @@ from app.adapters.db.models.identity import (
     UserRoleModel,
 )
 from app.adapters.db.models.interview_prep import InterviewQuestionModel, InterviewTopicModel
+from app.adapters.db.models.jd_tailoring import JdTailoringMessageModel, JdTailoringSessionModel
+from app.adapters.db.models.job_application_tracking import (
+    InterviewRoundModel,
+    JobApplicationModel,
+    RecruiterContactModel,
+)
 from app.adapters.db.models.learning_intelligence import (
     LearningItemModel,
     LearningRecommendationSetModel,
@@ -96,6 +102,22 @@ class SqlAlchemyAccountDeletionRepository:
             key for key in topic_image_result.scalars().all() if key is not None
         ]
 
+        # Collect tailored-resume file keys before deleting the rows —
+        # same best-effort "DB is the source of truth" convention as
+        # profile_photos/resume_file_keys/interview_topic_image_keys.
+        tailored_resume_result = await self._session.execute(
+            select(
+                JdTailoringSessionModel.tailored_resume_docx_key,
+                JdTailoringSessionModel.tailored_resume_pdf_key,
+            ).where(JdTailoringSessionModel.tenant_id == tenant_id)
+        )
+        tailored_resume_file_keys = [
+            key
+            for row in tailored_resume_result
+            for key in (row.tailored_resume_docx_key, row.tailored_resume_pdf_key)
+            if key is not None
+        ]
+
         # 1. Career-profile sub-entities (-> career_profiles.id)
         for model in (
             CareerHighlightModel,
@@ -114,6 +136,28 @@ class SqlAlchemyAccountDeletionRepository:
         await self._session.execute(
             delete(ChatMessageModel).where(
                 ChatMessageModel.conversation_id.in_(conversation_ids_subq)
+            )
+        )
+
+        # 2b. jd_tailoring_messages (-> jd_tailoring_sessions.id) and
+        # interview_rounds (-> job_applications.id) — neither has
+        # ON DELETE CASCADE (same "no FK in this schema has CASCADE"
+        # convention as chat_messages), so both must be deleted before
+        # step 3 removes their parent rows below.
+        jd_tailoring_session_ids_subq = select(JdTailoringSessionModel.id).where(
+            JdTailoringSessionModel.tenant_id == tenant_id
+        )
+        await self._session.execute(
+            delete(JdTailoringMessageModel).where(
+                JdTailoringMessageModel.session_id.in_(jd_tailoring_session_ids_subq)
+            )
+        )
+        job_application_ids_subq = select(JobApplicationModel.id).where(
+            JobApplicationModel.tenant_id == tenant_id
+        )
+        await self._session.execute(
+            delete(InterviewRoundModel).where(
+                InterviewRoundModel.job_application_id.in_(job_application_ids_subq)
             )
         )
 
@@ -155,6 +199,14 @@ class SqlAlchemyAccountDeletionRepository:
             # NOT NULL FK above.
             InterviewQuestionModel,
             InterviewTopicModel,
+            # All three cross-references from these are ON DELETE SET
+            # NULL (target_role_id, jd_tailoring_session_id/recruiter_id,
+            # same target_role_id precedent as CareerGoal/LearningItem
+            # above) — order among these three and relative to
+            # target_roles below doesn't matter.
+            JobApplicationModel,
+            JdTailoringSessionModel,
+            RecruiterContactModel,
             UserRoleModel,
             PlatformAdminModel,
         ):
@@ -210,4 +262,5 @@ class SqlAlchemyAccountDeletionRepository:
             resume_file_keys=resume_file_keys,
             profile_photos=profile_photos,
             interview_topic_image_keys=interview_topic_image_keys,
+            tailored_resume_file_keys=tailored_resume_file_keys,
         )

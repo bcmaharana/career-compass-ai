@@ -1685,10 +1685,332 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jd-tailoring/sessions/from-listing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Session From Listing */
+        post: operations["start_session_from_listing_api_v1_jd_tailoring_sessions_from_listing_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jd-tailoring/sessions/custom": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Custom Session */
+        post: operations["start_custom_session_api_v1_jd_tailoring_sessions_custom_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jd-tailoring/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Extract Jd Fields */
+        post: operations["extract_jd_fields_api_v1_jd_tailoring_extract_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jd-tailoring/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sessions */
+        get: operations["list_sessions_api_v1_jd_tailoring_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jd-tailoring/sessions/{session_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Session Messages */
+        get: operations["list_session_messages_api_v1_jd_tailoring_sessions__session_id__messages_get"];
+        put?: never;
+        /** Send Session Message */
+        post: operations["send_session_message_api_v1_jd_tailoring_sessions__session_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jd-tailoring/sessions/{session_id}/generate-resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Tailored Resume */
+        post: operations["generate_tailored_resume_api_v1_jd_tailoring_sessions__session_id__generate_resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jd-tailoring/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Session */
+        delete: operations["delete_session_api_v1_jd_tailoring_sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/job-applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Job Applications */
+        get: operations["list_job_applications_api_v1_job_applications_get"];
+        put?: never;
+        /** Create Job Application */
+        post: operations["create_job_application_api_v1_job_applications_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/job-applications/tracked-provider-ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tracked Provider Ids */
+        get: operations["list_tracked_provider_ids_api_v1_job_applications_tracked_provider_ids_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/job-applications/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Job Application Summary */
+        get: operations["get_job_application_summary_api_v1_job_applications_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/job-applications/{application_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Job Application */
+        delete: operations["delete_job_application_api_v1_job_applications__application_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Job Application */
+        patch: operations["update_job_application_api_v1_job_applications__application_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/job-applications/{application_id}/unlink-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unlink Job Application Session */
+        post: operations["unlink_job_application_session_api_v1_job_applications__application_id__unlink_session_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/job-applications/{application_id}/interview-rounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Interview Round */
+        post: operations["add_interview_round_api_v1_job_applications__application_id__interview_rounds_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interview-rounds/{round_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Interview Round */
+        delete: operations["delete_interview_round_api_v1_interview_rounds__round_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Interview Round */
+        patch: operations["update_interview_round_api_v1_interview_rounds__round_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/interview-rounds/{round_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move Interview Round */
+        post: operations["move_interview_round_api_v1_interview_rounds__round_id__move_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiter-contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Recruiter Contacts */
+        get: operations["list_recruiter_contacts_api_v1_recruiter_contacts_get"];
+        put?: never;
+        /** Add Recruiter Contact */
+        post: operations["add_recruiter_contact_api_v1_recruiter_contacts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruiter-contacts/{contact_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Recruiter Contact */
+        delete: operations["delete_recruiter_contact_api_v1_recruiter_contacts__contact_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Recruiter Contact */
+        patch: operations["update_recruiter_contact_api_v1_recruiter_contacts__contact_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/recruiter-contacts/{contact_id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Recruiter Contact Note */
+        post: operations["add_recruiter_contact_note_api_v1_recruiter_contacts__contact_id__notes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AddContactNoteRequest */
+        AddContactNoteRequest: {
+            /** Note */
+            note: string;
+            /**
+             * Note Date
+             * Format: date
+             */
+            note_date: string;
+        };
         /** AddFollowUpQuestionRequest */
         AddFollowUpQuestionRequest: {
             /** Question */
@@ -2032,6 +2354,16 @@ export interface components {
             description: string | null;
             /** Content Status */
             content_status: string;
+        };
+        /** ContactHistoryEntryResponse */
+        ContactHistoryEntryResponse: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Note */
+            note: string;
         };
         /** ContentRevisionResponse */
         ContentRevisionResponse: {
@@ -2486,6 +2818,44 @@ export interface components {
             /** Scope Target Role Ids */
             scope_target_role_ids: (string | null)[];
         };
+        /** InterviewRoundRequest */
+        InterviewRoundRequest: {
+            /** Stage Label */
+            stage_label: string;
+            /** Round Date */
+            round_date?: string | null;
+            /** Interviewer Name */
+            interviewer_name?: string | null;
+            /** Interviewer Title */
+            interviewer_title?: string | null;
+            /** Notes */
+            notes?: string | null;
+        };
+        /** InterviewRoundResponse */
+        InterviewRoundResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Job Application Id
+             * Format: uuid
+             */
+            job_application_id: string;
+            /** Stage Label */
+            stage_label: string;
+            /** Round Date */
+            round_date: string | null;
+            /** Interviewer Name */
+            interviewer_name: string | null;
+            /** Interviewer Title */
+            interviewer_title: string | null;
+            /** Notes */
+            notes: string | null;
+            /** Display Order */
+            display_order: number;
+        };
         /** InterviewTopicRequest */
         InterviewTopicRequest: {
             /** Name */
@@ -2537,6 +2907,164 @@ export interface components {
             reference_links: components["schemas"]["ReferenceLinkPayload"][];
             /** Scope Target Role Ids */
             scope_target_role_ids: (string | null)[];
+        };
+        /** JdExtractionRequest */
+        JdExtractionRequest: {
+            /** Jd Text */
+            jd_text: string;
+        };
+        /** JdExtractionResponse */
+        JdExtractionResponse: {
+            /** Company */
+            company: string | null;
+            /** Role Title */
+            role_title: string | null;
+        };
+        /** JdTailoringMessageResponse */
+        JdTailoringMessageResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Role */
+            role: string;
+            /** Content */
+            content: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** JdTailoringSessionResponse */
+        JdTailoringSessionResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Target Role Id */
+            target_role_id: string | null;
+            /** Source Type */
+            source_type: string;
+            /** Source Title */
+            source_title: string | null;
+            /** Source Company */
+            source_company: string | null;
+            /** Source Redirect Url */
+            source_redirect_url: string | null;
+            /** Jd Text */
+            jd_text: string;
+            /** Tailored Resume Status */
+            tailored_resume_status: string | null;
+            /** Tailored Resume Error */
+            tailored_resume_error: string | null;
+            /** Tailored Resume Generated At */
+            tailored_resume_generated_at: string | null;
+            /** Tailored Resume Docx Url */
+            tailored_resume_docx_url: string | null;
+            /** Tailored Resume Pdf Url */
+            tailored_resume_pdf_url: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** JobApplicationRequest */
+        JobApplicationRequest: {
+            /** Company */
+            company: string;
+            /** Role Title */
+            role_title: string;
+            /** Target Role Id */
+            target_role_id?: string | null;
+            /**
+             * Status
+             * @default considering
+             */
+            status: string;
+            /** Applied At */
+            applied_at?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Recruiter Id */
+            recruiter_id?: string | null;
+        };
+        /** JobApplicationResponse */
+        JobApplicationResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Company */
+            company: string;
+            /** Role Title */
+            role_title: string;
+            /** Status */
+            status: string;
+            /**
+             * Status Changed At
+             * Format: date-time
+             */
+            status_changed_at: string;
+            /** Target Role Id */
+            target_role_id: string | null;
+            /** Source Title */
+            source_title: string | null;
+            /** Source Company */
+            source_company: string | null;
+            /** Source Redirect Url */
+            source_redirect_url: string | null;
+            /** Jd Tailoring Session Id */
+            jd_tailoring_session_id: string | null;
+            /** Recruiter Id */
+            recruiter_id: string | null;
+            /** Applied At */
+            applied_at: string | null;
+            /** Notes */
+            notes: string | null;
+            /** Interview Rounds */
+            interview_rounds: components["schemas"]["InterviewRoundResponse"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** JobApplicationSummaryResponse */
+        JobApplicationSummaryResponse: {
+            /** Status Counts */
+            status_counts: components["schemas"]["StatusCountResponse"][];
+            next_interview: components["schemas"]["NextInterviewResponse"] | null;
+            /** Stuck Count */
+            stuck_count: number;
+            /** Stuck Examples */
+            stuck_examples: components["schemas"]["StuckApplicationResponse"][];
+        };
+        /** JobApplicationUpdateRequest */
+        JobApplicationUpdateRequest: {
+            /** Company */
+            company: string;
+            /** Role Title */
+            role_title: string;
+            /** Status */
+            status: string;
+            /** Target Role Id */
+            target_role_id?: string | null;
+            /** Applied At */
+            applied_at?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Recruiter Id */
+            recruiter_id?: string | null;
         };
         /** JobListingResponse */
         JobListingResponse: {
@@ -2816,6 +3344,25 @@ export interface components {
             /** Permission Codes */
             permission_codes: string[];
         };
+        /** NextInterviewResponse */
+        NextInterviewResponse: {
+            /**
+             * Application Id
+             * Format: uuid
+             */
+            application_id: string;
+            /** Company */
+            company: string;
+            /** Role Title */
+            role_title: string;
+            /** Stage Label */
+            stage_label: string;
+            /**
+             * Round Date
+             * Format: date
+             */
+            round_date: string;
+        };
         /** OrganizationSignupRequest */
         OrganizationSignupRequest: {
             /** Tenant Name */
@@ -3023,6 +3570,53 @@ export interface components {
              * Format: date-time
              */
             observed_at: string;
+        };
+        /** RecruiterContactRequest */
+        RecruiterContactRequest: {
+            /** Name */
+            name: string;
+            /** Email */
+            email?: string | null;
+            /** Phone */
+            phone?: string | null;
+            /** Company */
+            company?: string | null;
+            /** Linkedin Url */
+            linkedin_url?: string | null;
+            /** Role Title */
+            role_title?: string | null;
+        };
+        /** RecruiterContactResponse */
+        RecruiterContactResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Email */
+            email: string | null;
+            /** Phone */
+            phone: string | null;
+            /** Company */
+            company: string | null;
+            /** Linkedin Url */
+            linkedin_url: string | null;
+            /** Role Title */
+            role_title: string | null;
+            /** Contact History */
+            contact_history: components["schemas"]["ContactHistoryEntryResponse"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** ReferenceLinkPayload */
         ReferenceLinkPayload: {
@@ -3263,6 +3857,21 @@ export interface components {
             user_message: components["schemas"]["ChatMessageResponse"];
             assistant_message: components["schemas"]["ChatMessageResponse"];
         };
+        /** SendMessageRequest */
+        SendMessageRequest: {
+            /** Content */
+            content: string;
+        };
+        /** SendMessageResponse */
+        SendMessageResponse: {
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            user_message: components["schemas"]["JdTailoringMessageResponse"];
+            assistant_message: components["schemas"]["JdTailoringMessageResponse"];
+        };
         /** ServiceStatusResponse */
         ServiceStatusResponse: {
             /** Name */
@@ -3379,6 +3988,64 @@ export interface components {
             proficiency_level_definitions: {
                 [key: string]: string;
             } | null;
+        };
+        /** StartCustomRequest */
+        StartCustomRequest: {
+            /** Target Role Id */
+            target_role_id?: string | null;
+            /** Jd Text */
+            jd_text: string;
+            /** Company */
+            company: string;
+            /** Role Title */
+            role_title: string;
+        };
+        /** StartFromListingRequest */
+        StartFromListingRequest: {
+            /** Target Role Id */
+            target_role_id?: string | null;
+            /** Provider Id */
+            provider_id: string;
+            /** Title */
+            title: string;
+            /** Company */
+            company: string;
+            /** Redirect Url */
+            redirect_url: string;
+            /** Jd Text */
+            jd_text: string;
+        };
+        /** StartSessionResponse */
+        StartSessionResponse: {
+            session: components["schemas"]["JdTailoringSessionResponse"];
+            /**
+             * Job Application Id
+             * Format: uuid
+             */
+            job_application_id: string;
+        };
+        /** StatusCountResponse */
+        StatusCountResponse: {
+            /** Status */
+            status: string;
+            /** Count */
+            count: number;
+        };
+        /** StuckApplicationResponse */
+        StuckApplicationResponse: {
+            /**
+             * Application Id
+             * Format: uuid
+             */
+            application_id: string;
+            /** Company */
+            company: string;
+            /** Role Title */
+            role_title: string;
+            /** Status */
+            status: string;
+            /** Days In Status */
+            days_in_status: number;
         };
         /** SystemStatusResponse */
         SystemStatusResponse: {
@@ -7635,6 +8302,725 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InterviewPrepScopeSummaryResponse"][];
+                };
+            };
+        };
+    };
+    start_session_from_listing_api_v1_jd_tailoring_sessions_from_listing_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartFromListingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_custom_session_api_v1_jd_tailoring_sessions_custom_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartCustomRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extract_jd_fields_api_v1_jd_tailoring_extract_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JdExtractionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JdExtractionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sessions_api_v1_jd_tailoring_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JdTailoringSessionResponse"][];
+                };
+            };
+        };
+    };
+    list_session_messages_api_v1_jd_tailoring_sessions__session_id__messages_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JdTailoringMessageResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_session_message_api_v1_jd_tailoring_sessions__session_id__messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendMessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_tailored_resume_api_v1_jd_tailoring_sessions__session_id__generate_resume_post: {
+        parameters: {
+            query: {
+                format: "docx" | "pdf";
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JdTailoringSessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_session_api_v1_jd_tailoring_sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_job_applications_api_v1_job_applications_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobApplicationResponse"][];
+                };
+            };
+        };
+    };
+    create_job_application_api_v1_job_applications_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobApplicationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobApplicationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tracked_provider_ids_api_v1_job_applications_tracked_provider_ids_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+        };
+    };
+    get_job_application_summary_api_v1_job_applications_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobApplicationSummaryResponse"];
+                };
+            };
+        };
+    };
+    delete_job_application_api_v1_job_applications__application_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_job_application_api_v1_job_applications__application_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobApplicationUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobApplicationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlink_job_application_session_api_v1_job_applications__application_id__unlink_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobApplicationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_interview_round_api_v1_job_applications__application_id__interview_rounds_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewRoundRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewRoundResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_interview_round_api_v1_interview_rounds__round_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                round_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_interview_round_api_v1_interview_rounds__round_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                round_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewRoundRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewRoundResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_interview_round_api_v1_interview_rounds__round_id__move_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                round_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_recruiter_contacts_api_v1_recruiter_contacts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruiterContactResponse"][];
+                };
+            };
+        };
+    };
+    add_recruiter_contact_api_v1_recruiter_contacts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecruiterContactRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruiterContactResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_recruiter_contact_api_v1_recruiter_contacts__contact_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_recruiter_contact_api_v1_recruiter_contacts__contact_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecruiterContactRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruiterContactResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_recruiter_contact_note_api_v1_recruiter_contacts__contact_id__notes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddContactNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruiterContactResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

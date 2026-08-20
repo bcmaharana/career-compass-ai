@@ -43,7 +43,8 @@ Write-Host "Starting backend..."
 Start-Process powershell `
     -ArgumentList "-NoExit", `
     "-Command", `
-    "cd '$root\backend'; .\.venv\Scripts\activate; uvicorn app.main:app --reload"
+    "cd '$root\backend'; .\.venv\Scripts\activate; uvicorn app.main:app --reload" `
+    -WindowStyle Minimized
 
 # -----------------------------
 # Start frontend
@@ -53,6 +54,7 @@ Write-Host "Starting frontend..."
 Start-Process powershell `
     -ArgumentList "-NoExit", `
     "-Command", `
-    "cd '$root\frontend'; npm run dev"
+    "cd '$root\frontend'; npm run dev" `
+    -WindowStyle Minimized
 
 Write-Host "Career Compass AI started successfully." -ForegroundColor Green
