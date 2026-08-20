@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SettingsBackLink } from "@/features/settings/SettingsBackLink";
 import { cn } from "@/lib/utils";
 import { getErrorMessage } from "@/lib/errors";
 import { type FormEvent, useState } from "react";
@@ -31,24 +32,27 @@ export function SettingsJobSearchPreferencePage() {
   const { data: preference, isLoading, isError, error } = useJobSearchPreference();
 
   return (
-    <Card className="max-w-xl">
-      <CardHeader>
-        <CardTitle>Job Search Preference</CardTitle>
-        <CardDescription>
-          Set the location and filters used when searching for job listings on the Opportunity
-          Intelligence page.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
-        {isError && (
-          <p role="alert" className="text-sm text-destructive">
-            {getErrorMessage(error)}
-          </p>
-        )}
-        {preference && <JobSearchPreferenceForm preference={preference} />}
-      </CardContent>
-    </Card>
+    <div className="max-w-xl">
+      <SettingsBackLink />
+      <Card>
+        <CardHeader>
+          <CardTitle>Job Search Preference</CardTitle>
+          <CardDescription>
+            Set the location and filters used when searching for job listings on the Opportunity
+            Intelligence page.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+          {isError && (
+            <p role="alert" className="text-sm text-destructive">
+              {getErrorMessage(error)}
+            </p>
+          )}
+          {preference && <JobSearchPreferenceForm preference={preference} />}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

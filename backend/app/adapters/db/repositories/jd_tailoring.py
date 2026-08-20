@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import desc, select
+from sqlalchemy import delete, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.db.models import JdTailoringMessageModel, JdTailoringSessionModel
@@ -178,3 +178,31 @@ class SqlAlchemyJdTailoringMessageRepository:
             .order_by(JdTailoringMessageModel.created_at)
         )
         return [_message_to_domain(model) for model in result.scalars().all()]
+
+    async def delete_all_for_session(self, tenant_id: UUID, session_id: UUID) -> None:
+        # A single bulk DELETE, not a per-row loop — same
+        # "soft_delete_all_for_*" convention every other domain's
+        # bulk-clear repository method already follows, just a real hard
+        # delete here since this table has no deleted_at column.
+        await self._session.execute(
+            delete(JdTailoringMessageModel).where(
+                JdTailoringMessageModel.tenant_id == tenant_id,
+                JdTailoringMessageModel.session_id == session_id,
+            )
+        )
+        await self._session.flush()
+
+    async def delete(self, tenant_id: UUID, session_id: UUID, message_id: UUID) -> None:
+        # Scoped by session_id too (not just tenant_id + message_id) —
+        # a message_id that doesn't actually belong to session_id
+        # matches zero rows and is a silent no-op, same "idempotent,
+        # never errors on an already-gone/mismatched target" convention
+        # this app's other delete endpoints already follow.
+        await self._session.execute(
+            delete(JdTailoringMessageModel).where(
+                JdTailoringMessageModel.tenant_id == tenant_id,
+                JdTailoringMessageModel.session_id == session_id,
+                JdTailoringMessageModel.id == message_id,
+            )
+        )
+        await self._session.flush()

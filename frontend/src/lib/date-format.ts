@@ -55,3 +55,35 @@ export function formatDisplayDateTime(isoDateTime: string | null | undefined): s
 
   return `${day}-${month}-${year}, ${hours12}:${minutes} ${ampm}`;
 }
+
+/**
+ * "5 minutes ago"/"2 hours ago"/"yesterday"/"3 days ago" style relative
+ * time — used where a persisted timestamp needs to read as clearly
+ * historical, not live. Built specifically for JD Tailoring's
+ * `tailored_resume_error`: that message can bake in a real-time-only
+ * hint from the provider (e.g. "Try again in about 25 seconds"), which
+ * reads as actively wrong once actually re-displayed minutes, hours, or
+ * days later with no indication of when the underlying attempt actually
+ * happened (confirmed live, 2026-08-20 — a genuine user report of a
+ * "stale" rate-limit message that survived multiple logout/login
+ * cycles, since it's real persisted session state, not transient UI).
+ * Falls back to the absolute formatDisplayDateTime beyond a week, where
+ * "N days ago" stops being more useful than a real date.
+ */
+export function formatRelativeTime(isoDateTime: string | null | undefined): string | null {
+  if (!isoDateTime) return null;
+
+  const date = new Date(isoDateTime);
+  if (Number.isNaN(date.getTime())) return isoDateTime;
+
+  const diffSeconds = Math.round((Date.now() - date.getTime()) / 1000);
+  if (diffSeconds < 0) return "just now"; // clock skew guard
+  if (diffSeconds < 60) return "just now";
+  const diffMinutes = Math.round(diffSeconds / 60);
+  if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`;
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  const diffDays = Math.round(diffHours / 24);
+  if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  return formatDisplayDateTime(isoDateTime);
+}

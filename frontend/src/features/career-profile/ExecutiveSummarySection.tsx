@@ -2,13 +2,12 @@ import { useCareerProfile, useUpdateCareerProfile } from "@/api/queries/career-p
 import { Button } from "@/components/ui/button";
 import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CollapseToggle } from "@/components/ui/collapse-toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { Eraser } from "lucide-react";
+import { ChevronDown, ChevronRight, Eraser } from "lucide-react";
 import { useEffect, useState } from "react";
 
 /**
@@ -24,33 +23,49 @@ import { useEffect, useState } from "react";
  * and `summary` is the longer overview this card edits, per the Phase 2
  * follow-up decision.
  */
-export function ExecutiveSummarySection() {
+interface ExecutiveSummarySectionProps {
+  /** Expand/collapse now lives in CareerProfilePage's shared
+   * `expandedSection` state (single-open-accordion across every section,
+   * this one included — same mechanism as DashboardPage.tsx's
+   * `expandedCard`), not a local `useState` here. */
+  isOpen: boolean;
+  onToggleOpen: () => void;
+  onRequestOpen: () => void;
+}
+
+export function ExecutiveSummarySection({
+  isOpen,
+  onToggleOpen,
+  onRequestOpen,
+}: ExecutiveSummarySectionProps) {
   const scope = useProfileScope();
   const { data: profile } = useCareerProfile(scope);
   const updateProfile = useUpdateCareerProfile(scope);
 
   const [isEditing, setIsEditing] = useState(false);
-  const [isOpen, setIsOpen] = useState(true);
   const [summary, setSummary] = useState("");
   const [clearOpen, setClearOpen] = useState(false);
 
   // This component doesn't remount when the Master/Target-Role-Profile
   // switcher (TargetRolesWidget.tsx) changes `scope` — same instance,
-  // just refetching via a different query key — so without this, a
-  // section collapsed while looking at one role's summary silently
-  // stayed collapsed after switching to a different role's, hiding that
-  // role's summary by default instead of showing it. Also drops out of
-  // edit mode: staying in it across a scope change would otherwise leave
-  // the edit form showing the *previous* role's summary text next to the
-  // newly-loaded role's data underneath.
+  // just refetching via a different query key — so without this, the
+  // edit form could otherwise keep showing the *previous* role's summary
+  // text next to the newly-loaded role's data underneath. (The
+  // open/closed state itself is owned by CareerProfilePage now, and
+  // already resets on a scope change there — see its own `scopeKey`
+  // effect — so this effect only needs to handle edit mode.)
   useEffect(() => {
-    setIsOpen(true);
     setIsEditing(false);
   }, [scope]);
 
   function openEdit() {
     setSummary(profile?.summary ?? "");
     setIsEditing(true);
+    // The Edit button lives in the header, reachable even while the
+    // section is collapsed — without this, starting an edit while
+    // collapsed would activate edit mode with no visible CardContent to
+    // show it in, since that's now gated behind isOpen.
+    onRequestOpen();
   }
 
   async function handleClear() {
@@ -88,25 +103,42 @@ export function ExecutiveSummarySection() {
     // never needs to change dynamically the way a reorderable section's
     // does (see section-order.ts).
     <Card className="bg-background">
-      <CardHeader className="flex-row items-start justify-between space-y-0">
+      <CardHeader
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        onClick={onToggleOpen}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggleOpen();
+          }
+        }}
+        className="flex-row cursor-pointer select-none items-start justify-between space-y-0"
+      >
         <CardTitle>Executive Summary</CardTitle>
-        <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
-          {!isEditing && (
-            <Button variant="ghost" size="sm" onClick={openEdit}>
-              Edit
-            </Button>
+        <div className="flex items-center gap-2">
+          <div
+            className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {!isEditing && (
+              <Button variant="ghost" size="sm" onClick={openEdit}>
+                Edit
+              </Button>
+            )}
+            {!isEditing && !!profile?.summary && (
+              <Button variant="ghost" size="sm" onClick={() => setClearOpen(true)}>
+                <Eraser className="h-3.5 w-3.5" />
+                Clear
+              </Button>
+            )}
+          </div>
+          {isOpen ? (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           )}
-          {!isEditing && !!profile?.summary && (
-            <Button variant="ghost" size="sm" onClick={() => setClearOpen(true)}>
-              <Eraser className="h-3.5 w-3.5" />
-              Clear
-            </Button>
-          )}
-          <CollapseToggle
-            isOpen={isOpen}
-            onToggle={() => setIsOpen(!isOpen)}
-            label="Executive Summary"
-          />
         </div>
       </CardHeader>
       {isOpen && (

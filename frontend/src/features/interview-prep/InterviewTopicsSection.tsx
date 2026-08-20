@@ -11,7 +11,6 @@ import type { components } from "@/api/schema.gen";
 import { Button } from "@/components/ui/button";
 import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CollapseToggle } from "@/components/ui/collapse-toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -23,7 +22,7 @@ import { ScopeTagSelector, type ScopeOption } from "@/features/interview-prep/Sc
 import { groupInterviewTopicsBySection } from "@/lib/group-interview-topics-by-section";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { ImageOff, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ImageOff, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { type Dispatch, type FormEvent, type SetStateAction, useRef, useState } from "react";
 
 type InterviewTopic = components["schemas"]["InterviewTopicResponse"];
@@ -462,26 +461,27 @@ function TopicCard({
           )}
           <p className="text-sm font-medium">{topic.name}</p>
         </div>
-        <div
-          className={cn("flex shrink-0 items-center", ACTION_BUTTON_ROW_GAP)}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {isEditMode && (
-            <>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onEdit}>
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete}>
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </>
+        <div className="flex shrink-0 items-center gap-2">
+          <div
+            className={cn("flex items-center", ACTION_BUTTON_ROW_GAP)}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {isEditMode && (
+              <>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onEdit}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
+          {isOpen ? (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           )}
-          <CollapseToggle
-            isOpen={isOpen}
-            onToggle={onToggleOpen}
-            label={topic.name}
-            className="h-7 w-7 p-0"
-          />
         </div>
       </div>
 

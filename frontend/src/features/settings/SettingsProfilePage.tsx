@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { SettingsBackLink } from "@/features/settings/SettingsBackLink";
 import { getErrorMessage } from "@/lib/errors";
 import { getCountryOptions, getLanguageOptions } from "@/lib/locale-options";
 import { formatPhoneForCountry } from "@/lib/phone-format";
@@ -20,23 +21,26 @@ export function SettingsProfilePage() {
   const { data: user, isLoading, isError, error } = useCurrentUser();
 
   return (
-    <Card className="max-w-xl">
-      <CardHeader>
-        <CardTitle>Profile</CardTitle>
-        <CardDescription>
-          Your name and contact details, as they appear throughout Career Compass.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
-        {isError && (
-          <p role="alert" className="text-sm text-destructive">
-            {getErrorMessage(error)}
-          </p>
-        )}
-        {user && <SettingsProfileForm user={user} />}
-      </CardContent>
-    </Card>
+    <div className="max-w-xl">
+      <SettingsBackLink />
+      <Card>
+        <CardHeader>
+          <CardTitle>Profile</CardTitle>
+          <CardDescription>
+            Your name and contact details, as they appear throughout Career Compass.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+          {isError && (
+            <p role="alert" className="text-sm text-destructive">
+              {getErrorMessage(error)}
+            </p>
+          )}
+          {user && <SettingsProfileForm user={user} />}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -284,8 +288,8 @@ function SettingsProfileForm({ user }: { user: CurrentUserResponse }) {
         <Label htmlFor="settings-linkedin-url">LinkedIn profile URL</Label>
         <Input
           id="settings-linkedin-url"
-          type="url"
-          placeholder="https://linkedin.com/in/yourname"
+          type="text"
+          placeholder="linkedin.com/in/yourname"
           value={linkedinUrl}
           onChange={(e) => setLinkedinUrl(e.target.value)}
           maxLength={2048}
@@ -296,7 +300,7 @@ function SettingsProfileForm({ user }: { user: CurrentUserResponse }) {
         <Label htmlFor="settings-other-professional-url">Other professional URL</Label>
         <Input
           id="settings-other-professional-url"
-          type="url"
+          type="text"
           placeholder="e.g. a portfolio site or GitHub profile"
           value={otherProfessionalUrl}
           onChange={(e) => setOtherProfessionalUrl(e.target.value)}

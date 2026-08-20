@@ -291,6 +291,34 @@ class JdTailoringSessionService:
         await self.get_owned_or_raise(tenant_id=tenant_id, user_id=user_id, session_id=session_id)
         await self._sessions.soft_delete(tenant_id, session_id)
 
+    async def clear_messages(self, *, tenant_id: UUID, user_id: UUID, session_id: UUID) -> None:
+        """Wipes just the conversation history for a session — the
+        session itself (its JD text, target role link, and any already-
+        generated tailored resume) stays exactly as it is, unlike
+        soft_delete above which removes the whole session. Direct
+        2026-08-20 follow-up request: "the session needs to stay, but
+        only the AI conversation [should be cleared]." A genuine hard
+        delete of the message rows (JdTailoringMessage has no
+        deleted_at column to soft-delete against, unlike the session
+        itself), so this can't be undone.
+        """
+        await self.get_owned_or_raise(tenant_id=tenant_id, user_id=user_id, session_id=session_id)
+        await self._messages.delete_all_for_session(tenant_id, session_id)
+
+    async def delete_message(
+        self, *, tenant_id: UUID, user_id: UUID, session_id: UUID, message_id: UUID
+    ) -> None:
+        """Removes exactly one message from the conversation — e.g. one
+        specific piece of AI-suggested advice the person doesn't want to
+        keep — leaving every other message and the session itself
+        untouched. Direct 2026-08-20 follow-up to clear_messages above:
+        "if the user wants... to pick any specific advice, then there
+        should be one icon to enable the deletion of that specific
+        conversation [message]."
+        """
+        await self.get_owned_or_raise(tenant_id=tenant_id, user_id=user_id, session_id=session_id)
+        await self._messages.delete(tenant_id, session_id, message_id)
+
     async def _generate_reply(
         self,
         *,

@@ -28,6 +28,17 @@ interface DialogProps {
  * dismiss it. Reported as "expanding a textbox kicks me out of edit
  * mode" — reproducible with the textarea's resize handle specifically,
  * not a general click-outside case.
+ *
+ * Capped to a fraction of the viewport height (max-h-[85vh]), with the
+ * header (title/description/close button) staying fixed and only the
+ * body (`children`) scrolling internally — direct 2026-08-20 report:
+ * editing an Experience entry with a long multi-bullet description grew
+ * the dialog taller than the viewport with no way to reach the Save
+ * button or even see the box's own bottom edge, since neither this
+ * component nor its backdrop had any max-height/overflow handling at
+ * all before this. The header staying fixed (not scrolling away with
+ * the rest) keeps the close (X) button reachable regardless of how long
+ * the body grows.
  */
 export function Dialog({ open, onClose, title, description, children, className }: DialogProps) {
   useEffect(() => {
@@ -48,11 +59,11 @@ export function Dialog({ open, onClose, title, description, children, className 
         aria-modal="true"
         aria-labelledby="dialog-title"
         className={cn(
-          "w-full max-w-lg rounded-lg border border-border bg-card p-6 shadow-card",
+          "flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg border border-border bg-card shadow-card",
           className,
         )}
       >
-        <div className="mb-4 flex items-start justify-between">
+        <div className="flex shrink-0 items-start justify-between px-6 pb-4 pt-6">
           <div>
             <h2 id="dialog-title" className="font-display text-lg font-semibold">
               {title}
@@ -70,7 +81,7 @@ export function Dialog({ open, onClose, title, description, children, className 
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
-        {children}
+        <div className="overflow-y-auto px-6 pb-6">{children}</div>
       </div>
     </div>
   );

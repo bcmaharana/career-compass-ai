@@ -43,7 +43,7 @@ export function LoginPage() {
     event.preventDefault();
     login.mutate(
       accountType === "personal" ? { email, password } : { subdomain, email, password },
-      { onSuccess: () => navigate("/dashboard", { replace: true }) },
+      { onSuccess: () => navigate("/welcome", { replace: true }) },
     );
   }
 

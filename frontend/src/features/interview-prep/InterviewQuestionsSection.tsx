@@ -14,7 +14,7 @@ import type { components } from "@/api/schema.gen";
 import { Button } from "@/components/ui/button";
 import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CollapseToggle } from "@/components/ui/collapse-toggle";
+import { ClampedText } from "@/components/ui/clamped-content";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -28,7 +28,7 @@ import { ScopeTagSelector, type ScopeOption } from "@/features/interview-prep/Sc
 import { groupInterviewQuestionsByCategory } from "@/lib/group-interview-questions-by-category";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { Pencil, Plus, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { type Dispatch, type FormEvent, type SetStateAction, useState } from "react";
 
 type InterviewTopic = components["schemas"]["InterviewTopicResponse"];
@@ -407,12 +407,6 @@ function QuestionCard({
   // caught this list's "x" button deleting immediately with no
   // confirmation, unlike everything else here.
   const [deleteLinkIndex, setDeleteLinkIndex] = useState<number | null>(null);
-  // AI-Suggested Answer starts hidden — it's the model's text, not the
-  // user's own, and can be long/distracting until deliberately wanted.
-  // Generating/regenerating auto-reveals it, same "show the thing you
-  // just asked for" convention this app already uses elsewhere (e.g.
-  // auto-expanding a newly-added item).
-  const [isAiAnswerVisible, setIsAiAnswerVisible] = useState(false);
 
   const linkedTopic = topics.find((t) => t.id === question.topic_id);
 
@@ -512,26 +506,27 @@ function QuestionCard({
             )}
           </div>
         </div>
-        <div
-          className={cn("flex shrink-0 items-center", ACTION_BUTTON_ROW_GAP)}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {isEditMode && (
-            <>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onEdit}>
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete}>
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </>
+        <div className="flex shrink-0 items-center gap-2">
+          <div
+            className={cn("flex items-center", ACTION_BUTTON_ROW_GAP)}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {isEditMode && (
+              <>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onEdit}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
+          {isOpen ? (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           )}
-          <CollapseToggle
-            isOpen={isOpen}
-            onToggle={onToggleOpen}
-            label={question.question}
-            className="h-7 w-7 p-0"
-          />
         </div>
       </div>
 
@@ -584,46 +579,37 @@ function QuestionCard({
         </div>
 
         <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              AI-Suggested Answer
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            AI-Suggested Answer
+          </p>
+          {question.ai_answer_status === "generated" && (
+            <ClampedText
+              content={question.ai_answer ?? ""}
+              label="AI-suggested answer"
+              className="whitespace-pre-line text-sm"
+            >
+              {question.ai_answer}
+            </ClampedText>
+          )}
+          {question.ai_answer_status === "failed" && (
+            <p role="alert" className="text-sm text-destructive">
+              {question.ai_answer_error ?? "Something went wrong generating an answer."}
             </p>
-            <CollapseToggle
-              isOpen={isAiAnswerVisible}
-              onToggle={() => setIsAiAnswerVisible((v) => !v)}
-              label="AI-Suggested Answer"
-            />
-          </div>
-          {isAiAnswerVisible && (
-            <>
-              {question.ai_answer_status === "generated" && (
-                <div className="max-h-[400px] overflow-y-auto whitespace-pre-line text-sm scrollbar-hide">
-                  {question.ai_answer}
-                </div>
-              )}
-              {question.ai_answer_status === "failed" && (
-                <p role="alert" className="text-sm text-destructive">
-                  {question.ai_answer_error ?? "Something went wrong generating an answer."}
-                </p>
-              )}
-              {!question.ai_answer_status && (
-                <p className="text-sm text-muted-foreground">No AI answer generated yet.</p>
-              )}
-            </>
+          )}
+          {!question.ai_answer_status && (
+            <p className="text-sm text-muted-foreground">No AI answer generated yet.</p>
           )}
           <Button
             variant="outline"
             size="sm"
-            onClick={() =>
-              generateAnswer.mutate(question.id, { onSuccess: () => setIsAiAnswerVisible(true) })
-            }
+            onClick={() => generateAnswer.mutate(question.id)}
             disabled={generateAnswer.isPending}
             className="self-start"
           >
             {question.ai_answer_status ? (
               <RefreshCw className="h-3.5 w-3.5" />
             ) : (
-              <Sparkles className="h-3.5 w-3.5" />
+              <Bot className="h-3.5 w-3.5" />
             )}
             {generateAnswer.isPending
               ? "Generating..."
@@ -798,7 +784,6 @@ function FollowUpQuestionCard({
   const [linkUrl, setLinkUrl] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
   const [deleteLinkIndex, setDeleteLinkIndex] = useState<number | null>(null);
-  const [isAiAnswerVisible, setIsAiAnswerVisible] = useState(false);
 
   function startEditingQuestion() {
     setQuestionDraft(followUp.question);
@@ -891,26 +876,32 @@ function FollowUpQuestionCard({
             {followUp.question}
           </p>
         </div>
-        <div
-          className={cn("flex shrink-0 items-center", ACTION_BUTTON_ROW_GAP)}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {isEditMode && (
-            <>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={startEditingQuestion}>
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete}>
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </>
+        <div className="flex shrink-0 items-center gap-2">
+          <div
+            className={cn("flex items-center", ACTION_BUTTON_ROW_GAP)}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {isEditMode && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={startEditingQuestion}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
+          {isOpen ? (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           )}
-          <CollapseToggle
-            isOpen={isOpen}
-            onToggle={onToggleOpen}
-            label={followUp.question}
-            className="h-7 w-7 p-0"
-          />
         </div>
       </div>
 
@@ -985,46 +976,37 @@ function FollowUpQuestionCard({
           </div>
 
           <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                AI-Suggested Answer
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              AI-Suggested Answer
+            </p>
+            {followUp.ai_answer_status === "generated" && (
+              <ClampedText
+                content={followUp.ai_answer ?? ""}
+                label="AI-suggested answer"
+                className="whitespace-pre-line text-sm"
+              >
+                {followUp.ai_answer}
+              </ClampedText>
+            )}
+            {followUp.ai_answer_status === "failed" && (
+              <p role="alert" className="text-sm text-destructive">
+                {followUp.ai_answer_error ?? "Something went wrong generating an answer."}
               </p>
-              <CollapseToggle
-                isOpen={isAiAnswerVisible}
-                onToggle={() => setIsAiAnswerVisible((v) => !v)}
-                label="AI-Suggested Answer"
-              />
-            </div>
-            {isAiAnswerVisible && (
-              <>
-                {followUp.ai_answer_status === "generated" && (
-                  <div className="max-h-[400px] overflow-y-auto whitespace-pre-line text-sm scrollbar-hide">
-                    {followUp.ai_answer}
-                  </div>
-                )}
-                {followUp.ai_answer_status === "failed" && (
-                  <p role="alert" className="text-sm text-destructive">
-                    {followUp.ai_answer_error ?? "Something went wrong generating an answer."}
-                  </p>
-                )}
-                {!followUp.ai_answer_status && (
-                  <p className="text-sm text-muted-foreground">No AI answer generated yet.</p>
-                )}
-              </>
+            )}
+            {!followUp.ai_answer_status && (
+              <p className="text-sm text-muted-foreground">No AI answer generated yet.</p>
             )}
             <Button
               variant="outline"
               size="sm"
-              onClick={() =>
-                generateAnswer.mutate(followUp.id, { onSuccess: () => setIsAiAnswerVisible(true) })
-              }
+              onClick={() => generateAnswer.mutate(followUp.id)}
               disabled={generateAnswer.isPending}
               className="self-start"
             >
               {followUp.ai_answer_status ? (
                 <RefreshCw className="h-3.5 w-3.5" />
               ) : (
-                <Sparkles className="h-3.5 w-3.5" />
+                <Bot className="h-3.5 w-3.5" />
               )}
               {generateAnswer.isPending
                 ? "Generating..."

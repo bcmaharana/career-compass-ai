@@ -147,7 +147,7 @@ export function TargetRolesWidget({ onNavigate }: TargetRolesWidgetProps) {
                 "flex items-center justify-between gap-2 rounded-md px-2 py-1 text-[11px]",
                 activeRoleId === role.id
                   ? "bg-card text-foreground"
-                  : "bg-card/60 text-primary-foreground hover:bg-card",
+                  : "bg-card/60 text-foreground hover:bg-card",
               )}
             >
               <button
@@ -159,7 +159,10 @@ export function TargetRolesWidget({ onNavigate }: TargetRolesWidgetProps) {
                 className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
               >
                 <Tooltip content={role.role_name} className="flex min-w-0 items-center gap-1.5">
-                  <Badge variant="accent" className="shrink-0 px-1.5 py-0 text-[10px]">
+                  <Badge
+                    variant="accent"
+                    className="shrink-0 bg-accent px-1.5 py-0 text-[10px] text-accent-foreground"
+                  >
                     {role.tag}
                   </Badge>
                   <span className="truncate">{role.role_name}</span>

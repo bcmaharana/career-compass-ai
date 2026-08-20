@@ -97,6 +97,15 @@ class ResumeSummary(BaseModel):
 
 class ResumeMergeRequest(BaseModel):
     resume_id: UUID
+    # Which profile to merge into — required (not defaulted from the
+    # resume's own stored tag) so the review screen can send the user's
+    # explicit scope pick: None merges into Master, a real id into that
+    # Target Role Profile. Deliberately independent of the resume's own
+    # target_role_id (set once at upload time) so the same parsed resume
+    # can be merged into a different profile than it was originally
+    # tagged for, and merged again into additional profiles afterward —
+    # see ResumeMergeService.merge()'s docstring.
+    target_role_id: UUID | None
     accept_headline: bool = False
     accept_summary: bool = False
     accepted_skill_indices: list[int] = Field(default_factory=list, max_length=150)

@@ -87,6 +87,7 @@ class ResumeMergeService:
         tenant_id: UUID,
         user_id: UUID,
         resume_id: UUID,
+        target_role_id: UUID | None,
         accept_headline: bool,
         accept_summary: bool,
         accepted_skill_indices: list[int],
@@ -104,12 +105,14 @@ class ResumeMergeService:
                 "This resume has no extracted data to merge.", code="RESUME_NOT_PARSED"
             )
 
-        # The resume's own tag (set once, at upload time) determines the
-        # destination profile — None merges into Master, a real id merges
-        # into that Target Role Profile. Not a client-supplied field:
-        # the whole point is that a resume tagged to a role at upload
-        # can't be redirected to a different profile at merge time.
-        target_role_id = resume.target_role_id
+        # Destination profile is caller-supplied (the review screen's own
+        # scope picker), not derived from the resume's own stored tag —
+        # 2026-08-20: lets the same already-parsed resume be merged into
+        # more than one profile (e.g. Master first, then re-opened from
+        # Resume History and merged again into a Target Role Profile),
+        # not just the scope it happened to be uploaded/tagged for. The
+        # resume's own target_role_id is otherwise unrelated to this call
+        # and is left untouched either way.
 
         data = resume.extracted_data
         skill_items = data.get("skills") or []

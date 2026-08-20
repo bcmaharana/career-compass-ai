@@ -23,6 +23,19 @@ export interface SectionOrderProps {
   resumeIncluded: boolean;
   onToggleResumeIncluded: (checked: boolean) => void;
   resumeToggleDisabled?: boolean;
+  /** Expand/collapse state now lives in CareerProfilePage (one shared
+   * `expandedSection` value, same single-open-accordion shape
+   * DashboardPage.tsx's `expandedCard` uses), not a local `useState`
+   * per section — so every section's Card header and every Dashboard
+   * card share the identical click-header-to-toggle,
+   * only-one-open-at-a-time mechanism. `onToggleOpen` is a true toggle
+   * (wire it to the header's onClick) — `onRequestOpen` unconditionally
+   * opens this section (e.g. after adding a new item while collapsed,
+   * where a blind toggle could close it instead if it somehow were
+   * already open). */
+  isOpen: boolean;
+  onToggleOpen: () => void;
+  onRequestOpen: () => void;
 }
 
 /**

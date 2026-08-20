@@ -5,8 +5,8 @@ interface SwitchProps {
   onCheckedChange: (checked: boolean) => void;
   disabled?: boolean;
   /** Accessible label — no visible text of its own, same convention as
-   * CollapseToggle/MoveButtons (icon-only controls, described via
-   * aria-label rather than a persistent on-screen caption). */
+   * MoveButtons (an icon-only control, described via aria-label rather
+   * than a persistent on-screen caption). */
   label: string;
 }
 

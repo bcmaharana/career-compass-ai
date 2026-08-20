@@ -2,7 +2,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import { Compass, LineChart, Sparkles, UserCircle, UserPlus, Users } from "lucide-react";
+import { Bot, Compass, LineChart, UserCircle, UserPlus, Users } from "lucide-react";
 import { Navigate, Link } from "react-router-dom";
 
 // Sri Yantra hero graphic — replaced the earlier abstract hexagonal
@@ -313,7 +313,7 @@ export function LandingPage() {
           </div>
           <div className="rounded-lg border border-border bg-card p-6">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <Sparkles className="h-6 w-6" color="url(#rainbow-accent-gradient)" />
+              <Bot className="h-6 w-6" color="url(#rainbow-accent-gradient)" />
             </div>
             <h3 className="mt-4 font-display font-semibold">A governed AI coach</h3>
             <p className="mt-2 text-sm text-muted-foreground">

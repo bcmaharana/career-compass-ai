@@ -22,6 +22,7 @@ import { MoveButtons } from "@/components/ui/move-buttons";
 import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Select } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/errors";
+import { resolveValidTargetRoleId, useTargetRoleScopeStore } from "@/stores/target-role-scope-store";
 import { RefreshCw } from "lucide-react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
@@ -86,11 +87,31 @@ export function LearningIntelligencePage() {
   const [deleteTarget, setDeleteTarget] = useState<LearningItem | null>(null);
 
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
+  const setActiveTargetRoleId = useTargetRoleScopeStore((s) => s.setActiveTargetRoleId);
+
+  // Defaults to whichever role is currently active app-wide (see
+  // target-role-scope-store.ts), falling back to the person's first
+  // target role — this page's Recommendations panel has no Master mode
+  // of its own. Only reads the shared scope, doesn't write it, so
+  // simply landing here never silently overwrites the app-wide default
+  // with an auto-picked role nobody actually chose — see
+  // handleRoleChange below for the one place that's a real choice.
   useEffect(() => {
     if (!selectedRoleId && targetRoles && targetRoles.length > 0) {
-      setSelectedRoleId(targetRoles[0]!.id);
+      const preferred = resolveValidTargetRoleId(
+        useTargetRoleScopeStore.getState().activeTargetRoleId,
+        targetRoles,
+      );
+      setSelectedRoleId(preferred ?? targetRoles[0]!.id);
     }
   }, [targetRoles, selectedRoleId]);
+
+  function handleRoleChange(value: string) {
+    const roleId = value || null;
+    setSelectedRoleId(roleId);
+    setActiveTargetRoleId(roleId);
+  }
+
   const {
     data: recommendations,
     isLoading: recommendationsLoading,
@@ -237,7 +258,7 @@ export function LearningIntelligencePage() {
                 id="learning-target-role"
                 className="w-72"
                 value={selectedRoleId ?? ""}
-                onChange={(e) => setSelectedRoleId(e.target.value || null)}
+                onChange={(e) => handleRoleChange(e.target.value)}
               >
                 {targetRoles.map((role) => (
                   <option key={role.id} value={role.id}>

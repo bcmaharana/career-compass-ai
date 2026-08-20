@@ -42,14 +42,23 @@ class FakeJdTailoringSessionRepository:
 
 
 class FakeResumeExportService:
-    def __init__(self, data: ResumeData) -> None:
+    def __init__(self, data: ResumeData, *, empty_sections: list[str] | None = None) -> None:
         self._data = data
+        # Defaults to "nothing is empty" — most tests here exercise
+        # unrelated generation mechanics (JSON parsing, hyphen
+        # normalization, ...) and shouldn't be affected by the separate
+        # "included section has no data" guard; TestValidatesEmptyIncludedSections
+        # below is what actually exercises a non-empty value.
+        self._empty_sections = empty_sections or []
 
     async def gather_resume_data(self, *, tenant_id, user_id, target_role_id):
         return self._data.profile, self._data
 
     async def gather_resume_data_with_master_fallback(self, *, tenant_id, user_id, target_role_id):
         return self._data.profile, self._data
+
+    def find_empty_included_sections(self, profile, data) -> list[str]:
+        return self._empty_sections
 
 
 class FakeStorage:

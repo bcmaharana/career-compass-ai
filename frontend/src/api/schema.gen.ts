@@ -1765,7 +1765,14 @@ export interface paths {
         put?: never;
         /** Send Session Message */
         post: operations["send_session_message_api_v1_jd_tailoring_sessions__session_id__messages_post"];
-        delete?: never;
+        /**
+         * Clear Session Messages
+         * @description Clears just the conversation — the session itself (JD text,
+         *     target role link, any generated tailored resume) is untouched. The
+         *     distinct action from DELETE .../sessions/{id} above, which removes
+         *     the whole session.
+         */
+        delete: operations["clear_session_messages_api_v1_jd_tailoring_sessions__session_id__messages_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1800,6 +1807,28 @@ export interface paths {
         post?: never;
         /** Delete Session */
         delete: operations["delete_session_api_v1_jd_tailoring_sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jd-tailoring/sessions/{session_id}/messages/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Session Message
+         * @description Removes exactly one message — e.g. one piece of AI-suggested
+         *     advice the person doesn't want to keep — leaving every other
+         *     message and the session itself untouched.
+         */
+        delete: operations["delete_session_message_api_v1_jd_tailoring_sessions__session_id__messages__message_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3730,6 +3759,8 @@ export interface components {
              * Format: uuid
              */
             resume_id: string;
+            /** Target Role Id */
+            target_role_id: string | null;
             /**
              * Accept Headline
              * @default false
@@ -8491,6 +8522,35 @@ export interface operations {
             };
         };
     };
+    clear_session_messages_api_v1_jd_tailoring_sessions__session_id__messages_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     generate_tailored_resume_api_v1_jd_tailoring_sessions__session_id__generate_resume_post: {
         parameters: {
             query: {
@@ -8530,6 +8590,36 @@ export interface operations {
             header?: never;
             path: {
                 session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_session_message_api_v1_jd_tailoring_sessions__session_id__messages__message_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                message_id: string;
             };
             cookie?: never;
         };

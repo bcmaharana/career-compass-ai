@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CollapseToggle } from "@/components/ui/collapse-toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CopyButton } from "@/components/ui/copy-button";
 import { MoveButtons } from "@/components/ui/move-buttons";
@@ -17,13 +16,19 @@ import {
   moveCategoryGroup,
 } from "@/lib/group-by-category";
 import { cn } from "@/lib/utils";
-import { ArrowDown, ArrowUp, PencilLine, Plus, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, PencilLine, Plus, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 type CoreCompetency = components["schemas"]["CoreCompetencyPayload"];
 
 interface MySkillsSectionProps {
   cardBackground: "card" | "background";
+  /** Expand/collapse now lives in SkillIntelligencePage's shared
+   * `expandedSection` state (single-open-accordion across all three
+   * sections on that page — same mechanism as DashboardPage.tsx's
+   * `expandedCard`), not a local `useState` here. */
+  isOpen: boolean;
+  onToggleOpen: () => void;
 }
 
 /** Must match UpdateCareerProfileRequest.core_competencies' max_length
@@ -51,11 +56,10 @@ const MAX_SKILLS = 150;
  * other read as confusing/redundant in practice, "+Add" alone is the
  * one way to add a skill here now, same as Core Competencies.
  */
-export function MySkillsSection({ cardBackground }: MySkillsSectionProps) {
+export function MySkillsSection({ cardBackground, isOpen, onToggleOpen }: MySkillsSectionProps) {
   const { data: profile } = useCareerProfile();
   const updateProfile = useUpdateCareerProfile();
 
-  const [isOpen, setIsOpen] = useState(true);
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [dialogTarget, setDialogTarget] = useState<{
@@ -146,27 +150,48 @@ export function MySkillsSection({ cardBackground }: MySkillsSectionProps) {
 
   return (
     <Card className={cardBackground === "background" ? "bg-background" : undefined}>
-      <CardHeader className="flex-row items-start justify-between space-y-0">
+      <CardHeader
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        onClick={onToggleOpen}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggleOpen();
+          }
+        }}
+        className="flex-row cursor-pointer select-none items-start justify-between space-y-0"
+      >
         <CardTitle>
           My Skills{" "}
           <span className="text-sm font-normal italic text-muted-foreground">
             ({skills.length}/{MAX_SKILLS})
           </span>
         </CardTitle>
-        <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
-          <Button variant="ghost" size="sm" onClick={openAddDialog}>
-            <Plus className="h-3.5 w-3.5" />
-            Add
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
-            {isEditMode ? "Done" : "Edit"}
-          </Button>
-          <CopyButton
-            text={skills.map((s) => s.name).join(", ")}
-            disabled={skills.length === 0}
-            variant="ghost"
-          />
-          <CollapseToggle isOpen={isOpen} onToggle={() => setIsOpen(!isOpen)} label="My Skills" />
+        <div className="flex items-center gap-2">
+          <div
+            className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Button variant="ghost" size="sm" onClick={openAddDialog}>
+              <Plus className="h-3.5 w-3.5" />
+              Add
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
+              {isEditMode ? "Done" : "Edit"}
+            </Button>
+            <CopyButton
+              text={skills.map((s) => s.name).join(", ")}
+              disabled={skills.length === 0}
+              variant="ghost"
+            />
+          </div>
+          {isOpen ? (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          )}
         </div>
       </CardHeader>
       {isOpen && (

@@ -257,7 +257,7 @@ export function AccountPanelContent({
                   onClick={onNavigate}
                   className={({ isActive }) =>
                     cn(
-                      "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      "flex w-full items-center gap-3 rounded-md px-3 py-2 text-xs font-medium transition-colors",
                       isCollapsed && "justify-center px-0",
                       isActive ? activeGradientClasses : inactiveClasses,
                     )
@@ -324,7 +324,7 @@ export function AccountPanelContent({
               to="/settings"
               onClick={onNavigate}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                 inSettings ? activeGradientClasses : inactiveClasses,
               )}
             >
@@ -351,7 +351,7 @@ export function AccountPanelContent({
               <button
                 type="button"
                 onClick={onLogout}
-                className="flex w-full items-center gap-3 rounded-[4px] bg-primary px-3 py-1.5 text-sm font-medium transition-colors hover:bg-white/5"
+                className="flex w-full items-center gap-3 rounded-[4px] bg-primary px-3 py-1.5 text-xs font-medium transition-colors hover:bg-white/5"
               >
                 <LogOut className="h-4 w-4" strokeWidth={2} color="url(#rainbow-accent-gradient)" />
                 <span className="bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] bg-clip-text text-transparent">

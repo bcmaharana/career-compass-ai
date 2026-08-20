@@ -10,7 +10,6 @@ import type { components } from "@/api/schema.gen";
 import { Button } from "@/components/ui/button";
 import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CollapseToggle } from "@/components/ui/collapse-toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -23,7 +22,7 @@ import { itemAlternateClass, type SectionOrderProps } from "@/features/career-pr
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { Eraser, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Eraser, Pencil, Plus, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 type Certification = components["schemas"]["CertificationResponse"];
@@ -70,6 +69,9 @@ export function CertificationSection({
   resumeIncluded,
   onToggleResumeIncluded,
   resumeToggleDisabled,
+  isOpen,
+  onToggleOpen,
+  onRequestOpen,
 }: SectionOrderProps) {
   const scope = useProfileScope();
   const { data: certifications, isLoading } = useCertifications(scope);
@@ -83,7 +85,6 @@ export function CertificationSection({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [isOpen, setIsOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Certification | null>(null);
   const [clearSectionOpen, setClearSectionOpen] = useState(false);
@@ -124,7 +125,7 @@ export function CertificationSection({
     mutation
       .then(() => {
         setDialogOpen(false);
-        if (!editingId) setIsOpen(true);
+        if (!editingId) onRequestOpen();
       })
       .catch(() => {});
   }
@@ -149,40 +150,57 @@ export function CertificationSection({
 
   return (
     <Card className={cardBackground === "background" ? "bg-background" : undefined}>
-      <CardHeader className="flex-row items-start justify-between space-y-0">
+      <CardHeader
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        onClick={onToggleOpen}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggleOpen();
+          }
+        }}
+        className="flex-row cursor-pointer select-none items-start justify-between space-y-0"
+      >
         <CardTitle>Certifications</CardTitle>
-        <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
-          <ResumeIncludeToggle
-            checked={resumeIncluded}
-            onCheckedChange={onToggleResumeIncluded}
-            disabled={resumeToggleDisabled}
-            label="the Certifications section"
-          />
-          <Button variant="ghost" size="sm" onClick={openAddDialog}>
-            <Plus className="h-3.5 w-3.5" />
-            Add
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
-            {isEditMode ? "Done" : "Edit"}
-          </Button>
-          {!!certifications?.length && (
-            <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
-              <Eraser className="h-3.5 w-3.5" />
-              Clear
+        <div className="flex items-center gap-2">
+          <div
+            className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ResumeIncludeToggle
+              checked={resumeIncluded}
+              onCheckedChange={onToggleResumeIncluded}
+              disabled={resumeToggleDisabled}
+              label="the Certifications section"
+            />
+            <Button variant="ghost" size="sm" onClick={openAddDialog}>
+              <Plus className="h-3.5 w-3.5" />
+              Add
             </Button>
+            <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
+              {isEditMode ? "Done" : "Edit"}
+            </Button>
+            {!!certifications?.length && (
+              <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
+                <Eraser className="h-3.5 w-3.5" />
+                Clear
+              </Button>
+            )}
+            <MoveButtons
+              onMoveUp={onMoveUp}
+              onMoveDown={onMoveDown}
+              isFirst={isFirst}
+              isLast={isLast}
+              disabled={moveDisabled}
+            />
+          </div>
+          {isOpen ? (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           )}
-          <CollapseToggle
-            isOpen={isOpen}
-            onToggle={() => setIsOpen(!isOpen)}
-            label="Certifications"
-          />
-          <MoveButtons
-            onMoveUp={onMoveUp}
-            onMoveDown={onMoveDown}
-            isFirst={isFirst}
-            isLast={isLast}
-            disabled={moveDisabled}
-          />
         </div>
       </CardHeader>
       {isOpen && (

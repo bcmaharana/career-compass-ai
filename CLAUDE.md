@@ -3599,6 +3599,169 @@ Known environment gotchas already solved, don't reintroduce:
   Committed (`e26ab92`, frontend-only, no migration) and deployed to
   prod via `start-prod.ps1`; both `https://scaledbrain.com` and the
   local prod port returned a real `200` afterward.
+- **Shared target-role scope, Welcome screen, app-wide accordion rollout,
+  JD Tailoring conversation management, shared Dialog scroll fix, and a
+  real Education-description data bug** (2026-08-20) — done, deployed to
+  both dev and prod. A long, many-round session driven entirely by live
+  usage feedback, landed as one commit.
+  **Shared "active target role" scope**: previously every role-aware page
+  (Career Profile, Resume Intelligence, Opportunity Intelligence,
+  Learning Intelligence, Interview Prep, AI Career Coach) tracked its own
+  `?role=` scope independently — picking a role on one page had no effect
+  on any other. New `frontend/src/stores/target-role-scope-store.ts`
+  (Zustand, `activeTargetRoleId: string | null`, persisted to
+  `localStorage` under `"career-compass-active-target-role"` via an
+  explicit `"master"` sentinel so "deliberately Master" is distinguishable
+  from "never set") is now the single source of truth, read by every one
+  of those pages. Each URL-scoped page restores from the store on a bare
+  landing (no `?role=` already in the URL) and writes back to the store
+  whenever its own scope changes — an explicit `?role=` in the URL (a
+  bookmark, a shared link) still always wins over the stored value.
+  Resume Intelligence's history list now filters by the active scope
+  (previously showed every resume regardless of role) and its "Merge
+  into" picker on `ResumeReviewCard` can target a *different* scope than
+  the resume's own `target_role_id` — a resume uploaded generically can
+  be merged into a specific Target Role Profile, confirmed live via a
+  direct HTTP round trip (`ResumeMergeRequest.target_role_id` is now a
+  required, explicit field rather than implicitly reusing the resume's
+  own).
+  **Post-login Welcome screen** (`/welcome`, `frontend/src/features/welcome/WelcomePage.tsx`):
+  shows the quote-of-the-day plus a "which role are you working on?" role
+  picker that sets the shared scope store directly; skipping defaults to
+  Master. A user with zero target roles is redirected straight to
+  `/dashboard` without ever seeing the picker, since there'd be nothing
+  to choose from. Both `LoginPage.tsx` and `VerifyEmailPage.tsx` now
+  navigate here instead of straight to `/dashboard`.
+  **Accordion rollout, replacing every hide/show icon toggle app-wide**:
+  Dashboard's 7 cards, Career Profile's 9 sections, Skill Intelligence's 3
+  sections, and Interview Prep's Topics/Questions all converted to the
+  same single-open-accordion pattern already established elsewhere in
+  this app — one `expandedX: string | null` lifted to the page, a
+  click-anywhere-on-header row (`role="button"` + keyboard handling) with
+  nested interactive controls (Add/Edit/Clear/MoveButtons) each wrapping
+  their own `onClick` in `stopPropagation()`, and a chevron replacing the
+  old Eye/EyeOff icon. Every card/section starts **closed** except
+  Career Profile's Executive Summary, which starts **open** per explicit
+  request — still part of the same single-open accordion, just the
+  default. `components/ui/collapse-toggle.tsx` was deleted outright once
+  its last real usage was converted (confirmed zero remaining references
+  first). New `frontend/src/components/ui/clamped-content.tsx`
+  (`ClampedText`/`ClampedRichText`) is a separate, distinct pattern used
+  in two places: Experience entries show only title/company+location/
+  date-range by default and reveal the full rich-text description only
+  when the row itself is clicked (fully hidden, not clamped); Interview
+  Prep's AI-Suggested Answer stays always-visible but clamped to 3 lines
+  with a Show more/less link that only appears if the content actually
+  overflows (`scrollHeight`/`clientHeight` measured once on mount, not
+  on every toggle, so un-clamping doesn't lose the "was this ever
+  overflowing" flag).
+  **JD Tailoring conversation management** — three genuinely distinct,
+  coexisting actions clarified through several rounds of the user's own
+  follow-up corrections: whole-session delete (pre-existing), a new
+  "Clear conversation" action (`DELETE
+  .../sessions/{id}/messages`, wipes every message but keeps the session
+  row itself), and per-message delete (`DELETE
+  .../sessions/{id}/messages/{message_id}`, a hover-revealed trash icon
+  on each `MessageBubble`) — the user explicitly wanted all three, not
+  one replacing another. Both new repository methods
+  (`JdTailoringMessageRepository.delete_all_for_session`/`delete`) use a
+  single SQLAlchemy `delete(...)` statement, not a per-row loop, since
+  this table has no `deleted_at` column to soft-delete through. Also
+  fixed in the same area: `useDeleteJdTailoringSession`'s cache
+  invalidation was matching by key *prefix*, so deleting a session also
+  refetched `KEYS.messages(deletedSessionId)` for an instant, throwing a
+  harmless-but-real 404 into the console — narrowed to `exact: true`.
+  A separate, stale-message report ("Groq's free-tier rate limit was
+  reached. Try again in about 25 seconds." persisting across many
+  logout/login cycles) turned out to be genuinely-persisted state working
+  exactly as designed — the error text itself is real and correctly
+  stored, it just had no time context, so a relative-time prefix
+  (`formatRelativeTime` in `date-format.ts`) now reads "Last attempt (3
+  hours ago): Groq's free-tier..." instead of the bare message.
+  **Resume generation validation**: both the Career Profile "Download
+  Resume" flow and JD Tailoring's tailored-resume generation now refuse
+  to produce a document with a section the user has explicitly toggled
+  "included" but which has zero actual content —
+  `ResumeExportService.find_empty_included_sections()` — raising a clear
+  `RESUME_SECTION_INCLUDED_BUT_EMPTY` error instead of silently emitting
+  a resume with a blank heading. JD Tailoring's path uses this inside its
+  existing soft-fail pattern (persists `status="failed"` with the real
+  message rather than a raw 500).
+  **Settings polish**: every Settings sub-page gained a "← Back to
+  Settings" link (new `SettingsBackLink.tsx`) above its card; the bare
+  `/settings` landing page was rebuilt from a passive instructional
+  message into real clickable category cards (icon, label, purpose line
+  from `nav-items.ts`), gated the same way the Right Nav's own sub-nav
+  already gates Platform Admin. The AI-related icon used consistently
+  everywhere in the app (Bot, not Sparkles) now also covers the landing
+  page's "governed AI coach" card, the footer chat composer's send
+  button, and AI Career Coach's own nav icon/avatars — a single visual
+  language for "this is the AI," not per-page choices.
+  **Shared `Dialog` component had no height cap at all** — direct report:
+  editing an Experience entry with 5-6+ bullets grew the popup taller
+  than the viewport with the Save button (and the dialog's own bottom
+  edge) completely unreachable, no scroll affordance anywhere. Since
+  every Add/Edit popup app-wide (~20+ call sites) shares this one
+  component, fixed once centrally rather than per-caller: the box is now
+  `max-h-[85vh] flex flex-col`, with the title/close-button header as a
+  `shrink-0` block that never scrolls and `{children}` wrapped in its own
+  `overflow-y-auto` body. Verified live: dialog height caps at exactly
+  85% of viewport height, the header stays fixed and reachable, the body
+  scrolls independently of the page (`window.scrollY` stays 0), and a
+  genuinely long description's Save button — confirmed clipped before
+  scrolling via real bounding-box math, not just `isVisible()` — becomes
+  reachable and functional after.
+  **A real, previously-invisible data bug found live**: Education entries
+  were showing the exact same text twice — once in the "degree,
+  field_of_study" subtitle line, once again duplicated as the
+  description directly below it, inflating the card's height for no
+  reason. Root-caused via direct `psql` inspection (not guessed): the
+  resume-extraction AI prompt's general "if an entry has no bullet
+  points, use its existing short text as-is" rule was being applied to
+  Education specifically, where that "existing short text" is almost
+  always just the degree line itself — already fully captured in its own
+  structured field — so the LLM was writing a bullet that restates the
+  degree verbatim into `description`. This existed in real historical
+  data all along but was only ever invisible because Education's
+  description field was write-only in the UI until the 2026-08-17 rich
+  text rollout started rendering it for the first time. Fixed two ways:
+  (1) the extraction prompt (`RESUME_EXTRACTION_PROMPT_TEMPLATE` in
+  `scripts/seed_platform_defaults.py`) now explicitly forbids restating
+  degree/field_of_study/institution into `description` — it must be
+  `null` unless the source resume has genuinely separate content (GPA,
+  honors, coursework, thesis, activities) — re-seeded as prompt version
+  27 in both dev and prod; (2) the actual duplicate/junk data (10 rows
+  in dev, 5 in prod — either an exact "• " + degree restatement or a
+  bare empty `<br>` placeholder) was cleared directly via a scoped SQL
+  `UPDATE ... SET description = NULL` matched only on those two narrow
+  patterns, confirmed via a read-only-JWT verification against the real
+  affected dev account that every entry now round-trips `description:
+  null`. No code bug existed in the Education UI itself — it was
+  correctly rendering exactly whatever was stored, confirmed by manually
+  adding a description-less entry through the real UI and observing a
+  normal-height, single-duplicate-free card.
+  **Settings > Account**: reordered to always be the *last* card/nav
+  entry (after Platform Admin, which only some users even see) instead
+  of sitting third, and restyled with a solid destructive-red background
+  and white text (`bg-destructive`/`text-destructive-foreground`,
+  reusing the same design tokens the destructive Button variant already
+  defines) so the account-deletion category visually stands apart from
+  every other, non-destructive Settings category.
+  Verified live throughout via headless-Chromium Playwright against
+  throwaway Enterprise accounts (created via the low-level `/tenants`
+  primitive, deleted via `DELETE /identity/me` afterward): the Dialog
+  scroll fix's full round trip (add a 10-bullet Experience entry, scroll
+  within the dialog body only, Save succeeds and the entry appears); the
+  Settings Account card's real computed styles (`background-color: rgb
+  (206, 39, 39)`, white text) versus a normal card's white background/
+  dark text, and its last-position ordering; and a blank-description
+  Education entry rendering cleanly with no duplicate text. 543 backend
+  unit tests passing, mypy clean across all 265 `app/` source files,
+  frontend `typecheck`/`lint`/`build` all clean. Committed and pushed to
+  `origin/main`; deployed to prod via a full backend+frontend image
+  rebuild and restart (no new Alembic migration this session — only the
+  seed-script prompt re-seed and the direct, narrowly-scoped Education
+  data cleanup, both already applied to prod ahead of the code deploy).
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in

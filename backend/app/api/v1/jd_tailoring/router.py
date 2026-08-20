@@ -219,3 +219,41 @@ async def delete_session(
     await service.soft_delete(
         tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id), session_id=session_id
     )
+
+
+@router.delete(
+    "/jd-tailoring/sessions/{session_id}/messages", status_code=status.HTTP_204_NO_CONTENT
+)
+async def clear_session_messages(
+    session_id: UUID,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: JdTailoringSessionService = Depends(get_jd_tailoring_session_service),
+) -> None:
+    """Clears just the conversation — the session itself (JD text,
+    target role link, any generated tailored resume) is untouched. The
+    distinct action from DELETE .../sessions/{id} above, which removes
+    the whole session."""
+    await service.clear_messages(
+        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id), session_id=session_id
+    )
+
+
+@router.delete(
+    "/jd-tailoring/sessions/{session_id}/messages/{message_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_session_message(
+    session_id: UUID,
+    message_id: UUID,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: JdTailoringSessionService = Depends(get_jd_tailoring_session_service),
+) -> None:
+    """Removes exactly one message — e.g. one piece of AI-suggested
+    advice the person doesn't want to keep — leaving every other
+    message and the session itself untouched."""
+    await service.delete_message(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        session_id=session_id,
+        message_id=message_id,
+    )

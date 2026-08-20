@@ -10,7 +10,6 @@ import type { components } from "@/api/schema.gen";
 import { Button } from "@/components/ui/button";
 import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CollapseToggle } from "@/components/ui/collapse-toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -24,7 +23,7 @@ import { itemAlternateClass, type SectionOrderProps } from "@/features/career-pr
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { Eraser, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Eraser, Pencil, Plus, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 type Experience = components["schemas"]["ExperienceResponse"];
@@ -74,6 +73,9 @@ export function ExperienceSection({
   resumeIncluded,
   onToggleResumeIncluded,
   resumeToggleDisabled,
+  isOpen,
+  onToggleOpen,
+  onRequestOpen,
 }: SectionOrderProps) {
   const scope = useProfileScope();
   const { data: experiences, isLoading } = useExperiences(scope);
@@ -89,14 +91,17 @@ export function ExperienceSection({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [isOpen, setIsOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [collapsedDescriptionIds, setCollapsedDescriptionIds] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<Experience | null>(null);
   const [clearSectionOpen, setClearSectionOpen] = useState(false);
+  // Per-item expand state — collapsed by default, showing only title/
+  // company+location/date range (3 lines); clicking the item reveals its
+  // full description, no clamp or "Show more" link (direct 2026-08-20
+  // request, replacing the earlier ClampedRichText treatment here).
+  const [expandedItemIds, setExpandedItemIds] = useState<Set<string>>(new Set());
 
-  function toggleDescription(id: string) {
-    setCollapsedDescriptionIds((prev) => {
+  function toggleItemExpanded(id: string) {
+    setExpandedItemIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -148,10 +153,10 @@ export function ExperienceSection({
       .then(() => {
         setDialogOpen(false);
         // A collapsed section's Add button is still reachable (it lives
-        // in the header, not behind CollapseToggle) — expand so the
+        // in the header, not behind the collapse toggle) — expand so the
         // newly added item is actually visible instead of the section
         // silently staying collapsed after a successful add.
-        if (!editingId) setIsOpen(true);
+        if (!editingId) onRequestOpen();
       })
       .catch(() => {});
   }
@@ -177,40 +182,57 @@ export function ExperienceSection({
 
   return (
     <Card className={cardBackground === "background" ? "bg-background" : undefined}>
-      <CardHeader className="flex-row items-start justify-between space-y-0">
+      <CardHeader
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        onClick={onToggleOpen}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggleOpen();
+          }
+        }}
+        className="flex-row cursor-pointer select-none items-start justify-between space-y-0"
+      >
         <CardTitle>Professional Experience</CardTitle>
-        <div className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}>
-          <ResumeIncludeToggle
-            checked={resumeIncluded}
-            onCheckedChange={onToggleResumeIncluded}
-            disabled={resumeToggleDisabled}
-            label="the Professional Experience section"
-          />
-          <Button variant="ghost" size="sm" onClick={openAddDialog}>
-            <Plus className="h-3.5 w-3.5" />
-            Add
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
-            {isEditMode ? "Done" : "Edit"}
-          </Button>
-          {!!experiences?.length && (
-            <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
-              <Eraser className="h-3.5 w-3.5" />
-              Clear
+        <div className="flex items-center gap-2">
+          <div
+            className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ResumeIncludeToggle
+              checked={resumeIncluded}
+              onCheckedChange={onToggleResumeIncluded}
+              disabled={resumeToggleDisabled}
+              label="the Professional Experience section"
+            />
+            <Button variant="ghost" size="sm" onClick={openAddDialog}>
+              <Plus className="h-3.5 w-3.5" />
+              Add
             </Button>
+            <Button variant="ghost" size="sm" onClick={() => setIsEditMode((v) => !v)}>
+              {isEditMode ? "Done" : "Edit"}
+            </Button>
+            {!!experiences?.length && (
+              <Button variant="ghost" size="sm" onClick={() => setClearSectionOpen(true)}>
+                <Eraser className="h-3.5 w-3.5" />
+                Clear
+              </Button>
+            )}
+            <MoveButtons
+              onMoveUp={onMoveUp}
+              onMoveDown={onMoveDown}
+              isFirst={isFirst}
+              isLast={isLast}
+              disabled={moveDisabled}
+            />
+          </div>
+          {isOpen ? (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           )}
-          <CollapseToggle
-            isOpen={isOpen}
-            onToggle={() => setIsOpen(!isOpen)}
-            label="Professional Experience"
-          />
-          <MoveButtons
-            onMoveUp={onMoveUp}
-            onMoveDown={onMoveDown}
-            isFirst={isFirst}
-            isLast={isLast}
-            disabled={moveDisabled}
-          />
         </div>
       </CardHeader>
       {isOpen && (
@@ -221,7 +243,9 @@ export function ExperienceSection({
             No experience added yet — add your first role to get started.
           </p>
         )}
-        {experiences?.map((experience, index) => (
+        {experiences?.map((experience, index) => {
+          const isItemExpanded = expandedItemIds.has(experience.id);
+          return (
           <div
             key={experience.id}
             className={cn(
@@ -230,16 +254,30 @@ export function ExperienceSection({
             )}
           >
             {isEditMode && (
-              <MoveButtons
-                onMoveUp={() => moveExperience.mutate({ id: experience.id, direction: "up" })}
-                onMoveDown={() => moveExperience.mutate({ id: experience.id, direction: "down" })}
-                isFirst={index === 0}
-                isLast={index === experiences.length - 1}
-                disabled={moveExperience.isPending}
-                className="h-7 w-7 p-0"
-              />
+              <div onClick={(e) => e.stopPropagation()}>
+                <MoveButtons
+                  onMoveUp={() => moveExperience.mutate({ id: experience.id, direction: "up" })}
+                  onMoveDown={() => moveExperience.mutate({ id: experience.id, direction: "down" })}
+                  isFirst={index === 0}
+                  isLast={index === experiences.length - 1}
+                  disabled={moveExperience.isPending}
+                  className="h-7 w-7 p-0"
+                />
+              </div>
             )}
-            <div className="flex-1">
+            <div
+              role="button"
+              tabIndex={0}
+              aria-expanded={isItemExpanded}
+              onClick={() => toggleItemExpanded(experience.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  toggleItemExpanded(experience.id);
+                }
+              }}
+              className="flex-1 cursor-pointer select-none"
+            >
               <p className="text-sm font-medium">{experience.title}</p>
               <p className="text-sm text-muted-foreground">
                 <span className="font-bold">{experience.company}</span>
@@ -249,22 +287,19 @@ export function ExperienceSection({
                 {formatDisplayDate(experience.start_date)} –{" "}
                 {experience.end_date ? formatDisplayDate(experience.end_date) : "Present"}
               </p>
-              {!collapsedDescriptionIds.has(experience.id) && experience.description && (
+              {isItemExpanded && experience.description && (
                 <RichTextDisplay html={experience.description} className="mt-2" />
               )}
             </div>
-            <div className={cn("flex shrink-0", ACTION_BUTTON_ROW_GAP)}>
+            <div
+              className={cn("flex shrink-0 items-center", ACTION_BUTTON_ROW_GAP)}
+              onClick={(e) => e.stopPropagation()}
+            >
               <ResumeIncludeToggle
                 checked={experience.include_in_resume}
                 onCheckedChange={(checked) => toggleItemResume(experience, checked)}
                 disabled={updateExperience.isPending}
                 label={`the "${experience.title}" experience entry`}
-              />
-              <CollapseToggle
-                isOpen={!collapsedDescriptionIds.has(experience.id)}
-                onToggle={() => toggleDescription(experience.id)}
-                label={`${experience.title} description`}
-                className="h-7 w-7 p-0"
               />
               {isEditMode && (
                 <>
@@ -288,7 +323,8 @@ export function ExperienceSection({
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </CardContent>
       )}
 

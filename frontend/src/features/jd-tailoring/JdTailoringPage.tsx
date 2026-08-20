@@ -1,4 +1,6 @@
 import {
+  useClearJdTailoringMessages,
+  useDeleteJdTailoringMessage,
   useDeleteJdTailoringSession,
   useGenerateTailoredResume,
   useJdTailoringMessages,
@@ -9,11 +11,12 @@ import type { components } from "@/api/schema.gen";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { InlineLink } from "@/components/ui/inline-link";
 import { Textarea } from "@/components/ui/textarea";
-import { formatDisplayDateTime } from "@/lib/date-format";
+import { formatDisplayDateTime, formatRelativeTime } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { Sparkles, Trash2, UserCircle } from "lucide-react";
+import { Bot, Eraser, Trash2, UserCircle } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -40,10 +43,14 @@ export function JdTailoringPage() {
   const { data: messages, isLoading: messagesLoading } = useJdTailoringMessages(sessionId);
   const sendMessage = useSendJdTailoringMessage(sessionId ?? "");
   const deleteSession = useDeleteJdTailoringSession();
+  const clearMessages = useClearJdTailoringMessages();
+  const deleteMessage = useDeleteJdTailoringMessage(sessionId ?? "");
   const generateResume = useGenerateTailoredResume(sessionId ?? "");
 
   const [draft, setDraft] = useState("");
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [clearMessagesConfirmOpen, setClearMessagesConfirmOpen] = useState(false);
+  const [deleteMessageTargetId, setDeleteMessageTargetId] = useState<string | null>(null);
 
   const selectedSession = sessions?.find((session) => session.id === sessionId) ?? null;
 
@@ -67,6 +74,20 @@ export function JdTailoringPage() {
     });
   }
 
+  function handleConfirmClearMessages() {
+    if (!sessionId) return;
+    clearMessages.mutate(sessionId, {
+      onSuccess: () => setClearMessagesConfirmOpen(false),
+    });
+  }
+
+  function handleConfirmDeleteMessage() {
+    if (!deleteMessageTargetId) return;
+    deleteMessage.mutate(deleteMessageTargetId, {
+      onSuccess: () => setDeleteMessageTargetId(null),
+    });
+  }
+
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       <Card className="lg:w-80 lg:shrink-0">
@@ -77,8 +98,9 @@ export function JdTailoringPage() {
           {sessionsLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
           {sessions && sessions.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              No sessions yet — start one from a Job Listing on the Opportunity Intelligence
-              page, or use "Add Your Own JD" there.
+              No sessions yet — start one from a Job Listing on the{" "}
+              <InlineLink to="/opportunities">Opportunity Intelligence</InlineLink> page, or use
+              "Add Your Own JD" there.
             </p>
           )}
           {sessions?.map((session) => (
@@ -124,17 +146,28 @@ export function JdTailoringPage() {
         {!selectedSession ? (
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">
-              Select a session from the list, or start a new one from a Job Listing on
-              Opportunity Intelligence.
+              Select a session from the list, or start a new one from a Job Listing on{" "}
+              <InlineLink to="/opportunities">Opportunity Intelligence</InlineLink>.
             </p>
           </CardContent>
         ) : (
           <>
-            <CardHeader>
+            <CardHeader className="flex-row items-start justify-between space-y-0">
               <CardTitle>
                 {selectedSession.source_title ?? "Custom JD"}
                 {selectedSession.source_company ? ` at ${selectedSession.source_company}` : ""}
               </CardTitle>
+              {!!messages?.length && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setClearMessagesConfirmOpen(true)}
+                >
+                  <Eraser className="h-3.5 w-3.5" />
+                  Clear conversation
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <details className="rounded-md border border-border p-3 text-sm">
@@ -202,6 +235,23 @@ export function JdTailoringPage() {
                 {selectedSession.tailored_resume_status === "failed" &&
                   selectedSession.tailored_resume_error && (
                     <p role="alert" className="text-sm text-destructive">
+                      {/* Prefixed with when this happened — the error
+                          text itself can bake in a real-time-only hint
+                          (e.g. "Try again in about 25 seconds"), which
+                          reads as flatly wrong once shown again later
+                          with nothing marking it as a past attempt, not
+                          a live one (confirmed live, 2026-08-20: a real
+                          user report of a Groq rate-limit message
+                          "stuck" on screen across many logout/login
+                          cycles — it's real persisted session state, not
+                          a stale UI artifact, and only clears once a
+                          fresh Generate/Regenerate attempt overwrites it). */}
+                      {selectedSession.tailored_resume_generated_at && (
+                        <span className="font-medium">
+                          Last attempt ({formatRelativeTime(selectedSession.tailored_resume_generated_at)}
+                          ):{" "}
+                        </span>
+                      )}
                       {selectedSession.tailored_resume_error}
                     </p>
                   )}
@@ -221,7 +271,11 @@ export function JdTailoringPage() {
                   </p>
                 )}
                 {messages?.map((message) => (
-                  <MessageBubble key={message.id} message={message} />
+                  <MessageBubble
+                    key={message.id}
+                    message={message}
+                    onDelete={() => setDeleteMessageTargetId(message.id)}
+                  />
                 ))}
                 {sendMessage.isPending && <TypingBubble />}
               </div>
@@ -268,26 +322,63 @@ export function JdTailoringPage() {
         description="This removes the JD Tailoring conversation. Any Job Application it created stays tracked, just unlinked from this session."
         isPending={deleteSession.isPending}
       />
+
+      <ConfirmDialog
+        open={clearMessagesConfirmOpen}
+        onCancel={() => setClearMessagesConfirmOpen(false)}
+        onConfirm={handleConfirmClearMessages}
+        title="Clear this conversation?"
+        description="Removes every message in this conversation — the session itself (the JD, and any generated tailored resume) stays. This can't be undone."
+        confirmLabel="Clear"
+        confirmPendingLabel="Clearing..."
+        isPending={clearMessages.isPending}
+      />
+
+      <ConfirmDialog
+        open={deleteMessageTargetId !== null}
+        onCancel={() => setDeleteMessageTargetId(null)}
+        onConfirm={handleConfirmDeleteMessage}
+        title="Delete this message?"
+        description="Removes just this one message — the rest of the conversation stays. This can't be undone."
+        isPending={deleteMessage.isPending}
+      />
     </div>
   );
 }
 
-function MessageBubble({ message }: { message: JdTailoringMessage }) {
+function MessageBubble({
+  message,
+  onDelete,
+}: {
+  message: JdTailoringMessage;
+  onDelete: () => void;
+}) {
   const isUser = message.role === "user";
   return (
-    <div className={cn("flex items-start gap-3", isUser && "flex-row-reverse")}>
+    <div className={cn("group flex items-start gap-3", isUser && "flex-row-reverse")}>
       <div
         className={cn(
           "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
           isUser ? "bg-muted text-muted-foreground" : cn(RAINBOW_GRADIENT, "text-primary"),
         )}
       >
-        {isUser ? <UserCircle className="h-5 w-5" /> : <Sparkles className="h-4 w-4" />}
+        {isUser ? <UserCircle className="h-5 w-5" /> : <Bot className="h-4 w-4" />}
       </div>
       <div className={cn("flex max-w-2xl flex-col gap-1", isUser && "items-end")}>
-        <span className="text-xs font-medium text-muted-foreground">
-          {isUser ? "You" : "Advisor"}
-        </span>
+        <div className={cn("flex items-center gap-1.5", isUser && "flex-row-reverse")}>
+          <span className="text-xs font-medium text-muted-foreground">
+            {isUser ? "You" : "Advisor"}
+          </span>
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label="Delete this message"
+            title="Delete this message"
+            className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
         <div
           className={cn(
             "whitespace-pre-wrap rounded-lg px-4 py-2.5 text-sm",
@@ -312,7 +403,7 @@ function TypingBubble() {
           RAINBOW_GRADIENT,
         )}
       >
-        <Sparkles className="h-4 w-4" />
+        <Bot className="h-4 w-4" />
       </div>
       <div className="flex items-center gap-1 rounded-lg bg-muted px-4 py-3">
         {[0, 150, 300].map((delayMs) => (

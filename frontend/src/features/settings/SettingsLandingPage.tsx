@@ -1,41 +1,94 @@
+import { usePlatformAdminMe } from "@/api/queries/platform-admin";
 import { Card, CardContent } from "@/components/ui/card";
+import { SETTINGS_NAV_ITEMS, STANDARD_SETTINGS_NAV_ITEMS } from "@/lib/nav-items";
+import { cn } from "@/lib/utils";
 import { useMobileDropdownStore } from "@/stores/mobile-dropdown-store";
-import { Settings } from "lucide-react";
+import { Link } from "react-router-dom";
 
 /**
- * Bare /settings landing — deliberately does not default into Profile
- * (or any other category). The Right Nav's Settings sub-nav is the only
- * way in on desktop; on mobile, MobileAccountMenu.tsx auto-opens its
- * dropdown on landing here for the same reason (see its own docstring).
+ * Bare /settings landing — a real card per category (icon, name, and its
+ * one-line `purpose` from nav-items.ts) rather than the earlier plain
+ * "pick a category" instructional card, direct 2026-08-20 request. Still
+ * deliberately doesn't default straight into Profile — this page IS the
+ * chooser now, just a clickable one instead of a passive message; the
+ * Right Nav's Settings sub-nav remains the other way in on desktop.
  *
- * Renders nothing at all while that mobile dropdown is open
- * (`useMobileDropdownStore`) — on a narrow viewport its opaque panel
- * covers most of the page width, and rendering this page's own card
- * underneath it at the same time left an empty-looking blank card
- * showing beside/behind the dropdown for no reason once the message
- * inside it was hidden. The card (with its full instructional message)
- * still shows normally on desktop, where the store's `active` never
- * becomes `"account"` (MobileAccountMenu never mounts outside the mobile
- * shell), and on mobile once the dropdown has been dismissed without a
- * category chosen — at that point it's the only remaining way to explain
- * how to reopen it.
+ * Platform Admin only gets a card for a caller who actually has at least
+ * one platform.* permission — same gate AccountPanelContent.tsx's own
+ * sub-nav already applies, so this page never shows a card that would
+ * just 403.
+ *
+ * Renders nothing at all while the mobile account dropdown is open
+ * (`useMobileDropdownStore`) — see the previous version of this
+ * docstring for why: on a narrow viewport its opaque panel covers most
+ * of the page width, and rendering this page's own cards underneath it
+ * at the same time left them showing beside/behind the dropdown for no
+ * reason. The cards still show normally on desktop (the store's `active`
+ * never becomes `"account"` there), and on mobile once the dropdown has
+ * been dismissed without a category chosen.
  */
 export function SettingsLandingPage() {
   const isMobileAccountMenuOpen = useMobileDropdownStore((state) => state.active === "account");
+  const { data: platformAdmin } = usePlatformAdminMe();
 
   if (isMobileAccountMenuOpen) {
     return null;
   }
 
+  const visibleItems =
+    platformAdmin && platformAdmin.permission_codes.length > 0
+      ? SETTINGS_NAV_ITEMS
+      : STANDARD_SETTINGS_NAV_ITEMS;
+
   return (
-    <Card className="max-w-xl">
-      <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-        <Settings className="h-8 w-8 text-muted-foreground" strokeWidth={1.5} />
-        <p className="text-sm text-muted-foreground">
-          Choose a category from the panel on the right to set up your account — start with{" "}
-          <span className="font-medium text-foreground">Profile</span>.
-        </p>
-      </CardContent>
-    </Card>
+    <div className="grid max-w-xl gap-3">
+      {visibleItems.map(({ to, label, icon: Icon, purpose }) => {
+        // Account (delete-your-account) is styled as a deliberate warning
+        // card — solid destructive red with white text — so it visually
+        // stands apart from every other, non-destructive settings category,
+        // on top of always sorting last per nav-items.ts's own ordering.
+        const isAccount = to === "/settings/account";
+        return (
+          <Link key={to} to={to}>
+            <Card
+              className={cn(
+                "transition-colors",
+                isAccount
+                  ? "border-destructive bg-destructive hover:bg-destructive/90"
+                  : "hover:border-accent/50 hover:bg-muted/40",
+              )}
+            >
+              <CardContent className="flex items-center gap-4 py-4">
+                <Icon
+                  className={cn(
+                    "h-6 w-6 shrink-0",
+                    isAccount ? "text-destructive-foreground" : "text-accent",
+                  )}
+                  strokeWidth={1.5}
+                />
+                <div className="min-w-0">
+                  <p
+                    className={cn(
+                      "text-sm font-semibold",
+                      isAccount && "text-destructive-foreground",
+                    )}
+                  >
+                    {label}
+                  </p>
+                  <p
+                    className={cn(
+                      "text-sm",
+                      isAccount ? "text-destructive-foreground/85" : "text-muted-foreground",
+                    )}
+                  >
+                    {purpose}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        );
+      })}
+    </div>
   );
 }

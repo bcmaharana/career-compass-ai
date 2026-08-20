@@ -48,7 +48,7 @@ export function VerifyEmailPage() {
       hasSubmitted.current = true;
       verifySignup.mutate(
         { token },
-        { onSuccess: () => navigate("/dashboard", { replace: true }) },
+        { onSuccess: () => navigate("/welcome", { replace: true }) },
       );
     }, 0);
     return () => clearTimeout(timer);

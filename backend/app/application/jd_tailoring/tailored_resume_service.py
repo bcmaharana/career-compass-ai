@@ -33,7 +33,7 @@ from app.adapters.documents.resume_docx_builder import build_resume_docx
 from app.adapters.documents.resume_pdf_builder import build_resume_pdf
 from app.ai_platform.llm_service.service import LLMServiceInterface
 from app.application.career_profile.resume_export_service import ResumeExportService
-from app.core.exceptions import CareerCompassError, NotFoundError
+from app.core.exceptions import CareerCompassError, NotFoundError, ValidationError
 from app.core.logging import get_logger
 from app.adapters.documents.rich_text_export import plain_text
 from app.core.rich_text import plain_text_to_rich_html
@@ -208,7 +208,7 @@ class TailoredResumeService:
         # Intelligence, and an unpopulated Target Role Profile would
         # otherwise silently produce a near-empty tailored resume. See
         # that method's docstring.
-        _profile, base_data = await self._resume_export.gather_resume_data_with_master_fallback(
+        profile, base_data = await self._resume_export.gather_resume_data_with_master_fallback(
             tenant_id=tenant_id, user_id=user_id, target_role_id=session.target_role_id
         )
         experiences_json = json.dumps(
@@ -234,6 +234,26 @@ class TailoredResumeService:
         # report with zero way to see the raw text that broke).
         raw: str | None = None
         try:
+            # Checked here (inside the try, not alongside the NotFoundError
+            # above) so a failure is stored as a normal generation failure
+            # (session.tailored_resume_status="failed" with a clear
+            # message) rather than a raised 4xx — same soft-fail contract
+            # every other failure mode in this method already follows.
+            # Checked against the pre-AI-tailoring base_data: the AI only
+            # ever rewrites headline/summary/experience *descriptions*, it
+            # never invents entries into an empty section, so this is
+            # exactly the same "would this section render empty despite
+            # being marked included" question ResumeExportService.generate()
+            # asks for the profile's own plain resume.
+            empty_sections = self._resume_export.find_empty_included_sections(profile, base_data)
+            if empty_sections:
+                raise ValidationError(
+                    "These sections are set to be included in your resume but have no data: "
+                    f"{', '.join(empty_sections)}. Add content, or turn off inclusion for "
+                    "them, before generating.",
+                    code="RESUME_SECTION_INCLUDED_BUT_EMPTY",
+                )
+
             raw = await self._llm.generate(
                 use_case=_USE_CASE,
                 input_variables={

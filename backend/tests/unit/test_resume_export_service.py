@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 
 from app.application.career_profile.resume_export_service import ResumeExportService
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, ValidationError
 from app.domain.career_profile.entities import CareerProfile, Experience, TargetRole
 from app.domain.identity.entities import User
 
@@ -158,8 +158,33 @@ class FakeStorage:
         self.uploaded.pop(key, None)
 
 
+#: Excludes every toggleable section — used by tests that only exercise
+#: generate()'s storage/persistence orchestration (not section content),
+#: since ResumeExportService.generate() now refuses to generate a
+#: document with a section marked "include in resume" that has no data
+#: (find_empty_included_sections) — an all-empty profile with every
+#: toggle left at its true default would otherwise trip that guard on
+#: every one of these tests. Headline/summary have no toggle at all (see
+#: CareerProfile.resume_section_toggles's docstring) and stay populated
+#: either way, so the resulting document is a real, non-empty file.
+_ALL_SECTIONS_EXCLUDED: dict[str, bool] = {
+    "core_competencies": False,
+    "career_highlights": False,
+    "experience": False,
+    "education": False,
+    "certifications": False,
+    "key_achievements": False,
+    "career_goals": False,
+    "recommendations": False,
+}
+
+
 def _make_profile(
-    *, tenant_id: uuid.UUID, user_id: uuid.UUID, target_role_id: uuid.UUID | None = None
+    *,
+    tenant_id: uuid.UUID,
+    user_id: uuid.UUID,
+    target_role_id: uuid.UUID | None = None,
+    resume_section_toggles: dict[str, bool] | None = None,
 ) -> CareerProfile:
     now = datetime.now(UTC)
     return CareerProfile(
@@ -175,6 +200,7 @@ def _make_profile(
         created_at=now,
         updated_at=now,
         target_role_id=target_role_id,
+        resume_section_toggles=resume_section_toggles,
     )
 
 
@@ -225,7 +251,9 @@ class TestGenerate:
         tenant_id = uuid.uuid4()
         user = _make_user(tenant_id=tenant_id)
         users.users[user.id] = user
-        profile = _make_profile(tenant_id=tenant_id, user_id=user.id)
+        profile = _make_profile(
+            tenant_id=tenant_id, user_id=user.id, resume_section_toggles=_ALL_SECTIONS_EXCLUDED
+        )
         await profiles.create(profile)
 
         updated, url = await service.generate(
@@ -244,7 +272,9 @@ class TestGenerate:
         tenant_id = uuid.uuid4()
         user = _make_user(tenant_id=tenant_id)
         users.users[user.id] = user
-        profile = _make_profile(tenant_id=tenant_id, user_id=user.id)
+        profile = _make_profile(
+            tenant_id=tenant_id, user_id=user.id, resume_section_toggles=_ALL_SECTIONS_EXCLUDED
+        )
         await profiles.create(profile)
 
         await service.generate(
@@ -262,7 +292,9 @@ class TestGenerate:
         tenant_id = uuid.uuid4()
         user = _make_user(tenant_id=tenant_id)
         users.users[user.id] = user
-        profile = _make_profile(tenant_id=tenant_id, user_id=user.id)
+        profile = _make_profile(
+            tenant_id=tenant_id, user_id=user.id, resume_section_toggles=_ALL_SECTIONS_EXCLUDED
+        )
         await profiles.create(profile)
 
         first, _ = await service.generate(
@@ -281,11 +313,18 @@ class TestGenerate:
         tenant_id = uuid.uuid4()
         user = _make_user(tenant_id=tenant_id)
         users.users[user.id] = user
-        master = _make_profile(tenant_id=tenant_id, user_id=user.id)
+        master = _make_profile(
+            tenant_id=tenant_id, user_id=user.id, resume_section_toggles=_ALL_SECTIONS_EXCLUDED
+        )
         await profiles.create(master)
 
         role_id = uuid.uuid4()
-        role_profile = _make_profile(tenant_id=tenant_id, user_id=user.id, target_role_id=role_id)
+        role_profile = _make_profile(
+            tenant_id=tenant_id,
+            user_id=user.id,
+            target_role_id=role_id,
+            resume_section_toggles=_ALL_SECTIONS_EXCLUDED,
+        )
         await profiles.create(role_profile)
 
         await service.generate(
@@ -306,6 +345,53 @@ class TestGenerate:
             await service.generate(
                 tenant_id=uuid.uuid4(), user_id=uuid.uuid4(), target_role_id=None, format="docx"
             )
+
+    async def test_refuses_to_generate_when_an_included_section_has_no_data(self) -> None:
+        # Default toggles (None = every section "included") against a
+        # profile with genuinely zero data anywhere — every section
+        # should be named in the error.
+        service, profiles, users, storage = _build()
+        tenant_id = uuid.uuid4()
+        user = _make_user(tenant_id=tenant_id)
+        users.users[user.id] = user
+        profile = _make_profile(tenant_id=tenant_id, user_id=user.id)
+        await profiles.create(profile)
+
+        with pytest.raises(ValidationError) as exc_info:
+            await service.generate(
+                tenant_id=tenant_id, user_id=user.id, target_role_id=None, format="docx"
+            )
+
+        assert exc_info.value.code == "RESUME_SECTION_INCLUDED_BUT_EMPTY"
+        assert "Professional Experience" in str(exc_info.value)
+        assert "Core Competencies" in str(exc_info.value)
+        assert storage.uploaded == {}
+
+    async def test_generates_fine_when_the_only_empty_section_is_excluded(self) -> None:
+        # Same all-empty profile, but every section explicitly excluded
+        # except one populated Experience — no empty *included* section
+        # left, so generation should succeed.
+        experiences = FakeExperienceRepository()
+        service, profiles, users, storage = _build(experiences=experiences)
+        tenant_id = uuid.uuid4()
+        user = _make_user(tenant_id=tenant_id)
+        users.users[user.id] = user
+        profile = _make_profile(
+            tenant_id=tenant_id,
+            user_id=user.id,
+            resume_section_toggles={**_ALL_SECTIONS_EXCLUDED, "experience": True},
+        )
+        await profiles.create(profile)
+        experiences.by_profile[profile.id] = [
+            _make_experience(tenant_id=tenant_id, career_profile_id=profile.id)
+        ]
+
+        updated, _url = await service.generate(
+            tenant_id=tenant_id, user_id=user.id, target_role_id=None, format="docx"
+        )
+
+        assert updated.resume_docx_key is not None
+        assert storage.uploaded
 
 
 @pytest.mark.unit
@@ -406,7 +492,11 @@ class TestGetDownloadUrls:
         tenant_id = uuid.uuid4()
         user = _make_user(tenant_id=tenant_id)
         users.users[user.id] = user
-        await profiles.create(_make_profile(tenant_id=tenant_id, user_id=user.id))
+        await profiles.create(
+            _make_profile(
+                tenant_id=tenant_id, user_id=user.id, resume_section_toggles=_ALL_SECTIONS_EXCLUDED
+            )
+        )
 
         updated, _url = await service.generate(
             tenant_id=tenant_id, user_id=user.id, target_role_id=None, format="pdf"

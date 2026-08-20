@@ -19,8 +19,9 @@ import { PeerEndorsementsSection } from "@/features/career-profile/PeerEndorseme
 import { ProfileHeader } from "@/features/career-profile/ProfileHeader";
 import { ProfileScopeProvider } from "@/features/career-profile/ProfileScopeContext";
 import { ResumeDownloadBar } from "@/features/career-profile/ResumeDownloadBar";
+import { useTargetRoleScopeStore } from "@/stores/target-role-scope-store";
 import { Eraser } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { SectionOrderProps } from "@/features/career-profile/section-order";
@@ -74,13 +75,40 @@ function resolveOrder(saved: string[] | null | undefined): string[] {
  * text list on this page.
  */
 export function CareerProfilePage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const targetRoleId = searchParams.get("role");
   // Fed into every scope-dependent section's `key` below — see that
   // Component's key comment for why.
   const scopeKey = targetRoleId ?? "master";
   const { data: targetRoles } = useTargetRoles();
   const activeRole = targetRoleId ? targetRoles?.find((r) => r.id === targetRoleId) : null;
+  const setActiveTargetRoleId = useTargetRoleScopeStore((s) => s.setActiveTargetRoleId);
+
+  // Restore-on-bare-landing: the Left Nav link always points at the bare
+  // `/profile` (no `role`), so without this the scope would silently
+  // reset to Master every time — instead, landing here with no `role`
+  // param restores whichever role was last active anywhere in the app
+  // (see target-role-scope-store.ts). An explicit `?role=` already in
+  // the URL (a bookmark, a shared link) always wins over the stored
+  // default. Runs once per mount, mirroring
+  // InterviewPrepPage.tsx/ResumeIntelligencePage.tsx's identical pattern.
+  useEffect(() => {
+    if (searchParams.has("role")) return;
+    const saved = useTargetRoleScopeStore.getState().activeTargetRoleId;
+    if (saved) {
+      setSearchParams({ role: saved }, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Career Profile is the anchor page for picking a scope (the Target
+  // Roles widget navigates here) — every resolved scope change (an
+  // explicit pick, or the restore above) becomes the new app-wide
+  // default that AI Career Coach, Resume Intelligence, Opportunity
+  // Intelligence, Learning Intelligence, and Interview Prep all read.
+  useEffect(() => {
+    setActiveTargetRoleId(targetRoleId);
+  }, [targetRoleId, setActiveTargetRoleId]);
 
   const { data: profile } = useCareerProfile(targetRoleId);
   const updateProfile = useUpdateCareerProfile(targetRoleId);
@@ -88,6 +116,33 @@ export function CareerProfilePage() {
   const [clearProfileOpen, setClearProfileOpen] = useState(false);
 
   const orderedKeys = useMemo(() => resolveOrder(profile?.section_order), [profile?.section_order]);
+
+  // Single shared value (not one boolean per section) so opening a
+  // section's card always closes whichever other one was open — the
+  // same single-open-accordion shape DashboardPage.tsx's `expandedCard`
+  // uses. Covers Executive Summary (key "executive_summary") plus every
+  // reorderable SECTION_DEFS section. Executive Summary starts open on
+  // every fresh landing/scope switch (every other section starts
+  // closed) — a direct, explicit exception to the otherwise-uniform
+  // closed-by-default rule, since it's the first real content section
+  // after the sticky ProfileHeader strip. Still fully part of the same
+  // accordion afterward: opening any other section closes it, same as
+  // every other section, and the user can close it themselves by
+  // clicking its own header. Reset on every scope change — the sections
+  // themselves already fully remount on a scope switch (see each
+  // Component's `key` below), but this state lives up here in the page
+  // component, which doesn't remount, so it needs its own reset.
+  const [expandedSection, setExpandedSection] = useState<string | null>("executive_summary");
+  useEffect(() => {
+    setExpandedSection("executive_summary");
+  }, [scopeKey]);
+
+  function toggleSection(key: string) {
+    setExpandedSection((prev) => (prev === key ? null : key));
+  }
+  function openSection(key: string) {
+    setExpandedSection(key);
+  }
 
   function moveSection(key: string, direction: "up" | "down") {
     if (!profile) return;
@@ -151,7 +206,12 @@ export function CareerProfilePage() {
           <ResumeDownloadBar key={`${scopeKey}-resume-download`} profile={profile} scope={targetRoleId} />
         )}
         <ProfileHeader key={`${scopeKey}-header`} />
-        <ExecutiveSummarySection key={`${scopeKey}-summary`} />
+        <ExecutiveSummarySection
+          key={`${scopeKey}-summary`}
+          isOpen={expandedSection === "executive_summary"}
+          onToggleOpen={() => toggleSection("executive_summary")}
+          onRequestOpen={() => openSection("executive_summary")}
+        />
         {orderedKeys.map((key, index) => {
           const def = SECTION_DEFS.find((s) => s.key === key);
           if (!def) return null;
@@ -185,6 +245,9 @@ export function CareerProfilePage() {
               resumeIncluded={profile?.resume_section_toggles?.[key] ?? true}
               onToggleResumeIncluded={(checked) => toggleSectionResume(key, checked)}
               resumeToggleDisabled={updateProfile.isPending}
+              isOpen={expandedSection === key}
+              onToggleOpen={() => toggleSection(key)}
+              onRequestOpen={() => openSection(key)}
             />
           );
         })}

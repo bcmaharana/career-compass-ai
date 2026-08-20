@@ -14,6 +14,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SystemStatusCard } from "@/features/dashboard/SystemStatusCard";
+import { SettingsBackLink } from "@/features/settings/SettingsBackLink";
 import { getErrorMessage } from "@/lib/errors";
 import { type FormEvent, useState } from "react";
 
@@ -91,7 +92,12 @@ export function SettingsPlatformAdminPage() {
   const { data: me, isLoading } = usePlatformAdminMe();
 
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading...</p>;
+    return (
+      <div>
+        <SettingsBackLink />
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    );
   }
 
   const canEditSettings = me?.permission_codes.includes("platform.settings.edit") ?? false;
@@ -106,22 +112,28 @@ export function SettingsPlatformAdminPage() {
 
   if (!canViewSettings && !canManageAdmins) {
     return (
-      <Card className="max-w-xl">
-        <CardHeader>
-          <CardTitle>Platform Admin</CardTitle>
-          <CardDescription>You don&apos;t have access to this page.</CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="max-w-xl">
+        <SettingsBackLink />
+        <Card>
+          <CardHeader>
+            <CardTitle>Platform Admin</CardTitle>
+            <CardDescription>You don&apos;t have access to this page.</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-      <div className="flex flex-col gap-6">
-        {canViewSettings && <PlatformSettingsCard canEdit={canEditSettings} />}
-        {canManageAdmins && <PlatformAdminsCard />}
+    <div>
+      <SettingsBackLink />
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+        <div className="flex flex-col gap-6">
+          {canViewSettings && <PlatformSettingsCard canEdit={canEditSettings} />}
+          {canManageAdmins && <PlatformAdminsCard />}
+        </div>
+        <SystemStatusCard />
       </div>
-      <SystemStatusCard />
     </div>
   );
 }

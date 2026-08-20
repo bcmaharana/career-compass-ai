@@ -131,7 +131,45 @@ export function useDeleteJdTailoringSession() {
     mutationFn: (sessionId: string) =>
       apiClient.delete<void>(`/api/v1/jd-tailoring/sessions/${sessionId}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: KEYS.sessions });
+      // exact: true — a plain (default, prefix-matching) invalidation of
+      // KEYS.sessions also matches KEYS.messages(deletedSessionId) (which
+      // nests under the same ["jd-tailoring", "sessions", ...] prefix),
+      // triggering a refetch of the just-deleted session's messages
+      // before the page's own onSuccess has cleared `?session=` — a real
+      // (harmless but noisy) 404 caught live. Only the sessions list
+      // itself needs invalidating here.
+      queryClient.invalidateQueries({ queryKey: KEYS.sessions, exact: true });
+    },
+  });
+}
+
+/** Wipes just the conversation — the session itself (JD text, target
+ * role link, any generated tailored resume) stays and keeps showing in
+ * the Sessions list, unlike useDeleteJdTailoringSession above which
+ * removes the whole thing. */
+export function useClearJdTailoringMessages() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      apiClient.delete<void>(`/api/v1/jd-tailoring/sessions/${sessionId}/messages`),
+    onSuccess: (_data, sessionId) => {
+      queryClient.setQueryData<JdTailoringMessageResponse[]>(KEYS.messages(sessionId), []);
+    },
+  });
+}
+
+/** Removes exactly one message — e.g. one specific piece of AI-
+ * suggested advice the user doesn't want to keep — leaving every other
+ * message and the session itself untouched. */
+export function useDeleteJdTailoringMessage(sessionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (messageId: string) =>
+      apiClient.delete<void>(`/api/v1/jd-tailoring/sessions/${sessionId}/messages/${messageId}`),
+    onSuccess: (_data, messageId) => {
+      queryClient.setQueryData<JdTailoringMessageResponse[]>(KEYS.messages(sessionId), (old) =>
+        old?.filter((message) => message.id !== messageId),
+      );
     },
   });
 }

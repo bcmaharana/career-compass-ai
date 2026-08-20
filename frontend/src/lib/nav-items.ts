@@ -58,7 +58,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     to: "/coach",
     label: "AI Career Coach",
-    icon: Sparkles,
+    icon: Bot,
     purpose: "Get personalized, AI-guided career coaching.",
   },
   {
@@ -74,6 +74,13 @@ export const NAV_ITEMS: NavItem[] = [
     purpose: "Discover matching job listings and see your career path forward.",
     children: [
       {
+        to: "/jd-tailoring",
+        label: "JD Tailoring",
+        icon: FileSearch,
+        purpose:
+          "Chat with the AI about a specific job description and generate a tailored resume.",
+      },
+      {
         to: "/job-applications",
         label: "Job Applications",
         icon: ClipboardList,
@@ -84,13 +91,6 @@ export const NAV_ITEMS: NavItem[] = [
         label: "Recruiter Contacts",
         icon: Contact,
         purpose: "Your address book of recruiters and hiring contacts.",
-      },
-      {
-        to: "/jd-tailoring",
-        label: "JD Tailoring",
-        icon: FileSearch,
-        purpose:
-          "Chat with the AI about a specific job description and generate a tailored resume.",
       },
     ],
   },
@@ -144,18 +144,18 @@ export const SETTINGS_NAV_ITEMS: NavItem[] = [
     purpose: "Set the location and filters used when searching for job listings.",
   },
   {
-    to: "/settings/account",
-    label: "Account",
-    icon: UserX,
-    end: true,
-    purpose: "Permanently delete your account and all your data.",
-  },
-  {
     to: "/settings/platform-admin",
     label: "Platform Admin",
     icon: ShieldCheck,
     end: true,
     purpose: "Manage platform-wide settings and admin access.",
+  },
+  {
+    to: "/settings/account",
+    label: "Account",
+    icon: UserX,
+    end: true,
+    purpose: "Permanently delete your account and all your data.",
   },
 ];
 
@@ -182,6 +182,17 @@ const SETTINGS_LANDING_ITEM: NavItem = {
   icon: Settings,
   end: true,
   purpose: "Choose a category from the panel on the right.",
+};
+
+/** Header title/purpose only for the post-login `/welcome` page — kept
+ * out of NAV_ITEMS the same way SETTINGS_LANDING_ITEM is kept out of
+ * SETTINGS_NAV_ITEMS above, so it never renders as a Left Nav link. */
+const WELCOME_ITEM: NavItem = {
+  to: "/welcome",
+  label: "Welcome",
+  icon: Sparkles,
+  end: true,
+  purpose: "Pick up where you left off.",
 };
 
 export function isSettingsRoute(pathname: string): boolean {
@@ -212,6 +223,7 @@ function matchAgainst(items: NavItem[], pathname: string): NavItem | undefined {
  * (to show the right page name/purpose).
  */
 export function matchNavItem(pathname: string): NavItem {
+  if (pathname === "/welcome") return WELCOME_ITEM;
   if (isSettingsRoute(pathname)) {
     return matchAgainst(SETTINGS_NAV_ITEMS, pathname) ?? SETTINGS_LANDING_ITEM;
   }

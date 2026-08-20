@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CollapseToggle } from "@/components/ui/collapse-toggle";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CopyButton } from "@/components/ui/copy-button";
 import { InlineLink } from "@/components/ui/inline-link";
@@ -18,13 +17,18 @@ import { itemAlternateClass } from "@/features/career-profile/section-order";
 import { RenameSkillDialog } from "@/features/skill-intelligence/RenameSkillDialog";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { PencilLine, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronRight, PencilLine, Plus, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 type TargetRole = components["schemas"]["TargetRoleResponse"];
 
 interface TargetRoleSkillsSectionProps {
   cardBackground: "card" | "background";
+  /** Expand/collapse now lives in SkillIntelligencePage's shared
+   * `expandedSection` state (single-open-accordion across all three
+   * sections on that page), not a local `useState` here. */
+  isOpen: boolean;
+  onToggleOpen: () => void;
 }
 
 /** Splits a comma-separated add-input into trimmed, non-empty names —
@@ -64,6 +68,11 @@ function TargetRoleRequirementsRow({
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
   const [renameName, setRenameName] = useState("");
+  // Closed by default, independent per role — clicking the row header
+  // reveals the add-skill form and the linked skill badges (direct
+  // 2026-08-20 request: "sub cards ... should be implementing hide and
+  // show using clicks").
+  const [isExpanded, setIsExpanded] = useState(false);
 
   async function handleAdd(event: FormEvent) {
     event.preventDefault();
@@ -103,7 +112,19 @@ function TargetRoleRequirementsRow({
 
   return (
     <div className={cn("flex flex-col gap-3 rounded-md border border-border p-4", rowClassName)}>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        onClick={() => setIsExpanded((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setIsExpanded((v) => !v);
+          }
+        }}
+        className="flex cursor-pointer select-none items-center justify-between gap-2"
+      >
         <div className="flex items-center gap-2">
           <Badge variant="accent">{targetRole.tag}</Badge>
           <p className="text-sm font-medium md:text-base">
@@ -113,62 +134,75 @@ function TargetRoleRequirementsRow({
             </span>
           </p>
         </div>
-        <div className={cn("flex flex-wrap items-center", ACTION_BUTTON_ROW_GAP)}>
-          <form onSubmit={handleAdd} className="flex items-center gap-1.5">
-            <Input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Add target role skill(s)"
-              aria-label={`New required skill(s) for ${targetRole.role_name}, comma-separated`}
-              className="h-8 w-48"
-            />
-            <Button
-              type="submit"
-              variant="ghost"
-              size="sm"
-              disabled={!draft.trim() || isSubmitting}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add
-            </Button>
-          </form>
-          <CopyButton
-            text={targetRole.required_skills.join(", ")}
-            disabled={targetRole.required_skills.length === 0}
-            variant="ghost"
-          />
-        </div>
+        {isExpanded ? (
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        )}
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {targetRole.required_skills.length === 0 && (
-          <p className="text-sm text-muted-foreground">No required skills linked yet.</p>
-        )}
-        {targetRole.required_skills.map((skill) => (
-          <span
-            key={skill}
-            className="flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+      {isExpanded && (
+        <>
+          <div
+            className={cn("flex flex-wrap items-center", ACTION_BUTTON_ROW_GAP)}
+            onClick={(e) => e.stopPropagation()}
           >
-            {skill}
-            <button
-              type="button"
-              onClick={() => openRename(skill)}
-              aria-label={`Rename ${skill}`}
-              className="hover:text-foreground"
-            >
-              <PencilLine className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setDeleteTarget(skill)}
-              aria-label={`Remove ${skill} requirement`}
-              className="hover:text-destructive"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
-      </div>
+            <form onSubmit={handleAdd} className="flex items-center gap-1.5">
+              <Input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Add target role skill(s)"
+                aria-label={`New required skill(s) for ${targetRole.role_name}, comma-separated`}
+                className="h-8 w-48"
+              />
+              <Button
+                type="submit"
+                variant="ghost"
+                size="sm"
+                disabled={!draft.trim() || isSubmitting}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add
+              </Button>
+            </form>
+            <CopyButton
+              text={targetRole.required_skills.join(", ")}
+              disabled={targetRole.required_skills.length === 0}
+              variant="ghost"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {targetRole.required_skills.length === 0 && (
+              <p className="text-sm text-muted-foreground">No required skills linked yet.</p>
+            )}
+            {targetRole.required_skills.map((skill) => (
+              <span
+                key={skill}
+                className="flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+              >
+                {skill}
+                <button
+                  type="button"
+                  onClick={() => openRename(skill)}
+                  aria-label={`Rename ${skill}`}
+                  className="hover:text-foreground"
+                >
+                  <PencilLine className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(skill)}
+                  aria-label={`Remove ${skill} requirement`}
+                  className="hover:text-destructive"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        </>
+      )}
 
       {addRequiredSkill.isError && (
         <p role="alert" className="text-xs text-destructive">
@@ -207,19 +241,34 @@ function TargetRoleRequirementsRow({
   );
 }
 
-export function TargetRoleSkillsSection({ cardBackground }: TargetRoleSkillsSectionProps) {
+export function TargetRoleSkillsSection({
+  cardBackground,
+  isOpen,
+  onToggleOpen,
+}: TargetRoleSkillsSectionProps) {
   const { data: targetRoles } = useTargetRoles();
-  const [isOpen, setIsOpen] = useState(true);
 
   return (
     <Card className={cardBackground === "background" ? "bg-background" : undefined}>
-      <CardHeader className="flex-row items-start justify-between space-y-0">
+      <CardHeader
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        onClick={onToggleOpen}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggleOpen();
+          }
+        }}
+        className="flex-row cursor-pointer select-none items-start justify-between space-y-0"
+      >
         <CardTitle>Target Role Skill Requirements</CardTitle>
-        <CollapseToggle
-          isOpen={isOpen}
-          onToggle={() => setIsOpen(!isOpen)}
-          label="Target Role Skill Requirements"
-        />
+        {isOpen ? (
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        )}
       </CardHeader>
       {isOpen && (
         <CardContent className="flex flex-col gap-3">

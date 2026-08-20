@@ -21,7 +21,7 @@ from uuid import UUID
 from app.adapters.documents.resume_data import ResumeData
 from app.adapters.documents.resume_docx_builder import build_resume_docx
 from app.adapters.documents.resume_pdf_builder import build_resume_pdf
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, ValidationError
 from app.domain.career_profile.entities import (
     CareerGoal,
     CareerHighlight,
@@ -87,6 +87,21 @@ _DOWNLOAD_URL_TTL_SECONDS = 3600
 # doesn't become "JordanRivera".
 _UNSAFE_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]+')
 
+# Human-readable label per resume_section_toggles key, used only for the
+# "included but empty" validation error message below — order matches
+# SECTION_DEFS' own default rendering order in CareerProfilePage.tsx so
+# the message reads in the same sequence the page itself does.
+_SECTION_LABELS: dict[str, str] = {
+    "core_competencies": "Core Competencies",
+    "career_highlights": "Career Highlights",
+    "experience": "Professional Experience",
+    "education": "Education",
+    "certifications": "Certifications",
+    "key_achievements": "Key Achievements",
+    "career_goals": "Career Goals",
+    "recommendations": "Recommendations",
+}
+
 
 def _safe_filename_part(text: str) -> str:
     return _UNSAFE_FILENAME_CHARS.sub(" ", text).strip()
@@ -140,6 +155,37 @@ class ResumeExportService:
         """
         toggles = profile.resume_section_toggles
         return True if toggles is None else toggles.get(section_key, True)
+
+    def find_empty_included_sections(self, profile: CareerProfile, data: ResumeData) -> list[str]:
+        """Sections marked "include in resume" that ended up with zero
+        items after the include_in_resume filtering `_gather` already
+        applied — direct 2026-08-20 request: generating a document
+        should refuse (with a clear message) rather than silently
+        produce a resume missing a section the person believes is being
+        included. Shared by both this service's own `generate()` and
+        TailoredResumeService's AI-tailored generation, checked against
+        the same pre-AI-tailoring `data` either way — the AI only ever
+        rewrites headline/summary/experience *descriptions*, never
+        invents entries into an empty section or fabricates a summary
+        field with no such toggle, so checking here (before any
+        AI-specific work) is correct for both callers, not just this
+        one.
+        """
+        checks: list[tuple[str, list[object]]] = [
+            ("core_competencies", list(data.profile.core_competencies)),
+            ("career_highlights", list(data.career_highlights)),
+            ("experience", list(data.experiences)),
+            ("education", list(data.educations)),
+            ("certifications", list(data.certifications)),
+            ("key_achievements", list(data.key_achievements)),
+            ("career_goals", list(data.career_goals)),
+            ("recommendations", list(data.recommendations)),
+        ]
+        return [
+            _SECTION_LABELS[key]
+            for key, items in checks
+            if self._section_enabled(profile, key) and not items
+        ]
 
     async def _gather(
         self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID | None
@@ -291,6 +337,14 @@ class ResumeExportService:
         profile, data = await self._gather(
             tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
         )
+        empty_sections = self.find_empty_included_sections(profile, data)
+        if empty_sections:
+            raise ValidationError(
+                "These sections are set to be included in your resume but have no data: "
+                f"{', '.join(empty_sections)}. Add content, or turn off inclusion for "
+                "them, before generating.",
+                code="RESUME_SECTION_INCLUDED_BUT_EMPTY",
+            )
 
         content = build_resume_docx(data) if format == "docx" else build_resume_pdf(data)
 

@@ -43,3 +43,19 @@ class JdTailoringMessageRepository(Protocol):
         prompt, same role ChatMessageRepository.list_by_conversation
         plays for the single-conversation Chat domain."""
         ...
+    async def delete_all_for_session(self, tenant_id: UUID, session_id: UUID) -> None:
+        """Wipes every message for one session — the session row itself
+        is untouched, only its conversation history. A genuine hard
+        delete (this table has no deleted_at column), used by
+        JdTailoringSessionService.clear_messages."""
+        ...
+
+    async def delete(self, tenant_id: UUID, session_id: UUID, message_id: UUID) -> None:
+        """Removes exactly one message — everything else in the
+        conversation (and the session itself) is untouched. Scoped by
+        both tenant_id and session_id (not just message_id) so a
+        mismatched session_id in the request can never delete a message
+        that actually belongs to a different session. Used by
+        JdTailoringSessionService.delete_message. A genuine hard delete,
+        same reasoning as delete_all_for_session above."""
+        ...

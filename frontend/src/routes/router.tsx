@@ -26,6 +26,7 @@ import { RecruiterContactsPage } from "@/features/recruiter-contacts/RecruiterCo
 import { NotFoundPage } from "@/routes/NotFound";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 import { SkillIntelligencePage } from "@/features/skill-intelligence/SkillIntelligencePage";
+import { WelcomePage } from "@/features/welcome/WelcomePage";
 import { createBrowserRouter } from "react-router-dom";
 
 /**
@@ -80,6 +81,7 @@ export const router = createBrowserRouter([
       {
         element: <AppShell />,
         children: [
+          { path: "welcome", element: <WelcomePage /> },
           { path: "dashboard", element: <DashboardPage /> },
           { path: "profile", element: <CareerProfilePage /> },
           { path: "resumes", element: <ResumeIntelligencePage /> },

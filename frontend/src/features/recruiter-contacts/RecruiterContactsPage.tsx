@@ -15,7 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
-import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from "lucide-react";
+import { withHttps } from "@/lib/url";
+import { ChevronDown, ChevronUp, ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 type RecruiterContact = components["schemas"]["RecruiterContactResponse"];
@@ -144,10 +145,17 @@ export function RecruiterContactsPage() {
             return (
               <div key={contact.id} className="rounded-md border border-border px-4 py-2">
                 <div className="flex items-start justify-between gap-4">
-                  <button
-                    type="button"
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={() => toggleExpanded(contact.id)}
-                    className="flex-1 text-left"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleExpanded(contact.id);
+                      }
+                    }}
+                    className="flex-1 cursor-pointer text-left"
                   >
                     <p className="text-sm font-medium">{contact.name}</p>
                     <p className="text-sm text-muted-foreground">
@@ -158,7 +166,19 @@ export function RecruiterContactsPage() {
                         {[contact.email, contact.phone].filter(Boolean).join(" · ")}
                       </p>
                     )}
-                  </button>
+                    {contact.linkedin_url && (
+                      <a
+                        href={withHttps(contact.linkedin_url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
+                      >
+                        LinkedIn
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
                   <div className={`flex shrink-0 items-center ${ACTION_BUTTON_ROW_GAP}`}>
                     <Button
                       variant="ghost"
@@ -292,7 +312,8 @@ export function RecruiterContactsPage() {
             <Label htmlFor="rc-linkedin">LinkedIn URL</Label>
             <Input
               id="rc-linkedin"
-              type="url"
+              type="text"
+              placeholder="linkedin.com/in/theirname"
               value={form.linkedin_url}
               onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })}
             />

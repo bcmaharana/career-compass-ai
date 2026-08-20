@@ -17,21 +17,22 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Label } from "@/components/ui/label";
 import { OverrideMergeDialog } from "@/components/ui/override-merge-dialog";
 import { Select } from "@/components/ui/select";
 import { formatDisplayDate, formatDisplayDateTime } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
+import { useTargetRoleScopeStore } from "@/stores/target-role-scope-store";
 import { useUploadProgressStore } from "@/stores/upload-progress-store";
 import { Trash2, X } from "lucide-react";
-import { type ChangeEvent, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 type ResumeResponse = components["schemas"]["ResumeResponse"];
 type ResumeSummary = components["schemas"]["ResumeSummary"];
 type ExtractedResumeData = components["schemas"]["ExtractedResumeData"];
 type ResumeMergeResponse = components["schemas"]["ResumeMergeResponse"];
-type CoreCompetency = components["schemas"]["CoreCompetencyPayload"];
 
 const ACCEPTED_TYPES =
   "application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -80,18 +81,77 @@ function validateResumeFile(file: File): string | null {
  * already merged from it into the Career Profile stays untouched,
  * matching how the rest of this app treats merged data as independent
  * once written.
+ *
+ * Resume History is scoped by `?role=` in the URL, the same Master/
+ * Target-Role split Career Profile and Interview Prep already use — a
+ * resume tagged to a specific role at upload time only shows up while
+ * that role is the active scope, and Master-tagged (untagged) resumes
+ * only show under the Master scope. The Left Nav link always points at
+ * the bare `/resumes` (no `role`), so landing here with no `role` param
+ * restores whichever role is currently active app-wide (see
+ * target-role-scope-store.ts — set from here, Career Profile, Interview
+ * Prep, Opportunity Intelligence, or Learning Intelligence, whichever
+ * was most recently changed) — an explicit `?role=` already in the URL
+ * (a bookmark, a shared link) always wins over the stored preference.
  */
 export function ResumeIntelligencePage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const targetRoleId = searchParams.get("role");
   const { data: resumes, isLoading } = useResumeList();
   const [activeResumeId, setActiveResumeId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ResumeSummary | null>(null);
   const discardResume = useDiscardResume();
   const { data: targetRoles } = useTargetRoles();
+  const setActiveTargetRoleId = useTargetRoleScopeStore((s) => s.setActiveTargetRoleId);
+
+  // Restore-on-bare-landing: runs once per mount, only acts when the URL
+  // didn't already specify a scope.
+  useEffect(() => {
+    if (searchParams.has("role")) return;
+    const saved = useTargetRoleScopeStore.getState().activeTargetRoleId;
+    if (saved) {
+      setSearchParams({ role: saved }, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the app-wide scope in sync whenever this page's own resolved
+  // scope changes — covers both an explicit pick from the dropdown and
+  // the restore above.
+  useEffect(() => {
+    setActiveTargetRoleId(targetRoleId);
+  }, [targetRoleId, setActiveTargetRoleId]);
+
+  function handleScopeChange(value: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set("role", value);
+      else next.delete("role");
+      return next;
+    });
+  }
 
   function targetRoleName(id: string | null): string | null {
     if (!id) return null;
     return targetRoles?.find((r) => r.id === id)?.role_name ?? null;
   }
+
+  const scopedResumes = resumes?.filter((resume) => (resume.target_role_id ?? null) === targetRoleId);
+
+  // Per-scope resume counts, computed client-side from the already-
+  // fetched full resume list (no new endpoint needed) — only scopes with
+  // at least one resume are shown, same "don't list empty scopes as
+  // noise" convention Interview Prep's own per-scope summary already
+  // uses (GET /interview-prep/summary).
+  const scopeCounts: { label: string; count: number }[] = resumes
+    ? [
+        { label: "Master", count: resumes.filter((r) => r.target_role_id === null).length },
+        ...(targetRoles ?? []).map((role) => ({
+          label: role.role_name,
+          count: resumes.filter((r) => r.target_role_id === role.id).length,
+        })),
+      ].filter((s) => s.count > 0)
+    : [];
 
   function handleDelete() {
     if (deleteTarget) {
@@ -112,17 +172,50 @@ export function ResumeIntelligencePage() {
       <UploadCard onUploaded={(id) => setActiveResumeId(id)} />
 
       <Card>
+        <CardContent className="flex flex-col gap-1.5 pt-6">
+          <Label
+            htmlFor="resume-history-scope"
+            className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+          >
+            Current Scope
+          </Label>
+          <Select
+            id="resume-history-scope"
+            className="w-72"
+            value={targetRoleId ?? ""}
+            onChange={(e) => handleScopeChange(e.target.value)}
+          >
+            <option value="">Master (generic)</option>
+            {targetRoles?.map((role) => (
+              <option key={role.id} value={role.id}>
+                {role.role_name}
+              </option>
+            ))}
+          </Select>
+          {scopeCounts.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {scopeCounts
+                .map((s) => `${s.label}: ${s.count} resume${s.count === 1 ? "" : "s"}`)
+                .join(" | ")}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader>
           <CardTitle>Resume History</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
-          {resumes?.length === 0 && (
+          {scopedResumes?.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              No resumes uploaded yet — use the form above to get started.
+              No resumes uploaded yet for{" "}
+              {targetRoleId ? (targetRoleName(targetRoleId) ?? "this role") : "your Master profile"}{" "}
+              — use the form above to get started.
             </p>
           )}
-          {resumes?.map((resume) => (
+          {scopedResumes?.map((resume) => (
             <div
               key={resume.id}
               className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2"
@@ -382,16 +475,6 @@ function ResumeDetailSection({
   onBack: () => void;
 }) {
   const { data: resume, isLoading } = useResume(resumeId);
-  // Scoped to the resume's own target_role_id (null = Master) — this
-  // drives the "(already added)" skill-dedup preview below, which must
-  // reflect the profile the resume will actually merge into, not always
-  // Master. Getting this wrong wouldn't just mis-render a badge: a skill
-  // already on the Target Role Profile would show as available to add
-  // (misleading, though the merge's own server-side dedup would still
-  // catch it), and a Master-only skill would show as "already added" on
-  // a Target Role Profile that doesn't actually have it yet, blocking
-  // the user from selecting something they should be able to add.
-  const { data: profile } = useCareerProfile(resume?.target_role_id ?? null);
 
   return (
     <div className="grid gap-4">
@@ -421,11 +504,7 @@ function ResumeDetailSection({
       )}
 
       {resume?.status === "parsed" && resume.extracted_data && (
-        <ResumeReviewCard
-          resume={resume}
-          existingSkills={profile?.core_competencies ?? []}
-          onBack={onBack}
-        />
+        <ResumeReviewCard resume={resume} onBack={onBack} />
       )}
     </div>
   );
@@ -443,26 +522,40 @@ function toggleInSet<T>(current: Set<T>, value: T): Set<T> {
 
 function ResumeReviewCard({
   resume,
-  existingSkills,
   onBack,
 }: {
   resume: ResumeResponse;
-  existingSkills: CoreCompetency[];
   onBack: () => void;
 }) {
   const navigate = useNavigate();
   const mergeResume = useMergeResume();
-  // The resume's own tag (set once, at upload time) determines which
-  // profile it merges into — Master (null) or that Target Role Profile.
-  // Not a choice made here; matches the backend's own resolution in
-  // ResumeMergeService.merge().
-  const scope = resume.target_role_id;
   const { data: targetRoles } = useTargetRoles();
+  // Which profile to merge into — defaults to the resume's own tag (set
+  // at upload time) but is a real choice now, not fixed: the same
+  // already-parsed resume can be reviewed and merged again into a
+  // *different* profile than it was originally tagged for, simply by
+  // picking a different scope here and clicking merge again (direct
+  // 2026-08-20 request — "using parsed resume for one profile to be
+  // copied into another profile to start with"). Resume History never
+  // discards a resume after merging, so it stays available to re-open
+  // and merge into another scope at any time.
+  const [scope, setScope] = useState<string | null>(resume.target_role_id);
   const scopeLabel = scope
     ? `the ${targetRoles?.find((r) => r.id === scope)?.role_name ?? "Target Role"} profile`
     : "your Master Profile";
   const { data: summary } = useCareerProfileSummary(scope);
   const clearProfile = useClearCareerProfile(scope);
+  // Reactively reflects whichever scope is currently selected — this
+  // drives the "(already added)" skill-dedup preview below, which must
+  // reflect the profile the resume will actually merge into. Getting
+  // this wrong wouldn't just mis-render a badge: a skill already on the
+  // Target Role Profile would show as available to add (misleading,
+  // though the merge's own server-side dedup would still catch it), and
+  // a Master-only skill would show as "already added" on a Target Role
+  // Profile that doesn't actually have it yet, blocking the user from
+  // selecting something they should be able to add.
+  const { data: profile } = useCareerProfile(scope);
+  const existingSkills = useMemo(() => profile?.core_competencies ?? [], [profile]);
   const [showOverrideMergeDialog, setShowOverrideMergeDialog] = useState(false);
   // Set only when the merge succeeded but had to skip something (e.g. an
   // experience entry with no usable start date) — held here instead of
@@ -481,7 +574,10 @@ function ResumeReviewCard({
     careerHighlights: raw.career_highlights ?? [],
     keyAchievements: raw.key_achievements ?? [],
   };
-  const existingLower = new Set(existingSkills.map((s) => s.name.toLowerCase()));
+  const existingLower = useMemo(
+    () => new Set(existingSkills.map((s) => s.name.toLowerCase())),
+    [existingSkills],
+  );
   // Selection state is index-based (matches every other section here —
   // selectedExperience/selectedEducation/etc. — and the backend's
   // accepted_skill_indices, which resolves name+category by index
@@ -525,6 +621,7 @@ function ResumeReviewCard({
     mergeResume.mutate(
       {
         resume_id: resume.id,
+        target_role_id: scope,
         accept_headline: acceptHeadline,
         accept_summary: acceptSummary,
         accepted_skill_indices: Array.from(selectedSkills),
@@ -609,6 +706,31 @@ function ResumeReviewCard({
         <p className="text-sm text-muted-foreground">
           Uncheck anything you don't want added, then add the rest to your profile.
         </p>
+        <div className="mt-2 flex flex-col gap-1.5">
+          <Label
+            htmlFor="resume-merge-scope"
+            className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+          >
+            Merge into
+          </Label>
+          <Select
+            id="resume-merge-scope"
+            className="w-72"
+            value={scope ?? ""}
+            onChange={(e) => setScope(e.target.value || null)}
+          >
+            <option value="">Master (generic)</option>
+            {targetRoles?.map((role) => (
+              <option key={role.id} value={role.id}>
+                {role.role_name}
+              </option>
+            ))}
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Defaults to the scope this resume was uploaded for — pick a different profile to
+            merge this same parsed data into it too.
+          </p>
+        </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         {data.headline && (

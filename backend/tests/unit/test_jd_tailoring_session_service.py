@@ -62,6 +62,20 @@ class FakeJdTailoringMessageRepository:
     async def list_by_session(self, tenant_id: uuid.UUID, session_id: uuid.UUID) -> list[JdTailoringMessage]:
         return [m for m in self.messages if m.tenant_id == tenant_id and m.session_id == session_id]
 
+    async def delete_all_for_session(self, tenant_id: uuid.UUID, session_id: uuid.UUID) -> None:
+        self.messages = [
+            m for m in self.messages if not (m.tenant_id == tenant_id and m.session_id == session_id)
+        ]
+
+    async def delete(self, tenant_id: uuid.UUID, session_id: uuid.UUID, message_id: uuid.UUID) -> None:
+        self.messages = [
+            m
+            for m in self.messages
+            if not (
+                m.tenant_id == tenant_id and m.session_id == session_id and m.id == message_id
+            )
+        ]
+
 
 def _make_profile(*, tenant_id: uuid.UUID, user_id: uuid.UUID, **overrides) -> CareerProfile:
     now = datetime.now(UTC)
@@ -258,6 +272,232 @@ class TestOwnership:
 
         with pytest.raises(NotFoundError):
             await service.get_owned_or_raise(tenant_id=tenant_id, user_id=other, session_id=session.id)
+
+
+class TestClearMessages:
+    async def test_removes_every_message_but_keeps_the_session(self) -> None:
+        service, sessions_repo, messages_repo = _service()
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        session = await service.start_custom(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            target_role_id=None,
+            jd_text="JD",
+            company="Globex",
+            role_title="Engineer",
+        )
+        now = datetime.now(UTC)
+        await messages_repo.create(
+            JdTailoringMessage(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                session_id=session.id,
+                role="user",  # type: ignore[arg-type]
+                content="Hello",
+                created_at=now,
+            )
+        )
+        await messages_repo.create(
+            JdTailoringMessage(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                session_id=session.id,
+                role="assistant",  # type: ignore[arg-type]
+                content="Hi there",
+                created_at=now,
+            )
+        )
+
+        await service.clear_messages(tenant_id=tenant_id, user_id=user_id, session_id=session.id)
+
+        assert (
+            await service.list_messages(tenant_id=tenant_id, user_id=user_id, session_id=session.id)
+            == []
+        )
+        # The session itself is untouched — a real, distinct assertion
+        # from soft_delete's own behavior, which does remove it.
+        assert sessions_repo.sessions.get(session.id) is not None
+
+    async def test_does_not_touch_a_different_sessions_messages(self) -> None:
+        service, _sessions_repo, messages_repo = _service()
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        cleared_session = await service.start_custom(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            target_role_id=None,
+            jd_text="JD 1",
+            company="Globex",
+            role_title="Engineer",
+        )
+        other_session = await service.start_custom(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            target_role_id=None,
+            jd_text="JD 2",
+            company="Initech",
+            role_title="Engineer",
+        )
+        now = datetime.now(UTC)
+        await messages_repo.create(
+            JdTailoringMessage(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                session_id=cleared_session.id,
+                role="user",  # type: ignore[arg-type]
+                content="Hello",
+                created_at=now,
+            )
+        )
+        await messages_repo.create(
+            JdTailoringMessage(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                session_id=other_session.id,
+                role="user",  # type: ignore[arg-type]
+                content="Still here",
+                created_at=now,
+            )
+        )
+
+        await service.clear_messages(
+            tenant_id=tenant_id, user_id=user_id, session_id=cleared_session.id
+        )
+
+        assert (
+            await service.list_messages(
+                tenant_id=tenant_id, user_id=user_id, session_id=other_session.id
+            )
+        ) != []
+
+    async def test_cannot_clear_another_users_session(self) -> None:
+        service, _sessions_repo, _messages_repo = _service()
+        tenant_id = uuid.uuid4()
+        owner, other = uuid.uuid4(), uuid.uuid4()
+        session = await service.start_custom(
+            tenant_id=tenant_id,
+            user_id=owner,
+            target_role_id=None,
+            jd_text="JD",
+            company="Globex",
+            role_title="Engineer",
+        )
+
+        with pytest.raises(NotFoundError):
+            await service.clear_messages(tenant_id=tenant_id, user_id=other, session_id=session.id)
+
+
+class TestDeleteMessage:
+    async def test_removes_only_the_targeted_message(self) -> None:
+        service, _sessions_repo, messages_repo = _service()
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        session = await service.start_custom(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            target_role_id=None,
+            jd_text="JD",
+            company="Globex",
+            role_title="Engineer",
+        )
+        now = datetime.now(UTC)
+        keep = await messages_repo.create(
+            JdTailoringMessage(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                session_id=session.id,
+                role="user",  # type: ignore[arg-type]
+                content="Keep me",
+                created_at=now,
+            )
+        )
+        to_delete = await messages_repo.create(
+            JdTailoringMessage(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                session_id=session.id,
+                role="assistant",  # type: ignore[arg-type]
+                content="Delete me",
+                created_at=now,
+            )
+        )
+
+        await service.delete_message(
+            tenant_id=tenant_id, user_id=user_id, session_id=session.id, message_id=to_delete.id
+        )
+
+        remaining = await service.list_messages(
+            tenant_id=tenant_id, user_id=user_id, session_id=session.id
+        )
+        assert [m.id for m in remaining] == [keep.id]
+
+    async def test_a_message_id_from_a_different_session_is_a_silent_no_op(self) -> None:
+        service, _sessions_repo, messages_repo = _service()
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        session_a = await service.start_custom(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            target_role_id=None,
+            jd_text="JD 1",
+            company="Globex",
+            role_title="Engineer",
+        )
+        session_b = await service.start_custom(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            target_role_id=None,
+            jd_text="JD 2",
+            company="Initech",
+            role_title="Engineer",
+        )
+        now = datetime.now(UTC)
+        message_in_b = await messages_repo.create(
+            JdTailoringMessage(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                session_id=session_b.id,
+                role="user",  # type: ignore[arg-type]
+                content="Belongs to session B",
+                created_at=now,
+            )
+        )
+
+        # Asking to delete session_b's message while scoped to session_a
+        # should not raise and should not delete it.
+        await service.delete_message(
+            tenant_id=tenant_id, user_id=user_id, session_id=session_a.id, message_id=message_in_b.id
+        )
+
+        remaining = await service.list_messages(
+            tenant_id=tenant_id, user_id=user_id, session_id=session_b.id
+        )
+        assert [m.id for m in remaining] == [message_in_b.id]
+
+    async def test_cannot_delete_a_message_in_another_users_session(self) -> None:
+        service, _sessions_repo, messages_repo = _service()
+        tenant_id = uuid.uuid4()
+        owner, other = uuid.uuid4(), uuid.uuid4()
+        session = await service.start_custom(
+            tenant_id=tenant_id,
+            user_id=owner,
+            target_role_id=None,
+            jd_text="JD",
+            company="Globex",
+            role_title="Engineer",
+        )
+        message = await messages_repo.create(
+            JdTailoringMessage(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                session_id=session.id,
+                role="user",  # type: ignore[arg-type]
+                content="Hello",
+                created_at=datetime.now(UTC),
+            )
+        )
+
+        with pytest.raises(NotFoundError):
+            await service.delete_message(
+                tenant_id=tenant_id, user_id=other, session_id=session.id, message_id=message.id
+            )
 
 
 class TestSendMessage:

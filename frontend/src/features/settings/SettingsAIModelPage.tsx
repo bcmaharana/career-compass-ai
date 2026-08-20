@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/errors";
+import { SettingsBackLink } from "@/features/settings/SettingsBackLink";
 import { type FormEvent, useState } from "react";
 
 type ModelSelectionResponse = components["schemas"]["ModelSelectionResponse"];
@@ -13,23 +14,26 @@ export function SettingsAIModelPage() {
   const { data: selection, isLoading, isError, error } = useModelSelection();
 
   return (
-    <Card className="max-w-xl">
-      <CardHeader>
-        <CardTitle>AI Model</CardTitle>
-        <CardDescription>
-          Choose which AI model powers your AI Career Coach conversations.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
-        {isError && (
-          <p role="alert" className="text-sm text-destructive">
-            {getErrorMessage(error)}
-          </p>
-        )}
-        {selection && <SettingsAIModelForm selection={selection} />}
-      </CardContent>
-    </Card>
+    <div className="max-w-xl">
+      <SettingsBackLink />
+      <Card>
+        <CardHeader>
+          <CardTitle>AI Model</CardTitle>
+          <CardDescription>
+            Choose which AI model powers your AI Career Coach conversations.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+          {isError && (
+            <p role="alert" className="text-sm text-destructive">
+              {getErrorMessage(error)}
+            </p>
+          )}
+          {selection && <SettingsAIModelForm selection={selection} />}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

@@ -1,5 +1,6 @@
 import { useCareerProfile, useTargetRoles } from "@/api/queries/career-profile";
 import { useGapAnalysis } from "@/api/queries/skill-intelligence";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RichTextDisplay } from "@/components/ui/rich-text-editor";
 import { buildSuggestedPrompts } from "@/features/coach/suggested-prompts";
@@ -8,7 +9,8 @@ import { cn } from "@/lib/utils";
 import { useChatComposer } from "@/hooks/useChatComposer";
 import { useChatStore } from "@/stores/chat-store";
 import type { ChatThreadMessage } from "@/stores/chat-store";
-import { Sparkles, UserCircle } from "lucide-react";
+import { resolveValidTargetRoleId, useTargetRoleScopeStore } from "@/stores/target-role-scope-store";
+import { Bot, UserCircle } from "lucide-react";
 import { useMemo } from "react";
 
 const RAINBOW_GRADIENT =
@@ -32,26 +34,54 @@ const RAINBOW_GRADIENT =
  *
  * AppShell.tsx suppresses the generic <ChatThread /> while on this
  * route specifically so the same messages array isn't rendered twice.
+ *
+ * Grounded in whichever role is currently active app-wide (see
+ * target-role-scope-store.ts), set by picking a role on Career Profile
+ * or any of the other role-aware pages — this page has no scope
+ * selector of its own, it just reads whatever's already active: the
+ * "profile at a glance" card shows that Target Role Profile (falling
+ * back to Master when no role is active, or a stale/deleted one is
+ * stored), and its own gap count and suggested prompt are prioritized
+ * first among the personalized starters below.
  */
 export function CoachPage() {
-  const { data: profile } = useCareerProfile();
+  const activeTargetRoleId = useTargetRoleScopeStore((s) => s.activeTargetRoleId);
   const { data: targetRoles } = useTargetRoles();
+  const scopeRoleId = resolveValidTargetRoleId(activeTargetRoleId, targetRoles);
+  const activeRole = scopeRoleId ? targetRoles?.find((r) => r.id === scopeRoleId) : null;
+
+  const { data: profile } = useCareerProfile(scopeRoleId);
   const { data: gapAnalysis } = useGapAnalysis();
 
   const messages = useChatStore((state) => state.messages);
   const isSending = useChatStore((state) => state.isSending);
   const { sendTurn, isError, error } = useChatComposer();
 
+  // The active role's own prompt (if any) is guaranteed to appear first
+  // among the role-based suggestions below — buildSuggestedPrompts walks
+  // this list in order and stops after the first two role hits.
+  const prioritizedTargetRoles = useMemo(() => {
+    if (!targetRoles || !scopeRoleId) return targetRoles;
+    const active = targetRoles.find((r) => r.id === scopeRoleId);
+    if (!active) return targetRoles;
+    return [active, ...targetRoles.filter((r) => r.id !== scopeRoleId)];
+  }, [targetRoles, scopeRoleId]);
+
   const prompts = useMemo(
-    () => buildSuggestedPrompts(profile, targetRoles, gapAnalysis),
-    [profile, targetRoles, gapAnalysis],
+    () => buildSuggestedPrompts(profile, prioritizedTargetRoles, gapAnalysis),
+    [profile, prioritizedTargetRoles, gapAnalysis],
   );
 
   const hasConversation = messages.length > 0 || isSending;
-  const totalGaps = (gapAnalysis?.target_role_gaps ?? []).reduce(
-    (sum, gap) => sum + gap.missing_skills.length,
-    0,
+  const gapForActiveRole = (gapAnalysis?.target_role_gaps ?? []).find(
+    (gap) => gap.target_role_id === scopeRoleId,
   );
+  // Scoped to the active role's own gap count once a role is active —
+  // otherwise (Master) the overall count across every target role, same
+  // as before this page had any scope awareness.
+  const totalGaps = scopeRoleId
+    ? (gapForActiveRole?.missing_skills.length ?? 0)
+    : (gapAnalysis?.target_role_gaps ?? []).reduce((sum, gap) => sum + gap.missing_skills.length, 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -63,7 +93,7 @@ export function CoachPage() {
               RAINBOW_GRADIENT,
             )}
           >
-            <Sparkles className="h-6 w-6 text-primary" />
+            <Bot className="h-6 w-6 text-primary" />
           </div>
           <div>
             <h1 className="font-display text-lg font-semibold">Your AI Career Coach</h1>
@@ -80,6 +110,10 @@ export function CoachPage() {
           <Card>
             <CardHeader>
               <CardTitle>Your profile at a glance</CardTitle>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                Showing:
+                <Badge variant="accent">{activeRole ? activeRole.role_name : "Master Profile"}</Badge>
+              </div>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-x-8 gap-y-4 text-sm">
               <div>
@@ -99,7 +133,9 @@ export function CoachPage() {
                 <p className="font-medium">{profile?.core_competencies.length ?? 0}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Open skill gaps</p>
+                <p className="text-muted-foreground">
+                  {activeRole ? `${activeRole.role_name} skill gaps` : "Open skill gaps"}
+                </p>
                 <p className="font-medium">{totalGaps}</p>
               </div>
             </CardContent>
@@ -160,7 +196,7 @@ function MessageBubble({ message }: { message: ChatThreadMessage }) {
           isUser ? "bg-muted text-muted-foreground" : cn(RAINBOW_GRADIENT, "text-primary"),
         )}
       >
-        {isUser ? <UserCircle className="h-5 w-5" /> : <Sparkles className="h-4 w-4" />}
+        {isUser ? <UserCircle className="h-5 w-5" /> : <Bot className="h-4 w-4" />}
       </div>
       <div className={cn("flex max-w-2xl flex-col gap-1", isUser && "items-end")}>
         <span className="text-xs font-medium text-muted-foreground">
@@ -190,7 +226,7 @@ function TypingBubble() {
           RAINBOW_GRADIENT,
         )}
       >
-        <Sparkles className="h-4 w-4" />
+        <Bot className="h-4 w-4" />
       </div>
       <div className="flex items-center gap-1 rounded-lg bg-muted px-4 py-3">
         {[0, 150, 300].map((delayMs) => (

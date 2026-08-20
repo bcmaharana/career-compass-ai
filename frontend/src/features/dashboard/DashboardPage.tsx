@@ -14,9 +14,83 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InlineLink } from "@/components/ui/inline-link";
 import { formatDisplayDate } from "@/lib/date-format";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { useState } from "react";
+import type { ReactNode } from "react";
 
 type ResumeSummary = components["schemas"]["ResumeSummary"];
 type TargetRoleResponse = components["schemas"]["TargetRoleResponse"];
+
+interface DashboardCardProps {
+  isOpen: boolean;
+  onToggle: () => void;
+}
+
+/**
+ * Shared closed-by-default accordion shell for every Dashboard card — a
+ * card starts collapsed (header + optional description only) and only
+ * mounts its `children` (each card's own CardContent body) once opened,
+ * so a collapsed card's own per-row hooks (e.g. ProfileCompletenessRow's
+ * useCareerProfileSummary per scope) never even fire until the person
+ * actually opens it — React never calls a child component's function
+ * body for an element that isn't part of what gets returned to the
+ * reconciler, so gating `children` behind `isOpen` here is enough; no
+ * extra "enabled" plumbing needed on the individual query hooks. Single-
+ * open behavior (opening one card closes whichever else was open) is
+ * driven by DashboardPage's own `expandedCard` state, the same one-value
+ * -not-independent-booleans shape InterviewPrepPage.tsx's
+ * Topic/Question accordion already uses. The whole header is clickable
+ * (not just the chevron), mirroring Interview Prep's own
+ * click-anywhere-on-header card pattern.
+ */
+function DashboardCardShell({
+  title,
+  description,
+  isOpen,
+  onToggle,
+  children,
+}: {
+  title: string;
+  description?: ReactNode;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Card>
+      <CardHeader
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggle();
+          }
+        }}
+        className="cursor-pointer select-none"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <CardTitle>{title}</CardTitle>
+            {/* The description line (e.g. "Across 2 target roles") only
+                shows once the card is open — direct feedback that it
+                read as clutter sitting under the title on an otherwise
+                collapsed, single-line card header. */}
+            {isOpen && description}
+          </div>
+          {isOpen ? (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          )}
+        </div>
+      </CardHeader>
+      {isOpen && <CardContent className="flex flex-col gap-2">{children}</CardContent>}
+    </Card>
+  );
+}
 
 /** The Master profile plus one entry per Target Role Profile — the same
  * scoping axis career-profile.ts's queries use (null = Master), reused
@@ -39,37 +113,73 @@ function useProfileScopes(): { id: string | null; label: string }[] {
  * System Status (Settings > Platform Admin) and the Right Nav identity
  * box existed to cover the same ground properly.
  */
+type DashboardCardId =
+  | "profile"
+  | "skills"
+  | "resumes"
+  | "opportunities"
+  | "job-applications"
+  | "learning"
+  | "interview-prep";
+
 export function DashboardPage() {
+  // Single shared value (not one boolean per card) so opening a card
+  // always closes whichever other one was open — same pattern this
+  // app's other single-open accordions (e.g. Interview Prep's
+  // Topics/Questions) already use. `null` = every card closed, the
+  // default on a fresh page load.
+  const [expandedCard, setExpandedCard] = useState<DashboardCardId | null>(null);
+
+  function toggleCard(id: DashboardCardId) {
+    setExpandedCard((prev) => (prev === id ? null : id));
+  }
+
   return (
     <div className="flex max-w-xl flex-col gap-4">
-      <ProfileCompletenessCard />
-      <SkillIntelligenceCard />
-      <ResumeIntelligenceCard />
-      <OpportunityIntelligenceCard />
-      <JobApplicationsCard />
-      <LearningIntelligenceCard />
-      <InterviewPrepCard />
+      <ProfileCompletenessCard
+        isOpen={expandedCard === "profile"}
+        onToggle={() => toggleCard("profile")}
+      />
+      <SkillIntelligenceCard
+        isOpen={expandedCard === "skills"}
+        onToggle={() => toggleCard("skills")}
+      />
+      <ResumeIntelligenceCard
+        isOpen={expandedCard === "resumes"}
+        onToggle={() => toggleCard("resumes")}
+      />
+      <OpportunityIntelligenceCard
+        isOpen={expandedCard === "opportunities"}
+        onToggle={() => toggleCard("opportunities")}
+      />
+      <JobApplicationsCard
+        isOpen={expandedCard === "job-applications"}
+        onToggle={() => toggleCard("job-applications")}
+      />
+      <LearningIntelligenceCard
+        isOpen={expandedCard === "learning"}
+        onToggle={() => toggleCard("learning")}
+      />
+      <InterviewPrepCard
+        isOpen={expandedCard === "interview-prep"}
+        onToggle={() => toggleCard("interview-prep")}
+      />
     </div>
   );
 }
 
-function ProfileCompletenessCard() {
+function ProfileCompletenessCard({ isOpen, onToggle }: DashboardCardProps) {
   const scopes = useProfileScopes();
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Career Profile</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        {scopes.map((scope) => (
-          <ProfileCompletenessRow key={scope.id ?? "master"} scope={scope.id} label={scope.label} />
-        ))}
-        <InlineLink to="/profile" className="text-xs">
-          Go to Career Profile
-        </InlineLink>
-      </CardContent>
-    </Card>
+    <DashboardCardShell title="Career Profile" isOpen={isOpen} onToggle={onToggle}>
+      {scopes.map((scope) => (
+        <ProfileCompletenessRow key={scope.id ?? "master"} scope={scope.id} label={scope.label} />
+      ))}
+      <InlineLink to="/profile" className="text-xs">
+        Go to Career Profile
+      </InlineLink>
+    </DashboardCardShell>
   );
 }
 
@@ -114,7 +224,7 @@ function isUncategorized(category: string | null | undefined): boolean {
   return trimmed === "" || trimmed.toLowerCase() === "unknown";
 }
 
-function SkillIntelligenceCard() {
+function SkillIntelligenceCard({ isOpen, onToggle }: DashboardCardProps) {
   const { data: gapAnalysis, isLoading: gapLoading } = useGapAnalysis();
   const { data: targetRoles, isLoading: rolesLoading } = useTargetRoles();
   const isLoading = gapLoading || rolesLoading;
@@ -127,31 +237,32 @@ function SkillIntelligenceCard() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Skill Intelligence</CardTitle>
+    <DashboardCardShell
+      title="Skill Intelligence"
+      description={
         <CardDescription>
           {roleCount > 0
             ? `Across ${roleCount} target role${roleCount === 1 ? "" : "s"}`
             : "No target roles set yet"}
         </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
-        {!isLoading && roleCount === 0 && (
-          <p className="text-sm text-muted-foreground">
-            Add a target role to see which skills you&apos;re missing.
-          </p>
-        )}
-        {!isLoading &&
-          targetRoles?.map((role) => (
-            <SkillIntelligenceRow key={role.id} role={role} missingSkills={missingSkillsFor(role.id)} />
-          ))}
-        <InlineLink to="/skills" className="text-xs">
-          Go to Skill Intelligence
-        </InlineLink>
-      </CardContent>
-    </Card>
+      }
+      isOpen={isOpen}
+      onToggle={onToggle}
+    >
+      {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+      {!isLoading && roleCount === 0 && (
+        <p className="text-sm text-muted-foreground">
+          Add a target role to see which skills you&apos;re missing.
+        </p>
+      )}
+      {!isLoading &&
+        targetRoles?.map((role) => (
+          <SkillIntelligenceRow key={role.id} role={role} missingSkills={missingSkillsFor(role.id)} />
+        ))}
+      <InlineLink to="/skills" className="text-xs">
+        Go to Skill Intelligence
+      </InlineLink>
+    </DashboardCardShell>
   );
 }
 
@@ -213,29 +324,24 @@ function SkillIntelligenceRow({
   );
 }
 
-function ResumeIntelligenceCard() {
+function ResumeIntelligenceCard({ isOpen, onToggle }: DashboardCardProps) {
   const scopes = useProfileScopes();
   const { data: resumes } = useResumeList();
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Resume Intelligence</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        {scopes.map((scope) => (
-          <ResumeStatusRow
-            key={scope.id ?? "master"}
-            scope={scope.id}
-            label={scope.label}
-            resumes={resumes ?? []}
-          />
-        ))}
-        <InlineLink to="/resumes" className="text-xs">
-          Go to Resume Intelligence
-        </InlineLink>
-      </CardContent>
-    </Card>
+    <DashboardCardShell title="Resume Intelligence" isOpen={isOpen} onToggle={onToggle}>
+      {scopes.map((scope) => (
+        <ResumeStatusRow
+          key={scope.id ?? "master"}
+          scope={scope.id}
+          label={scope.label}
+          resumes={resumes ?? []}
+        />
+      ))}
+      <InlineLink to="/resumes" className="text-xs">
+        Go to Resume Intelligence
+      </InlineLink>
+    </DashboardCardShell>
   );
 }
 
@@ -277,7 +383,7 @@ function ResumeStatusRow({
  * the other cards above) — job listings and career path are both real
  * external/graph lookups, not free local computation, so the dashboard
  * deliberately doesn't fan out to every target role here. */
-function OpportunityIntelligenceCard() {
+function OpportunityIntelligenceCard({ isOpen, onToggle }: DashboardCardProps) {
   const { data: targetRoles, isLoading: rolesLoading } = useTargetRoles();
   const primaryRoleId = targetRoles?.[0]?.id ?? null;
   const { data: jobListings, isLoading: jobsLoading } = useJobListings(primaryRoleId);
@@ -285,41 +391,40 @@ function OpportunityIntelligenceCard() {
   const isLoading = rolesLoading || jobsLoading || pathLoading;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Opportunity Intelligence</CardTitle>
-        {targetRoles && targetRoles.length > 0 && (
+    <DashboardCardShell
+      title="Opportunity Intelligence"
+      description={
+        targetRoles && targetRoles.length > 0 ? (
           <CardDescription>For {targetRoles[0]!.role_name}</CardDescription>
-        )}
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        {!primaryRoleId && (
-          <p className="text-sm text-muted-foreground">
-            Add a target role to see matching job listings and a career path.
-          </p>
-        )}
-        {primaryRoleId && isLoading && (
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        )}
-        {primaryRoleId && !isLoading && (
-          <>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium">Job listings</span>
-              <Badge variant="default">{jobListings?.listings.length ?? 0} found</Badge>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium">Career path</span>
-              <Badge variant={careerPath?.resolved ? "accent" : "default"}>
-                {careerPath?.resolved ? "Available" : "No data yet"}
-              </Badge>
-            </div>
-          </>
-        )}
-        <InlineLink to="/opportunities" className="text-xs">
-          Go to Opportunity Intelligence
-        </InlineLink>
-      </CardContent>
-    </Card>
+        ) : undefined
+      }
+      isOpen={isOpen}
+      onToggle={onToggle}
+    >
+      {!primaryRoleId && (
+        <p className="text-sm text-muted-foreground">
+          Add a target role to see matching job listings and a career path.
+        </p>
+      )}
+      {primaryRoleId && isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+      {primaryRoleId && !isLoading && (
+        <>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium">Job listings</span>
+            <Badge variant="default">{jobListings?.listings.length ?? 0} found</Badge>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium">Career path</span>
+            <Badge variant={careerPath?.resolved ? "accent" : "default"}>
+              {careerPath?.resolved ? "Available" : "No data yet"}
+            </Badge>
+          </div>
+        </>
+      )}
+      <InlineLink to="/opportunities" className="text-xs">
+        Go to Opportunity Intelligence
+      </InlineLink>
+    </DashboardCardShell>
   );
 }
 
@@ -338,128 +443,119 @@ const JOB_APPLICATION_STATUS_LABELS: Record<string, string> = {
 /** Status pipeline breakdown + soonest upcoming interview + a
  * stuck-too-long nudge — all live-computed server-side
  * (JobApplicationSummaryService), no client-side aggregation. */
-function JobApplicationsCard() {
+function JobApplicationsCard({ isOpen, onToggle }: DashboardCardProps) {
   const { data: summary, isLoading } = useJobApplicationsSummary();
   const hasAnyApplications = (summary?.status_counts.length ?? 0) > 0;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Job Applications</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
-        {!isLoading && !hasAnyApplications && (
-          <p className="text-sm text-muted-foreground">
-            No applications tracked yet — add one, or start a JD Tailoring session from a Job
-            Listing to have one created automatically.
-          </p>
-        )}
-        {!isLoading && hasAnyApplications && summary && (
-          <>
-            <div className="flex flex-wrap gap-2">
-              {summary.status_counts.map((sc) => (
-                <Badge key={sc.status} variant="default">
-                  {sc.count} {JOB_APPLICATION_STATUS_LABELS[sc.status] ?? sc.status}
-                </Badge>
-              ))}
-            </div>
-            {summary.next_interview && (
-              <p className="text-sm">
-                Next interview: {summary.next_interview.stage_label} at{" "}
-                {summary.next_interview.company} on{" "}
-                {formatDisplayDate(summary.next_interview.round_date)}
-              </p>
-            )}
-            {summary.stuck_count > 0 && (
-              <Badge variant="destructive">
-                {summary.stuck_count} need{summary.stuck_count === 1 ? "s" : ""} a follow-up
+    <DashboardCardShell title="Job Applications" isOpen={isOpen} onToggle={onToggle}>
+      {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+      {!isLoading && !hasAnyApplications && (
+        <p className="text-sm text-muted-foreground">
+          No applications tracked yet — add one, or start a JD Tailoring session from a Job
+          Listing to have one created automatically.
+        </p>
+      )}
+      {!isLoading && hasAnyApplications && summary && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {summary.status_counts.map((sc) => (
+              <Badge key={sc.status} variant="default">
+                {sc.count} {JOB_APPLICATION_STATUS_LABELS[sc.status] ?? sc.status}
               </Badge>
-            )}
-          </>
-        )}
-        <InlineLink to="/job-applications" className="text-xs">
-          Go to Job Applications
-        </InlineLink>
-      </CardContent>
-    </Card>
+            ))}
+          </div>
+          {summary.next_interview && (
+            <p className="text-sm">
+              Next interview: {summary.next_interview.stage_label} at{" "}
+              {summary.next_interview.company} on{" "}
+              {formatDisplayDate(summary.next_interview.round_date)}
+            </p>
+          )}
+          {summary.stuck_count > 0 && (
+            <Badge variant="destructive">
+              {summary.stuck_count} need{summary.stuck_count === 1 ? "s" : ""} a follow-up
+            </Badge>
+          )}
+        </>
+      )}
+      <InlineLink to="/job-applications" className="text-xs">
+        Go to Job Applications
+      </InlineLink>
+    </DashboardCardShell>
   );
 }
 
-function LearningIntelligenceCard() {
+function LearningIntelligenceCard({ isOpen, onToggle }: DashboardCardProps) {
   const { data: items, isLoading } = useLearningItems();
   const inProgressCount = items?.filter((i) => i.status === "in_progress").length ?? 0;
   const completedCount = items?.filter((i) => i.status === "completed").length ?? 0;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Learning Intelligence</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
-        {!isLoading && items?.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No learning items yet — track courses, certs, or resources you're working toward.
-          </p>
-        )}
-        {!isLoading && items && items.length > 0 && (
-          <div className="flex items-center gap-2">
-            <Badge variant="default">{items.length} total</Badge>
-            <Badge variant="accent">{inProgressCount} in progress</Badge>
-            <Badge variant="default">{completedCount} completed</Badge>
-          </div>
-        )}
-        <InlineLink to="/learning" className="text-xs">
-          Go to Learning Intelligence
-        </InlineLink>
-      </CardContent>
-    </Card>
+    <DashboardCardShell title="Learning Intelligence" isOpen={isOpen} onToggle={onToggle}>
+      {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+      {!isLoading && items?.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          No learning items yet — track courses, certs, or resources you're working toward.
+        </p>
+      )}
+      {!isLoading && items && items.length > 0 && (
+        <div className="flex items-center gap-2">
+          <Badge variant="default">{items.length} total</Badge>
+          <Badge variant="accent">{inProgressCount} in progress</Badge>
+          <Badge variant="default">{completedCount} completed</Badge>
+        </div>
+      )}
+      <InlineLink to="/learning" className="text-xs">
+        Go to Learning Intelligence
+      </InlineLink>
+    </DashboardCardShell>
   );
 }
 
-function InterviewPrepCard() {
+function InterviewPrepCard({ isOpen, onToggle }: DashboardCardProps) {
   const { data: summary, isLoading } = useInterviewPrepSummary();
   const scopeCount = summary?.length ?? 0;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Interview Prep</CardTitle>
+    <DashboardCardShell
+      title="Interview Prep"
+      description={
         <CardDescription>
           {scopeCount > 0
             ? `Across ${scopeCount} scope${scopeCount === 1 ? "" : "s"}`
             : "Master + every target role"}
         </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
-        {!isLoading && scopeCount === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No topics or questions yet — start building your interview prep.
-          </p>
-        )}
-        {!isLoading &&
-          summary?.map((s) => (
-            <div
-              key={s.target_role_id ?? "master"}
-              className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0 last:pb-0"
-            >
-              <span className="truncate text-sm font-medium">{s.role_name}</span>
-              <div className="flex items-center gap-2">
-                <Badge variant="default">
-                  {s.topic_count} {s.topic_count === 1 ? "topic" : "topics"}
-                </Badge>
-                <Badge variant="default">
-                  {s.question_count} {s.question_count === 1 ? "question" : "questions"}
-                </Badge>
-              </div>
+      }
+      isOpen={isOpen}
+      onToggle={onToggle}
+    >
+      {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+      {!isLoading && scopeCount === 0 && (
+        <p className="text-sm text-muted-foreground">
+          No topics or questions yet — start building your interview prep.
+        </p>
+      )}
+      {!isLoading &&
+        summary?.map((s) => (
+          <div
+            key={s.target_role_id ?? "master"}
+            className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0 last:pb-0"
+          >
+            <span className="truncate text-sm font-medium">{s.role_name}</span>
+            <div className="flex items-center gap-2">
+              <Badge variant="default">
+                {s.topic_count} {s.topic_count === 1 ? "topic" : "topics"}
+              </Badge>
+              <Badge variant="default">
+                {s.question_count} {s.question_count === 1 ? "question" : "questions"}
+              </Badge>
             </div>
-          ))}
-        <InlineLink to="/interview-prep" className="text-xs">
-          Go to Interview Prep
-        </InlineLink>
-      </CardContent>
-    </Card>
+          </div>
+        ))}
+      <InlineLink to="/interview-prep" className="text-xs">
+        Go to Interview Prep
+      </InlineLink>
+    </DashboardCardShell>
   );
 }

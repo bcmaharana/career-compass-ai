@@ -13,6 +13,7 @@ import { InterviewTopicsSection } from "@/features/interview-prep/InterviewTopic
 import { groupInterviewQuestionsByCategory } from "@/lib/group-interview-questions-by-category";
 import { groupInterviewTopicsBySection } from "@/lib/group-interview-topics-by-section";
 import { cn } from "@/lib/utils";
+import { useTargetRoleScopeStore } from "@/stores/target-role-scope-store";
 import {
   type Dispatch,
   type ReactNode,
@@ -21,14 +22,6 @@ import {
   useState,
 } from "react";
 import { useSearchParams } from "react-router-dom";
-
-/** "master" is a real stored value here (not just an absent key) so a
- * returning visit can tell "Master was the last scope, deliberately"
- * apart from "no preference recorded yet" (a brand-new browser/user) —
- * both currently render identically (no `role` param), but only the
- * former should ever *win* over some other stale state, so they need to
- * stay distinguishable in storage even though they're the same on screen. */
-const LAST_SCOPE_KEY = "interview-prep-last-scope";
 
 /** Tab config for the page's sub-sections — Topics and Interview
  * Questions today, extensible to a future third tab without touching
@@ -53,11 +46,13 @@ type PrepTabId = (typeof PREP_TABS)[number]["id"];
  *
  * The nav link always points at the bare `/interview-prep` (no `role`),
  * so without this the scope would silently reset to Master every time
- * — instead, landing here with no `role` param restores whatever scope
- * was last viewed/edited, persisted in localStorage (survives a full
- * browser restart, not just this session). An explicit `?role=` in the
- * URL (a bookmark, a link someone shared) always wins over the stored
- * preference — only a *bare* landing falls back to it.
+ * — instead, landing here with no `role` param restores whatever role
+ * is currently active app-wide (see target-role-scope-store.ts — set
+ * from here, Career Profile, Resume Intelligence, Opportunity
+ * Intelligence, or Learning Intelligence, whichever was most recently
+ * changed). An explicit `?role=` in the URL (a bookmark, a link someone
+ * shared) always wins over the stored preference — only a *bare*
+ * landing falls back to it.
  */
 export function InterviewPrepPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -65,23 +60,27 @@ export function InterviewPrepPage() {
   const scopeKey = targetRoleId ?? "master";
   const activeTab: PrepTabId = searchParams.get("tab") === "questions" ? "questions" : "topics";
   const { data: targetRoles } = useTargetRoles();
+  const setActiveTargetRoleId = useTargetRoleScopeStore((s) => s.setActiveTargetRoleId);
 
   // Restore-on-bare-landing: runs once per mount, only acts when the
   // URL didn't already specify a scope.
   useEffect(() => {
     if (searchParams.has("role")) return;
-    const saved = localStorage.getItem(LAST_SCOPE_KEY);
-    if (saved && saved !== "master") {
+    const saved = useTargetRoleScopeStore.getState().activeTargetRoleId;
+    if (saved) {
       setSearchParams({ role: saved }, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Persist whenever the resolved scope changes — covers both an
-  // explicit pick from the dropdown and the restore above.
+  // Keep the app-wide scope in sync whenever this page's own resolved
+  // scope changes — covers both an explicit pick from the dropdown and
+  // the restore above — so a role picked here becomes the default AI
+  // Career Coach/Resume Intelligence/Opportunity Intelligence/Learning
+  // Intelligence/Career Profile all pick up next.
   useEffect(() => {
-    localStorage.setItem(LAST_SCOPE_KEY, targetRoleId ?? "master");
-  }, [targetRoleId]);
+    setActiveTargetRoleId(targetRoleId);
+  }, [targetRoleId, setActiveTargetRoleId]);
 
   const { data: topics } = useInterviewTopics(targetRoleId);
   const { data: questions } = useInterviewQuestions(targetRoleId);

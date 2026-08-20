@@ -228,7 +228,17 @@ an employer/company, which always belongs in "experience" instead, even if the e
 has no listed responsibilities — never let an employer appear in both "experience" and \
 "education"; (2) a professional association, institute, or membership body (e.g. "IEEE", \
 "Institution of Engineers", "PMI") — those belong in "certifications" instead, since \
-membership/credentialing is what they represent, not a degree program.
+membership/credentialing is what they represent, not a degree program. An education \
+entry's "description" must NEVER restate the degree name, field of study, or \
+institution name — those already have their own "degree"/"field_of_study"/"institution" \
+fields, and repeating them in "description" is pure, useless duplication that renders \
+twice on the person's profile. If the source resume gives nothing for that entry beyond \
+the degree/institution/dates themselves (the overwhelmingly common case), "description" \
+must be null — do NOT apply the general "use its existing short text as-is" rule from \
+above to education, since that text IS the degree line already captured elsewhere. Only \
+write a real "description" for education when the source text has genuinely separate \
+content: GPA, honors/distinctions, relevant coursework, a thesis title, or activities — \
+never a restatement of what's already in the structured fields.
 - "certifications" is produced in TWO SEPARATE STEPS, not written directly — this is \
 deliberate, because writing straight into "certifications" has been observed, live, \
 losing 2 of 13 real items on one attempt and 0 of the same 13 on the very next, \

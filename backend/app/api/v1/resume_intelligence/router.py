@@ -229,6 +229,7 @@ async def merge_resume(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         resume_id=request.resume_id,
+        target_role_id=request.target_role_id,
         accept_headline=request.accept_headline,
         accept_summary=request.accept_summary,
         accepted_skill_indices=request.accepted_skill_indices,
