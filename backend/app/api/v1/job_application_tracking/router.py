@@ -152,7 +152,7 @@ async def create_job_application(
         company=request.company,
         role_title=request.role_title,
         target_role_id=request.target_role_id,
-        status=request.status,  # type: ignore[arg-type]  # pattern-validated
+        status=request.status,
         applied_at=request.applied_at,
         notes=request.notes,
         recruiter_id=request.recruiter_id,
@@ -173,7 +173,7 @@ async def update_job_application(
         application_id=application_id,
         company=request.company,
         role_title=request.role_title,
-        status=request.status,  # type: ignore[arg-type]  # pattern-validated
+        status=request.status,
         target_role_id=request.target_role_id,
         applied_at=request.applied_at,
         notes=request.notes,

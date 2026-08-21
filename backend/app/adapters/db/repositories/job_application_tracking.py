@@ -10,6 +10,7 @@ shape as app/adapters/db/repositories/interview_prep.py's
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import desc, select
@@ -25,8 +26,19 @@ from app.domain.job_application_tracking.entities import (
     ContactHistoryEntry,
     InterviewRound,
     JobApplication,
+    JobApplicationStatus,
     RecruiterContact,
 )
+
+# status is a plain str at the SQLAlchemy level but DB CHECK-constrained
+# (see app/adapters/db/models/job_application_tracking.py) to exactly the
+# values JobApplicationStatus allows — named once here instead of a
+# `# type: ignore[arg-type]` at the mapping call site, same pattern as
+# app/adapters/db/repositories/career_intelligence.py.
+
+
+def _status(value: str) -> JobApplicationStatus:
+    return cast(JobApplicationStatus, value)
 
 
 def _contact_history_to_domain(raw: list[dict[str, object]]) -> list[ContactHistoryEntry]:
@@ -85,7 +97,7 @@ def _application_to_domain(
         user_id=model.user_id,
         company=model.company,
         role_title=model.role_title,
-        status=model.status,  # type: ignore[arg-type]  # DB-CHECK-constrained
+        status=_status(model.status),
         status_changed_at=model.status_changed_at,
         created_at=model.created_at,
         updated_at=model.updated_at,

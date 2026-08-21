@@ -5,19 +5,16 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-_STATUS_PATTERN = (
-    "^(considering|applied|phone_screen|interview|offer|rejected|withdrawn|"
-    "didnt_hear_back|other)$"
-)
+from app.domain.job_application_tracking.entities import JobApplicationStatus
 
 
 class JobApplicationRequest(BaseModel):
     company: str
     role_title: str
     target_role_id: UUID | None = None
-    status: str = Field(default="considering", pattern=_STATUS_PATTERN)
+    status: JobApplicationStatus = "considering"
     applied_at: date | None = None
     notes: str | None = None
     recruiter_id: UUID | None = None
@@ -26,7 +23,7 @@ class JobApplicationRequest(BaseModel):
 class JobApplicationUpdateRequest(BaseModel):
     company: str
     role_title: str
-    status: str = Field(pattern=_STATUS_PATTERN)
+    status: JobApplicationStatus
     target_role_id: UUID | None = None
     applied_at: date | None = None
     notes: str | None = None

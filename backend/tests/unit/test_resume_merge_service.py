@@ -21,6 +21,7 @@ from app.application.career_profile.certification_service import CertificationSe
 from app.application.career_profile.education_service import EducationService
 from app.application.career_profile.experience_service import ExperienceService
 from app.application.career_profile.key_achievement_service import KeyAchievementService
+from app.application.career_profile.target_role_service import TargetRoleService
 from app.application.resume_intelligence.resume_merge_service import ResumeMergeService
 from app.core.exceptions import CareerCompassError
 from app.domain.career_profile.entities import (
@@ -32,6 +33,7 @@ from app.domain.career_profile.entities import (
     Education,
     Experience,
     KeyAchievement,
+    TargetRole,
 )
 from app.domain.resume_intelligence.entities import Resume
 
@@ -337,6 +339,29 @@ class FakeKeyAchievementRepository:
         raise NotImplementedError
 
 
+class FakeTargetRoleRepository:
+    def __init__(self) -> None:
+        self.target_roles: dict[uuid.UUID, TargetRole] = {}
+
+    async def create(self, target_role: TargetRole) -> TargetRole:
+        self.target_roles[target_role.id] = target_role
+        return replace(target_role)
+
+    async def get_by_id(self, tenant_id: uuid.UUID, target_role_id: uuid.UUID) -> TargetRole | None:
+        t = self.target_roles.get(target_role_id)
+        return replace(t) if t and t.tenant_id == tenant_id else None
+
+    async def list_for_user(self, tenant_id: uuid.UUID, user_id: uuid.UUID) -> list[TargetRole]:
+        raise NotImplementedError
+
+    async def update(self, target_role: TargetRole) -> TargetRole:
+        self.target_roles[target_role.id] = replace(target_role)
+        return replace(target_role)
+
+    async def soft_delete(self, tenant_id: uuid.UUID, target_role_id: uuid.UUID) -> None:
+        raise NotImplementedError
+
+
 @pytest.fixture
 def setup():
     resumes = FakeResumeRepository()
@@ -348,6 +373,8 @@ def setup():
     certifications = CertificationService(FakeCertificationRepository(), career_profiles)
     career_highlights = CareerHighlightService(FakeCareerHighlightRepository(), career_profiles)
     key_achievements = KeyAchievementService(FakeKeyAchievementRepository(), career_profiles)
+    target_role_repo = FakeTargetRoleRepository()
+    target_roles = TargetRoleService(target_role_repo)
     merge_service = ResumeMergeService(
         resumes,
         experiences,
@@ -356,6 +383,7 @@ def setup():
         career_highlights,
         key_achievements,
         career_profiles,
+        target_roles,
     )
     return (
         merge_service,
@@ -366,6 +394,7 @@ def setup():
         career_highlights,
         key_achievements,
         career_profiles,
+        target_role_repo,
     )
 
 
@@ -400,6 +429,7 @@ class TestMerge:
             _career_highlights,
             _key_achievements,
             career_profiles,
+            _target_role_repo,
         ) = setup
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         resume = await resumes.create(_make_resume(tenant_id, user_id))
@@ -470,7 +500,7 @@ class TestMerge:
         assert result.added_key_achievement_count == 1
 
     async def test_skills_already_on_the_profile_are_not_duplicated(self, setup) -> None:
-        merge_service, resumes, _, _, _, _, _, career_profiles = setup
+        merge_service, resumes, _, _, _, _, _, career_profiles, _ = setup
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         await career_profiles.update(
             tenant_id=tenant_id, user_id=user_id, headline=None, summary=None,
@@ -585,6 +615,7 @@ class TestMerge:
             _career_highlights,
             _key_achievements,
             career_profiles,
+            _target_role_repo,
         ) = setup
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         data_with_missing_date: dict[str, object] = {
@@ -626,7 +657,7 @@ class TestMerge:
         assert [e.company for e in added_experiences] == ["Initech"]
 
     async def test_accepted_career_highlights_are_added(self, setup) -> None:
-        merge_service, resumes, _, _, _, career_highlights, _, _ = setup
+        merge_service, resumes, _, _, _, career_highlights, _, _, _ = setup
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         resume = await resumes.create(_make_resume(tenant_id, user_id))
 
@@ -651,7 +682,7 @@ class TestMerge:
         assert added[0].company == "Initech"
 
     async def test_accepted_key_achievements_are_added(self, setup) -> None:
-        merge_service, resumes, _, _, _, _, key_achievements, _ = setup
+        merge_service, resumes, _, _, _, _, key_achievements, _, _ = setup
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         resume = await resumes.create(_make_resume(tenant_id, user_id))
 
@@ -674,3 +705,107 @@ class TestMerge:
         added = await key_achievements.list_for_current_user(tenant_id=tenant_id, user_id=user_id)
         assert len(added) == 1
         assert added[0].company == "Initech"
+
+    async def test_merging_into_a_real_target_role_lands_on_that_profile_not_master(
+        self, setup
+    ) -> None:
+        """2026-08-21: the one behavior this session's cross-profile-merge
+        change was actually built to enable (merge the same already-parsed
+        resume into a specific Target Role Profile, not just Master) had
+        no direct test coverage until now — every pre-existing test only
+        ever exercised target_role_id=None.
+        """
+        (
+            merge_service,
+            resumes,
+            experiences,
+            _,
+            _,
+            _,
+            _,
+            career_profiles,
+            target_role_repo,
+        ) = setup
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        resume = await resumes.create(_make_resume(tenant_id, user_id))
+        target_role = await target_role_repo.create(
+            TargetRole(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                user_id=user_id,
+                role_name="Staff Engineer",
+                tag="SE",
+                created_at=datetime.now(UTC),
+            )
+        )
+
+        await merge_service.merge(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            resume_id=resume.id,
+            target_role_id=target_role.id,
+            accept_headline=False,
+            accept_summary=False,
+            accepted_skill_indices=[],
+            accepted_experience_indices=[0],
+            accepted_education_indices=[],
+            accepted_certification_indices=[],
+            accepted_career_highlight_indices=[],
+            accepted_key_achievement_indices=[],
+        )
+
+        # Landed on the Target Role Profile, not Master.
+        role_scoped = await experiences.list_for_current_user(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role.id
+        )
+        assert [e.company for e in role_scoped] == ["Initech"]
+        master_scoped = await experiences.list_for_current_user(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=None
+        )
+        assert master_scoped == []
+        role_profile = await career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role.id
+        )
+        master_profile = await career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=None
+        )
+        assert role_profile.id != master_profile.id
+
+    async def test_merging_into_a_target_role_the_caller_does_not_own_raises_not_found(
+        self, setup
+    ) -> None:
+        """Security hardening, 2026-08-21: target_role_id is caller-supplied
+        on the merge request — verify ownership is actually enforced
+        (get_owned_or_raise) rather than the id being trusted blindly.
+        """
+        merge_service, resumes, *_, target_role_repo = setup
+        tenant_id = uuid.uuid4()
+        owner, intruder = uuid.uuid4(), uuid.uuid4()
+        resume = await resumes.create(_make_resume(tenant_id, intruder))
+        someone_elses_role = await target_role_repo.create(
+            TargetRole(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                user_id=owner,
+                role_name="Staff Engineer",
+                tag="SE",
+                created_at=datetime.now(UTC),
+            )
+        )
+
+        with pytest.raises(CareerCompassError) as exc_info:
+            await merge_service.merge(
+                tenant_id=tenant_id,
+                user_id=intruder,
+                resume_id=resume.id,
+                target_role_id=someone_elses_role.id,
+                accept_headline=False,
+                accept_summary=False,
+                accepted_skill_indices=[],
+                accepted_experience_indices=[],
+                accepted_education_indices=[],
+                accepted_certification_indices=[],
+                accepted_career_highlight_indices=[],
+                accepted_key_achievement_indices=[],
+            )
+        assert exc_info.value.code == "TARGET_ROLE_NOT_FOUND"

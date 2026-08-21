@@ -19,11 +19,10 @@ import { PeerEndorsementsSection } from "@/features/career-profile/PeerEndorseme
 import { ProfileHeader } from "@/features/career-profile/ProfileHeader";
 import { ProfileScopeProvider } from "@/features/career-profile/ProfileScopeContext";
 import { ResumeDownloadBar } from "@/features/career-profile/ResumeDownloadBar";
-import { useTargetRoleScopeStore } from "@/stores/target-role-scope-store";
+import { useRoleScopeParam } from "@/stores/target-role-scope-store";
 import { Eraser } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
-import { useSearchParams } from "react-router-dom";
 import type { SectionOrderProps } from "@/features/career-profile/section-order";
 
 /**
@@ -75,40 +74,18 @@ function resolveOrder(saved: string[] | null | undefined): string[] {
  * text list on this page.
  */
 export function CareerProfilePage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const targetRoleId = searchParams.get("role");
+  // Career Profile is the anchor page for picking a scope (the Target
+  // Roles widget navigates here) — every resolved scope change (an
+  // explicit pick, or useRoleScopeParam's own restore-on-bare-landing)
+  // becomes the new app-wide default that AI Career Coach, Resume
+  // Intelligence, Opportunity Intelligence, Learning Intelligence, and
+  // Interview Prep all read. See target-role-scope-store.ts.
+  const { targetRoleId } = useRoleScopeParam();
   // Fed into every scope-dependent section's `key` below — see that
   // Component's key comment for why.
   const scopeKey = targetRoleId ?? "master";
   const { data: targetRoles } = useTargetRoles();
   const activeRole = targetRoleId ? targetRoles?.find((r) => r.id === targetRoleId) : null;
-  const setActiveTargetRoleId = useTargetRoleScopeStore((s) => s.setActiveTargetRoleId);
-
-  // Restore-on-bare-landing: the Left Nav link always points at the bare
-  // `/profile` (no `role`), so without this the scope would silently
-  // reset to Master every time — instead, landing here with no `role`
-  // param restores whichever role was last active anywhere in the app
-  // (see target-role-scope-store.ts). An explicit `?role=` already in
-  // the URL (a bookmark, a shared link) always wins over the stored
-  // default. Runs once per mount, mirroring
-  // InterviewPrepPage.tsx/ResumeIntelligencePage.tsx's identical pattern.
-  useEffect(() => {
-    if (searchParams.has("role")) return;
-    const saved = useTargetRoleScopeStore.getState().activeTargetRoleId;
-    if (saved) {
-      setSearchParams({ role: saved }, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Career Profile is the anchor page for picking a scope (the Target
-  // Roles widget navigates here) — every resolved scope change (an
-  // explicit pick, or the restore above) becomes the new app-wide
-  // default that AI Career Coach, Resume Intelligence, Opportunity
-  // Intelligence, Learning Intelligence, and Interview Prep all read.
-  useEffect(() => {
-    setActiveTargetRoleId(targetRoleId);
-  }, [targetRoleId, setActiveTargetRoleId]);
 
   const { data: profile } = useCareerProfile(targetRoleId);
   const updateProfile = useUpdateCareerProfile(targetRoleId);

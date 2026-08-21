@@ -18,7 +18,7 @@ from uuid import UUID
 
 from app.core.exceptions import NotFoundError, ValidationError
 from app.core.rich_text import sanitize_rich_text
-from app.domain.interview_prep.entities import InterviewQuestion, ReferenceLink
+from app.domain.interview_prep.entities import InterviewQuestion, ReferenceLink, is_safe_reference_url
 from app.domain.interview_prep.repositories import (
     Direction,
     InterviewQuestionRepository,
@@ -30,6 +30,18 @@ def _dedupe_scopes(scope_target_role_ids: list[UUID | None]) -> list[UUID | None
     """Preserves order while dropping duplicates — a plain `list(set(...))`
     would both lose order and choke on `None` sorting inconsistently."""
     return list(dict.fromkeys(scope_target_role_ids))
+
+
+def _validate_reference_links(reference_links: list[ReferenceLink]) -> None:
+    """Server-side scheme gate — the client is never trusted to have
+    enforced this on its own. See is_safe_reference_url's own docstring
+    for why this can't be as simple as checking for "://"."""
+    for link in reference_links:
+        if not is_safe_reference_url(link.url):
+            raise ValidationError(
+                "That reference link's URL isn't allowed.",
+                code="UNSAFE_REFERENCE_LINK_URL",
+            )
 
 
 class InterviewQuestionService:
@@ -119,6 +131,7 @@ class InterviewQuestionService:
             raise ValidationError(
                 "A question must be tagged to at least one scope.", code="SCOPE_REQUIRED"
             )
+        _validate_reference_links(reference_links)
 
         existing = await self.get_owned_or_raise(
             tenant_id=tenant_id, user_id=user_id, question_id=question_id
@@ -240,6 +253,7 @@ class InterviewQuestionService:
         trimmed = question.strip()
         if not trimmed:
             raise ValidationError("Question is required.", code="INTERVIEW_QUESTION_REQUIRED")
+        _validate_reference_links(reference_links)
 
         existing = await self.get_owned_follow_up_or_raise(
             tenant_id=tenant_id, user_id=user_id, follow_up_id=follow_up_id

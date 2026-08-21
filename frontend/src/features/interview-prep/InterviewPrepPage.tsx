@@ -13,7 +13,7 @@ import { InterviewTopicsSection } from "@/features/interview-prep/InterviewTopic
 import { groupInterviewQuestionsByCategory } from "@/lib/group-interview-questions-by-category";
 import { groupInterviewTopicsBySection } from "@/lib/group-interview-topics-by-section";
 import { cn } from "@/lib/utils";
-import { useTargetRoleScopeStore } from "@/stores/target-role-scope-store";
+import { useRoleScopeParam } from "@/stores/target-role-scope-store";
 import {
   type Dispatch,
   type ReactNode,
@@ -21,7 +21,6 @@ import {
   useEffect,
   useState,
 } from "react";
-import { useSearchParams } from "react-router-dom";
 
 /** Tab config for the page's sub-sections — Topics and Interview
  * Questions today, extensible to a future third tab without touching
@@ -55,32 +54,10 @@ type PrepTabId = (typeof PREP_TABS)[number]["id"];
  * landing falls back to it.
  */
 export function InterviewPrepPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const targetRoleId = searchParams.get("role");
+  const { targetRoleId, searchParams, setSearchParams } = useRoleScopeParam();
   const scopeKey = targetRoleId ?? "master";
   const activeTab: PrepTabId = searchParams.get("tab") === "questions" ? "questions" : "topics";
   const { data: targetRoles } = useTargetRoles();
-  const setActiveTargetRoleId = useTargetRoleScopeStore((s) => s.setActiveTargetRoleId);
-
-  // Restore-on-bare-landing: runs once per mount, only acts when the
-  // URL didn't already specify a scope.
-  useEffect(() => {
-    if (searchParams.has("role")) return;
-    const saved = useTargetRoleScopeStore.getState().activeTargetRoleId;
-    if (saved) {
-      setSearchParams({ role: saved }, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Keep the app-wide scope in sync whenever this page's own resolved
-  // scope changes — covers both an explicit pick from the dropdown and
-  // the restore above — so a role picked here becomes the default AI
-  // Career Coach/Resume Intelligence/Opportunity Intelligence/Learning
-  // Intelligence/Career Profile all pick up next.
-  useEffect(() => {
-    setActiveTargetRoleId(targetRoleId);
-  }, [targetRoleId, setActiveTargetRoleId]);
 
   const { data: topics } = useInterviewTopics(targetRoleId);
   const { data: questions } = useInterviewQuestions(targetRoleId);

@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { create } from "zustand";
 
 const STORAGE_KEY = "career-compass-active-target-role";
@@ -71,4 +73,38 @@ export function resolveValidTargetRoleId(
 ): string | null {
   if (!targetRoleId) return null;
   return targetRoles?.some((role) => role.id === targetRoleId) ? targetRoleId : null;
+}
+
+/**
+ * Shared by every URL-scoped page (Career Profile, Interview Prep, Resume
+ * Intelligence — previously each reimplemented this identically, byte for
+ * byte, 2026-08-21 tech-debt cleanup): reads the page's own `?role=` param
+ * and keeps it in sync with the shared scope store in both directions —
+ * restoring from the store on a bare landing (no `role` param already in
+ * the URL — an explicit one, e.g. a bookmark or shared link, always wins
+ * and is left untouched), and writing this page's own resolved scope back
+ * into the store whenever it changes (an explicit pick, or the restore
+ * itself). Returns `searchParams`/`setSearchParams` too since most callers
+ * still need them for their own additional params (a `?tab=`, a custom
+ * scope-change handler) — this hook only ever touches the `role` key.
+ */
+export function useRoleScopeParam() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const targetRoleId = searchParams.get("role");
+  const setActiveTargetRoleId = useTargetRoleScopeStore((s) => s.setActiveTargetRoleId);
+
+  useEffect(() => {
+    if (searchParams.has("role")) return;
+    const saved = useTargetRoleScopeStore.getState().activeTargetRoleId;
+    if (saved) {
+      setSearchParams({ role: saved }, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    setActiveTargetRoleId(targetRoleId);
+  }, [targetRoleId, setActiveTargetRoleId]);
+
+  return { targetRoleId, searchParams, setSearchParams };
 }

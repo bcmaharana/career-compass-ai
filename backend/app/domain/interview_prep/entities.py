@@ -30,6 +30,7 @@ domain entity itself.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
@@ -45,6 +46,34 @@ class ReferenceLink:
 
     url: str
     label: str
+
+
+# Scheme allowlist rather than a denylist — a denylist only ever catches
+# the schemes someone thought to name. Applied at every ReferenceLink
+# write site (both InterviewQuestion and InterviewTopic), not just
+# rendered defensively on the frontend: an `<a href>` with no scheme
+# validation is a stored-XSS vector for a crafted `javascript:`/`data:`
+# URL, and this app's own convention elsewhere (sanitize on write, never
+# trust render time alone) says the check belongs here.
+_SAFE_URL_SCHEMES = frozenset({"http", "https", "mailto"})
+# RFC 3986's scheme grammar: a leading ALPHA, then any mix of
+# letters/digits/+/-/.  A dangerous scheme like "javascript:" or
+# "data:" matches this just as validly as "http:" does — critically,
+# neither requires a "//" after the colon, so a naive check for "://"
+# would let "javascript:alert(1)" straight through unblocked.
+_SCHEME_RE = re.compile(r"^([a-zA-Z][a-zA-Z0-9+.-]*):")
+
+
+def is_safe_reference_url(url: str) -> bool:
+    match = _SCHEME_RE.match(url.strip())
+    if match is None:
+        # A scheme-less value (e.g. "linkedin.com/in/x", matching this
+        # app's existing deliberately-permissive LinkedIn/credential-URL
+        # fields) is safe — a bare host/path string carries no scheme for
+        # a browser to execute, it can only ever be rendered as a literal
+        # <a href> attribute value.
+        return True
+    return match.group(1).lower() in _SAFE_URL_SCHEMES
 
 
 @dataclass(slots=True)

@@ -7,6 +7,7 @@ app/adapters/db/repositories/chat.py.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import delete, desc, select
@@ -17,7 +18,23 @@ from app.domain.jd_tailoring.entities import (
     JdTailoringMessage,
     JdTailoringMessageRole,
     JdTailoringSession,
+    SourceType,
+    TailoredResumeStatus,
 )
+
+# source_type/tailored_resume_status are plain str at the SQLAlchemy level
+# but DB CHECK-constrained (see app/adapters/db/models/jd_tailoring.py) to
+# exactly the values their domain Literal type allows — named once here
+# instead of a `# type: ignore[arg-type]` at the mapping call site, same
+# pattern as app/adapters/db/repositories/career_intelligence.py.
+
+
+def _source_type(value: str) -> SourceType:
+    return cast(SourceType, value)
+
+
+def _tailored_resume_status(value: str | None) -> TailoredResumeStatus | None:
+    return cast("TailoredResumeStatus | None", value)
 
 
 def _session_to_domain(model: JdTailoringSessionModel) -> JdTailoringSession:
@@ -25,7 +42,7 @@ def _session_to_domain(model: JdTailoringSessionModel) -> JdTailoringSession:
         id=model.id,
         tenant_id=model.tenant_id,
         user_id=model.user_id,
-        source_type=model.source_type,  # type: ignore[arg-type]  # DB-CHECK-constrained
+        source_type=_source_type(model.source_type),
         jd_text=model.jd_text,
         created_at=model.created_at,
         updated_at=model.updated_at,
@@ -41,7 +58,7 @@ def _session_to_domain(model: JdTailoringSessionModel) -> JdTailoringSession:
             if model.tailored_resume_content is not None
             else None
         ),
-        tailored_resume_status=model.tailored_resume_status,  # type: ignore[arg-type]
+        tailored_resume_status=_tailored_resume_status(model.tailored_resume_status),
         tailored_resume_error=model.tailored_resume_error,
         tailored_resume_generated_at=model.tailored_resume_generated_at,
         deleted_at=model.deleted_at,

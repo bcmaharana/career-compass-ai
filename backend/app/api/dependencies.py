@@ -1100,6 +1100,7 @@ def get_resume_merge_service(
     career_highlights: CareerHighlightService = Depends(get_career_highlight_service),
     key_achievements: KeyAchievementService = Depends(get_key_achievement_service),
     career_profiles: CareerProfileService = Depends(get_career_profile_service),
+    target_roles: TargetRoleService = Depends(get_target_role_service),
 ) -> ResumeMergeService:
     return ResumeMergeService(
         resumes,
@@ -1109,6 +1110,7 @@ def get_resume_merge_service(
         career_highlights,
         key_achievements,
         career_profiles,
+        target_roles,
     )
 
 

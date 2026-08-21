@@ -23,11 +23,11 @@ import { Select } from "@/components/ui/select";
 import { formatDisplayDate, formatDisplayDateTime } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { useTargetRoleScopeStore } from "@/stores/target-role-scope-store";
+import { useRoleScopeParam } from "@/stores/target-role-scope-store";
 import { useUploadProgressStore } from "@/stores/upload-progress-store";
 import { Trash2, X } from "lucide-react";
-import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { type ChangeEvent, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 type ResumeResponse = components["schemas"]["ResumeResponse"];
 type ResumeSummary = components["schemas"]["ResumeSummary"];
@@ -95,32 +95,12 @@ function validateResumeFile(file: File): string | null {
  * (a bookmark, a shared link) always wins over the stored preference.
  */
 export function ResumeIntelligencePage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const targetRoleId = searchParams.get("role");
+  const { targetRoleId, setSearchParams } = useRoleScopeParam();
   const { data: resumes, isLoading } = useResumeList();
   const [activeResumeId, setActiveResumeId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ResumeSummary | null>(null);
   const discardResume = useDiscardResume();
   const { data: targetRoles } = useTargetRoles();
-  const setActiveTargetRoleId = useTargetRoleScopeStore((s) => s.setActiveTargetRoleId);
-
-  // Restore-on-bare-landing: runs once per mount, only acts when the URL
-  // didn't already specify a scope.
-  useEffect(() => {
-    if (searchParams.has("role")) return;
-    const saved = useTargetRoleScopeStore.getState().activeTargetRoleId;
-    if (saved) {
-      setSearchParams({ role: saved }, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Keep the app-wide scope in sync whenever this page's own resolved
-  // scope changes — covers both an explicit pick from the dropdown and
-  // the restore above.
-  useEffect(() => {
-    setActiveTargetRoleId(targetRoleId);
-  }, [targetRoleId, setActiveTargetRoleId]);
 
   function handleScopeChange(value: string) {
     setSearchParams((prev) => {

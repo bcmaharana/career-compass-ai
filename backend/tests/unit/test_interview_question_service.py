@@ -490,6 +490,27 @@ class TestUpdate:
 
         assert set(updated.scope_target_role_ids) == {None, role_id}
 
+    async def test_update_rejects_a_javascript_scheme_reference_link(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        questions_repo = FakeInterviewQuestionRepository()
+        question = await questions_repo.create(_make_question(tenant_id, user_id))
+        service = InterviewQuestionService(questions_repo, FakeInterviewTopicRepository())
+
+        with pytest.raises(ValidationError):
+            await service.update(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                question_id=question.id,
+                topic_id=None,
+                question="Original?",
+                category=None,
+                manual_answer=None,
+                reference_links=[
+                    ReferenceLink(url="javascript:alert(document.cookie)", label="Evil")
+                ],
+                scope_target_role_ids=[None],
+            )
+
 
 class TestDelete:
     async def test_delete_removes_everywhere_when_only_one_scope(self) -> None:
@@ -715,6 +736,27 @@ class TestFollowUps:
 
         assert updated.ai_answer is None
         assert updated.ai_answer_status is None
+
+    async def test_update_follow_up_rejects_a_data_scheme_reference_link(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        questions_repo = FakeInterviewQuestionRepository()
+        parent = await questions_repo.create(_make_question(tenant_id, user_id))
+        service = InterviewQuestionService(questions_repo, FakeInterviewTopicRepository())
+        follow_up = await service.add_follow_up(
+            tenant_id=tenant_id, user_id=user_id, parent_question_id=parent.id, question="Follow-up?"
+        )
+
+        with pytest.raises(ValidationError):
+            await service.update_follow_up(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                follow_up_id=follow_up.id,
+                question="Follow-up?",
+                manual_answer=None,
+                reference_links=[
+                    ReferenceLink(url="data:text/html,<script>alert(1)</script>", label="Evil")
+                ],
+            )
 
     async def test_update_follow_up_rejects_a_top_level_question_id(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()

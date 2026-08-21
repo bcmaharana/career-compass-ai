@@ -25,6 +25,7 @@ from app.ai_platform.llm_service.service import LLMServiceInterface
 from app.application.career_profile.career_profile_service import CareerProfileService
 from app.application.career_profile.target_role_service import TargetRoleService
 from app.core.exceptions import CareerCompassError, NotFoundError
+from app.core.rich_text import sanitize_rich_text
 from app.domain.interview_prep.entities import InterviewQuestion
 from app.domain.interview_prep.repositories import InterviewQuestionRepository, InterviewTopicRepository
 
@@ -126,7 +127,13 @@ class InterviewAnswerService:
                 max_tokens=_MAX_RESPONSE_TOKENS,
                 temperature=0.4,
             )
-            question.ai_answer = answer.strip()
+            # Sanitized like every other rich-text-adjacent field in this
+            # domain (manual_answer, discussion) even though this field is
+            # rendered as plain text today, not through RichTextDisplay —
+            # defense-in-depth against the day someone adds formatting
+            # support here too and forgets this is the one field in the
+            # domain that was never sanitized on write.
+            question.ai_answer = sanitize_rich_text(answer.strip())
             question.ai_answer_status = "generated"
             question.ai_answer_error = None
         except CareerCompassError as exc:

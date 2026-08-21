@@ -22,6 +22,7 @@ from app.application.career_profile.certification_service import CertificationSe
 from app.application.career_profile.education_service import EducationService
 from app.application.career_profile.experience_service import ExperienceService
 from app.application.career_profile.key_achievement_service import KeyAchievementService
+from app.application.career_profile.target_role_service import TargetRoleService
 from app.core.exceptions import NotFoundError, ValidationError
 from app.domain.career_profile.entities import CoreCompetency
 from app.domain.resume_intelligence.repositories import ResumeRepository
@@ -72,6 +73,7 @@ class ResumeMergeService:
         career_highlights: CareerHighlightService,
         key_achievements: KeyAchievementService,
         career_profiles: CareerProfileService,
+        target_roles: TargetRoleService,
     ) -> None:
         self._resumes = resumes
         self._experiences = experiences
@@ -80,6 +82,7 @@ class ResumeMergeService:
         self._career_highlights = career_highlights
         self._key_achievements = key_achievements
         self._career_profiles = career_profiles
+        self._target_roles = target_roles
 
     async def merge(
         self,
@@ -113,6 +116,23 @@ class ResumeMergeService:
         # not just the scope it happened to be uploaded/tagged for. The
         # resume's own target_role_id is otherwise unrelated to this call
         # and is left untouched either way.
+        #
+        # Ownership is verified explicitly here (2026-08-21, security
+        # hardening pass) rather than left implicit — get_owned_or_raise
+        # 404s for a target_role_id that doesn't belong to this user
+        # before CareerProfileService.get_or_create ever runs, matching
+        # the same check TargetRole-linked writes elsewhere in this
+        # codebase already perform (e.g. TargetRoleSkillService). Not a
+        # confirmed exploit (career_profiles' own unique constraint on
+        # (tenant_id, user_id, target_role_id) already prevented a
+        # caller from reading/writing another user's actual profile data
+        # this way — see git history for the full analysis) but this
+        # closes the gap as defense-in-depth rather than relying on that
+        # constraint alone.
+        if target_role_id is not None:
+            await self._target_roles.get_owned_or_raise(
+                tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+            )
 
         data = resume.extracted_data
         skill_items = data.get("skills") or []

@@ -266,6 +266,26 @@ class TestUpdateAndDelete:
 
         assert updated.reference_links == [ReferenceLink(url="https://example.com", label="Example")]
 
+    async def test_update_rejects_a_javascript_scheme_reference_link(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        topic = await repo.create(_make_topic(tenant_id, user_id))
+        service = InterviewTopicService(repo, FakePrivateObjectStorage())
+
+        with pytest.raises(ValidationError):
+            await service.update(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                topic_id=topic.id,
+                name=topic.name,
+                section=None,
+                discussion=None,
+                reference_links=[
+                    ReferenceLink(url="javascript:alert(document.cookie)", label="Evil")
+                ],
+                scope_target_role_ids=[None],
+            )
+
     async def test_update_requires_ownership(self) -> None:
         tenant_id, user_id, other_user = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
         repo = FakeInterviewTopicRepository()
