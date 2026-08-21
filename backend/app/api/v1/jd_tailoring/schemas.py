@@ -74,3 +74,15 @@ class SendMessageResponse(BaseModel):
     session_id: UUID
     user_message: JdTailoringMessageResponse
     assistant_message: JdTailoringMessageResponse
+
+
+class DeleteMessageResponse(BaseModel):
+    #: Every message row actually removed — the one the caller targeted
+    #: plus its paired question/answer, if one was found adjacent to it
+    #: (see JdTailoringSessionService.delete_message). Returned instead of
+    #: a bare 204 specifically so the frontend's optimistic cache update
+    #: knows to remove BOTH bubbles, not just the one it clicked — a
+    #: plain 204 gave it no way to know a second row had also gone,
+    #: leaving the paired message visibly stuck on screen until a full
+    #: refetch (caught from a direct user report, 2026-08-21).
+    deleted_message_ids: list[UUID]

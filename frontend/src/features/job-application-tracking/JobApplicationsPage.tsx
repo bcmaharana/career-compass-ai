@@ -30,6 +30,12 @@ import { type FormEvent, useState } from "react";
 
 type JobApplication = components["schemas"]["JobApplicationResponse"];
 type InterviewRound = components["schemas"]["InterviewRoundResponse"];
+//: JobApplicationResponse.status is a plain string (the response schema
+//: was left loose), but the create/update request schemas tightened
+//: `status` to this literal union as part of the 2026-08-21 tech-debt
+//: pass — FormState needs the stricter request-side type since it's
+//: what actually gets sent back on submit.
+type JobApplicationStatusValue = components["schemas"]["JobApplicationRequest"]["status"];
 
 const STATUS_LABELS: Record<string, string> = {
   considering: "Considering",
@@ -47,7 +53,7 @@ const TERMINAL_STATUSES = new Set(["offer", "rejected", "withdrawn", "didnt_hear
 interface FormState {
   company: string;
   role_title: string;
-  status: string;
+  status: JobApplicationStatusValue;
   target_role_id: string;
   applied_at: string;
   notes: string;
@@ -68,7 +74,10 @@ function toFormState(app: JobApplication): FormState {
   return {
     company: app.company,
     role_title: app.role_title,
-    status: app.status,
+    // app.status is DB-CHECK-constrained to this same set of values
+    // server-side (see backend/app/domain/job_application_tracking/entities.py)
+    // even though the response schema types it as a plain string.
+    status: app.status as JobApplicationStatusValue,
     target_role_id: app.target_role_id ?? "",
     applied_at: app.applied_at ?? "",
     notes: app.notes ?? "",
@@ -307,7 +316,9 @@ export function JobApplicationsPage() {
             <Select
               id="ja-status"
               value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, status: e.target.value as JobApplicationStatusValue })
+              }
             >
               {Object.entries(STATUS_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>

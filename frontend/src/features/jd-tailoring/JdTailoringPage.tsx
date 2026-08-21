@@ -15,6 +15,7 @@ import { InlineLink } from "@/components/ui/inline-link";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDisplayDateTime, formatRelativeTime } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
+import { renderMarkdownMessage } from "@/lib/markdown-message";
 import { cn } from "@/lib/utils";
 import { Bot, Eraser, Trash2, UserCircle } from "lucide-react";
 import { useState } from "react";
@@ -381,11 +382,13 @@ function MessageBubble({
         </div>
         <div
           className={cn(
-            "whitespace-pre-wrap rounded-lg px-4 py-2.5 text-sm",
-            isUser ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
+            "rounded-lg px-4 py-2.5 text-sm",
+            isUser
+              ? "whitespace-pre-wrap bg-primary text-primary-foreground"
+              : "bg-muted text-foreground",
           )}
         >
-          {message.content}
+          {isUser ? message.content : renderMarkdownMessage(message.content)}
         </div>
       </div>
     </div>

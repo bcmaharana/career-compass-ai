@@ -278,15 +278,30 @@ export function ExperienceSection({
               }}
               className="flex-1 cursor-pointer select-none"
             >
-              <p className="text-sm font-medium">{experience.title}</p>
-              <p className="text-sm text-muted-foreground">
-                <span className="font-bold">{experience.company}</span>
-                {experience.location ? ` · ${experience.location}` : ""}
-              </p>
-              <p className="text-xs font-bold italic text-accent">
-                {formatDisplayDate(experience.start_date)} –{" "}
-                {experience.end_date ? formatDisplayDate(experience.end_date) : "Present"}
-              </p>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{experience.title}</p>
+                  <p className="text-sm text-muted-foreground">
+                    <span className="font-bold">{experience.company}</span>
+                    {experience.location ? ` · ${experience.location}` : ""}
+                  </p>
+                  <p className="text-xs font-bold italic text-accent">
+                    {formatDisplayDate(experience.start_date)} –{" "}
+                    {experience.end_date ? formatDisplayDate(experience.end_date) : "Present"}
+                  </p>
+                </div>
+                {/* Nothing indicated this row was clickable/had more to
+                    show before this — a chevron only when there's
+                    actually a description to reveal, matching the
+                    section-header chevron's own on/off shape so the
+                    affordance reads consistently at both levels. */}
+                {experience.description &&
+                  (isItemExpanded ? (
+                    <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  ))}
+              </div>
               {isItemExpanded && experience.description && (
                 <RichTextDisplay html={experience.description} className="mt-2" />
               )}

@@ -15,7 +15,6 @@ template never branches on presence/absence).
 
 from __future__ import annotations
 
-import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -42,42 +41,31 @@ logger = get_logger(__name__)
 _USE_CASE = "jd_tailoring_chat"
 _MAX_HISTORY_MESSAGES = 20
 _MAX_RESPONSE_TOKENS = 1000
+#: Same Groq free-tier per-request token ceiling and same fix as
+#: chat_service.py's identical constant — a message-count cap alone
+#: doesn't bound total rendered size, since individual replies (this
+#: session's own tables/bold-formatted answers included) can each run
+#: several thousand characters. See that file's comment for the full
+#: incident (2026-08-21).
+_MAX_HISTORY_CHARS = 20000
 
 _FALLBACK_REPLY = (
     "I'm having trouble reaching the AI right now — please try again in a moment. "
     "Your message has been saved."
 )
 
-#: The prompt instructs plain text — no markdown headers/bold/tables
-#: (see JD_TAILORING_CHAT_PROMPT_TEMPLATE's "Formatting rules") — but
-#: the model doesn't reliably comply. Confirmed live (2026-08-19): a
-#: real reply correctly dropped ** bold and table syntax but still
-#: emitted a literal "### Gaps you should watch for" section header
-#: mid-response, and an earlier real user report showed a reply with
-#: full markdown headers/bold/a table. Since this reply renders as
-#: plain text (MessageBubble in JdTailoringPage.tsx has no markdown
-#: renderer), any markdown syntax that slips through shows up as raw,
-#: ugly punctuation rather than formatting — same
-#: don't-trust-instruction-compliance-alone lesson as
-#: tailored_resume_service.py's _normalize_llm_text/bullet-prefix
-#: stripping, applied here to the chat path instead.
-_MARKDOWN_HEADER_RE = re.compile(r"^#{1,6}[ \t]+", re.MULTILINE)
-_MARKDOWN_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
-_MARKDOWN_BOLD_UNDERSCORE_RE = re.compile(r"__(.+?)__")
-_MARKDOWN_HR_RE = re.compile(r"^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$", re.MULTILINE)
-_MARKDOWN_TABLE_SEPARATOR_RE = re.compile(
-    r"^[ \t]*\|?[ \t]*:?-{2,}:?[ \t]*(\|[ \t]*:?-{2,}:?[ \t]*)*\|?[ \t]*$", re.MULTILINE
-)
-
-
-def _strip_markdown_formatting(text: str) -> str:
-    text = _MARKDOWN_TABLE_SEPARATOR_RE.sub("", text)
-    text = _MARKDOWN_HR_RE.sub("", text)
-    text = _MARKDOWN_HEADER_RE.sub("", text)
-    text = _MARKDOWN_BOLD_RE.sub(r"\1", text)
-    text = _MARKDOWN_BOLD_UNDERSCORE_RE.sub(r"\1", text)
-    text = text.replace("|", " - ")
-    return re.sub(r"\n{3,}", "\n\n", text).strip()
+#: 2026-08-21: this used to strip markdown headers/bold/tables from
+#: every reply, because JdTailoringPage.tsx's MessageBubble had no
+#: markdown renderer and any syntax that slipped through (the model
+#: never reliably complied with the "no markdown" instruction either —
+#: confirmed live 2026-08-19, replies with real headers/bold/tables kept
+#: getting through) showed up as raw, ugly punctuation. Removed now that
+#: renderMarkdownMessage (frontend/src/lib/markdown-message.tsx) renders
+#: bold/italic/lists/headers/tables as real elements everywhere a chat
+#: message is shown, including this page — stripping formatting the
+#: frontend can now render properly would only make replies worse, not
+#: safer. See JD_TAILORING_CHAT_PROMPT_TEMPLATE's "Formatting rules" for
+#: the matching prompt-side change.
 
 
 #: Bounded, real-facts-only grounding for the chat — deliberately more
@@ -307,17 +295,50 @@ class JdTailoringSessionService:
 
     async def delete_message(
         self, *, tenant_id: UUID, user_id: UUID, session_id: UUID, message_id: UUID
-    ) -> None:
-        """Removes exactly one message from the conversation — e.g. one
-        specific piece of AI-suggested advice the person doesn't want to
-        keep — leaving every other message and the session itself
-        untouched. Direct 2026-08-20 follow-up to clear_messages above:
-        "if the user wants... to pick any specific advice, then there
-        should be one icon to enable the deletion of that specific
-        conversation [message]."
+    ) -> list[UUID]:
+        """Removes a whole question+answer turn — the message clicked
+        plus its paired counterpart (2026-08-21 direct follow-up: "when
+        we are deleting a conversation, it should delete the question
+        and answer" — the original 2026-08-20 version of this only ever
+        removed the single row clicked, leaving an orphaned question or
+        a dangling answer with no question above it). Pairing is by
+        adjacency in conversation order, not a stored link: deleting a
+        USER message also deletes the very next message if it's the
+        ASSISTANT reply that followed it; deleting an ASSISTANT message
+        also deletes the message immediately before it if that's the
+        USER question that prompted it. A message with no such neighbor
+        (e.g. the session's very first message with no reply yet if the
+        LLM call is still in flight, or some future non-alternating
+        history) still deletes cleanly on its own — the pairing only
+        ever adds a second id when one genuinely sits right next to it.
+
+        Returns every id actually removed — the router surfaces this in
+        the response body (not a bare 204) specifically so the
+        frontend's cache update knows to remove both bubbles, not just
+        the one the caller targeted; a 204 gave it no way to know a
+        second row had also gone, which is exactly what a live user
+        report caught (the paired message stayed visibly stuck on
+        screen until a full page refresh).
         """
         await self.get_owned_or_raise(tenant_id=tenant_id, user_id=user_id, session_id=session_id)
-        await self._messages.delete(tenant_id, session_id, message_id)
+        history = await self._messages.list_by_session(tenant_id, session_id)
+        target_index = next((i for i, m in enumerate(history) if m.id == message_id), None)
+
+        ids_to_delete = [message_id]
+        if target_index is not None:
+            target = history[target_index]
+            if target.role == JdTailoringMessageRole.USER:
+                paired = history[target_index + 1] if target_index + 1 < len(history) else None
+                if paired is not None and paired.role == JdTailoringMessageRole.ASSISTANT:
+                    ids_to_delete.append(paired.id)
+            elif target.role == JdTailoringMessageRole.ASSISTANT:
+                paired = history[target_index - 1] if target_index > 0 else None
+                if paired is not None and paired.role == JdTailoringMessageRole.USER:
+                    ids_to_delete.append(paired.id)
+
+        for id_to_delete in ids_to_delete:
+            await self._messages.delete(tenant_id, session_id, id_to_delete)
+        return ids_to_delete
 
     async def _generate_reply(
         self,
@@ -367,7 +388,7 @@ class JdTailoringSessionService:
                 user_id=user_id,
                 max_tokens=_MAX_RESPONSE_TOKENS,
             )
-            return _strip_markdown_formatting(raw_reply)
+            return raw_reply.strip()
         except CareerCompassError as exc:
             logger.warning("jd_tailoring_llm_generate_failed", code=exc.code, error=str(exc))
             return _FALLBACK_REPLY
@@ -382,4 +403,12 @@ def _render_history(history: list[JdTailoringMessage]) -> str:
         JdTailoringMessageRole.USER: "Candidate",
         JdTailoringMessageRole.ASSISTANT: "Advisor",
     }
-    return "\n".join(f"{speaker[message.role]}: {message.content}" for message in recent)
+    lines = [f"{speaker[message.role]}: {message.content}" for message in recent]
+
+    # Drop the oldest lines first until the rendered history fits the
+    # character budget — see _MAX_HISTORY_CHARS above. Always keeps at
+    # least the single most recent line, even if it alone exceeds it.
+    while len(lines) > 1 and sum(len(line) for line in lines) > _MAX_HISTORY_CHARS:
+        lines.pop(0)
+
+    return "\n".join(lines)

@@ -1,3 +1,4 @@
+import { renderMarkdownMessage } from "@/lib/markdown-message";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
 
@@ -35,13 +36,13 @@ export function ChatThread({ variant = "page" }: ChatThreadProps) {
           <div
             key={message.id}
             className={cn(
-              "max-w-xl whitespace-pre-wrap rounded-lg px-4 py-2.5 text-sm",
+              "max-w-xl rounded-lg px-4 py-2.5 text-sm",
               message.role === "user"
-                ? "ml-auto bg-primary text-primary-foreground"
+                ? "ml-auto whitespace-pre-wrap bg-primary text-primary-foreground"
                 : "mr-auto bg-muted text-foreground",
             )}
           >
-            {message.content}
+            {message.role === "user" ? message.content : renderMarkdownMessage(message.content)}
           </div>
         ))}
         {isSending && <TypingIndicator />}

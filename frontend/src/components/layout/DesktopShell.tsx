@@ -204,7 +204,7 @@ export function DesktopShell({ mainRef, onLogout }: DesktopShellProps) {
 
         <div className="h-px bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)]" />
 
-        <nav className="mt-4 flex flex-1 flex-col gap-1 overflow-y-auto px-3">
+        <nav className="mt-4 flex flex-1 flex-col gap-1 overflow-y-auto scrollbar-hide px-3">
           {NAV_ITEMS.map(({ to, label, icon: Icon, end, children }) => {
             const link = (
               <NavLink

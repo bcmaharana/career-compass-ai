@@ -280,13 +280,19 @@ export function LandingPage() {
             to="/signup?type=individual"
             className={cn(buttonVariants({ variant: "primary", size: "lg" }), "w-full sm:w-auto")}
           >
-            Get started for yourself
+            Get Started For Yourself
           </Link>
           <Link
             to="/signup?type=organization"
             className={cn(buttonVariants({ variant: "outline", size: "lg" }), "w-full sm:w-auto")}
           >
-            Set up for your team
+            Set Up For Your Team
+          </Link>
+          <Link
+            to="/login"
+            className={cn(buttonVariants({ variant: "ghost", size: "lg" }), "w-full sm:w-auto")}
+          >
+            Existing User Login
           </Link>
         </div>
 

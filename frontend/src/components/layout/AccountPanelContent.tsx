@@ -1,5 +1,6 @@
 import { useCareerProfile } from "@/api/queries/career-profile";
 import { usePlatformAdminMe } from "@/api/queries/platform-admin";
+import { ProfileIconMenu } from "@/components/layout/ProfileIconMenu";
 import { Tooltip } from "@/components/ui/tooltip";
 import { TargetRolesWidget } from "@/features/career-profile/TargetRolesWidget";
 import { formatDisplayDate } from "@/lib/date-format";
@@ -174,50 +175,66 @@ export function AccountPanelContent({
         )}
       >
         <div className={cn("flex flex-col gap-1", isCollapsed ? "items-center" : "items-start")}>
-          {isCollapsed ? (
-            <Tooltip content={collapsedIdentitySummary} placement="left">
-              <Link
-                to="/profile"
-                aria-label="Career Profile"
-                onClick={onNavigate}
-                className="hover:opacity-80"
-              >
-                {profile?.photo_url && !photoLoadFailed ? (
-                  <img
-                    src={profile.photo_url}
-                    alt=""
-                    className="h-9 w-9 shrink-0 rounded-full object-cover"
-                    onError={() => setPhotoLoadFailed(true)}
-                  />
-                ) : (
-                  <UserCircle
-                    className="h-9 w-9 shrink-0 text-primary-foreground/70"
-                    strokeWidth={1.5}
-                  />
-                )}
-              </Link>
-            </Tooltip>
+          {onLogout ? (
+            // Clicking the profile icon opens a small Career Profile/Sign
+            // Out menu whenever a real onLogout is in scope — the rail
+            // (RightNav) always provides one. While collapsed, the
+            // greeting/name/date summary that used to live in a separate
+            // hover Tooltip around this same trigger is passed in as the
+            // menu's own header instead (2026-08-21) — a hover tooltip and
+            // this click-menu both anchoring off the same trigger meant
+            // the tooltip was still showing (the mouse never left the
+            // icon) at the same time the menu opened, rendering the two
+            // on top of each other. Expanded state omits it: that text is
+            // already shown persistently in the row beside the icon.
+            <ProfileIconMenu
+              photoUrl={profile?.photo_url}
+              onLogout={onLogout}
+              onNavigate={onNavigate}
+              triggerClassName="hover:opacity-80"
+              iconClassName="h-9 w-9"
+              header={isCollapsed ? collapsedIdentitySummary : undefined}
+            />
           ) : (
-            <Link
-              to="/profile"
-              aria-label="Career Profile"
-              onClick={onNavigate}
-              className="hover:opacity-80"
-            >
-              {profile?.photo_url && !photoLoadFailed ? (
-                <img
-                  src={profile.photo_url}
-                  alt=""
-                  className="h-9 w-9 shrink-0 rounded-full object-cover"
-                  onError={() => setPhotoLoadFailed(true)}
-                />
+            // The plain Link fallback only ever applies to
+            // MobileAccountMenu's own dropdown, which deliberately passes
+            // no onLogout (Sign out lives in AppFooter's icon columns
+            // there instead — see this component's showSettingsAndSignOut
+            // doc) — a nested menu inside an already-open dropdown would
+            // be redundant there. MobileAccountMenu never collapses, so
+            // the Tooltip here never actually renders in practice, but is
+            // kept for type/prop-shape completeness if that ever changes.
+            (() => {
+              const link = (
+                <Link
+                  to="/profile"
+                  aria-label="Career Profile"
+                  onClick={onNavigate}
+                  className="hover:opacity-80"
+                >
+                  {profile?.photo_url && !photoLoadFailed ? (
+                    <img
+                      src={profile.photo_url}
+                      alt=""
+                      className="h-9 w-9 shrink-0 rounded-full object-cover"
+                      onError={() => setPhotoLoadFailed(true)}
+                    />
+                  ) : (
+                    <UserCircle
+                      className="h-9 w-9 shrink-0 text-primary-foreground/70"
+                      strokeWidth={1.5}
+                    />
+                  )}
+                </Link>
+              );
+              return isCollapsed ? (
+                <Tooltip content={collapsedIdentitySummary} placement="left">
+                  {link}
+                </Tooltip>
               ) : (
-                <UserCircle
-                  className="h-9 w-9 shrink-0 text-primary-foreground/70"
-                  strokeWidth={1.5}
-                />
-              )}
-            </Link>
+                link
+              );
+            })()
           )}
 
           {toggleButton}
@@ -244,7 +261,7 @@ export function AccountPanelContent({
 
       <div className="h-px bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)]" />
 
-      <div className="flex-1 overflow-y-auto bg-primary">
+      <div className="flex-1 overflow-y-auto scrollbar-hide bg-primary">
         {inSettings ? (
           <nav className="flex flex-col gap-1 p-3">
             {visibleSettingsNavItems.map(({ to, label, icon: Icon, end }) => {
@@ -334,12 +351,12 @@ export function AccountPanelContent({
           )}
 
           {isCollapsed ? (
-            <Tooltip content="Sign out" placement="left" className="flex w-full justify-center">
+            <Tooltip content="Sign Out" placement="left" className="flex w-full justify-center">
               <div className="rounded-md bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] p-[3px]">
                 <button
                   type="button"
                   onClick={onLogout}
-                  aria-label="Sign out"
+                  aria-label="Sign Out"
                   className="flex h-8 w-8 items-center justify-center rounded-[4px] bg-primary transition-colors hover:bg-white/5"
                 >
                   <LogOut className="h-4 w-4" strokeWidth={2} color="url(#rainbow-accent-gradient)" />
@@ -355,7 +372,7 @@ export function AccountPanelContent({
               >
                 <LogOut className="h-4 w-4" strokeWidth={2} color="url(#rainbow-accent-gradient)" />
                 <span className="bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] bg-clip-text text-transparent">
-                  Sign out
+                  Sign Out
                 </span>
               </button>
             </div>

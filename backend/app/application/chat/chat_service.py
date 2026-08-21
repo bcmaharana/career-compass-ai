@@ -37,6 +37,20 @@ logger = get_logger(__name__)
 _CHAT_USE_CASE = "career_coach_chat"
 _MAX_HISTORY_MESSAGES = 20
 _MAX_RESPONSE_TOKENS = 1000
+#: Groq's free tier enforces a hard ~12000-token-per-request cap (see
+#: groq_provider.py's _SAFE_TOTAL_TOKEN_BUDGET) that this app has no
+#: control over — the adapter can clamp its OWN max_tokens ask down to
+#: fit, but has no way to shrink an already-oversized INPUT prompt.
+#: _MAX_HISTORY_MESSAGES alone doesn't bound total size, since
+#: individual messages (especially AI replies, which can run several
+#: thousand characters) vary wildly in length — a real 30-message
+#: conversation with several ~3500-char replies exceeded Groq's cap and
+#: fell back to the generic "trouble reaching the AI" message until this
+#: was added (caught from a direct user report, 2026-08-21). Trimming by
+#: a character budget on top of the message-count cap keeps the
+#: rendered history a safe size regardless of how verbose past replies
+#: were.
+_MAX_HISTORY_CHARS = 20000
 
 _FALLBACK_REPLY = (
     "I'm having trouble reaching the AI coach right now — please try again in a moment. "
@@ -121,6 +135,93 @@ class ChatService:
         conversation = await self._conversations.get_latest_for_user(tenant_id, user_id)
         return conversation.id if conversation else None
 
+    async def get_owned_or_raise(
+        self, *, tenant_id: UUID, user_id: UUID, conversation_id: UUID
+    ) -> ChatConversation:
+        conversation = await self._conversations.get_by_id(tenant_id, conversation_id)
+        if conversation is None or conversation.user_id != user_id:
+            raise NotFoundError(
+                "Chat conversation not found.", code="CHAT_CONVERSATION_NOT_FOUND"
+            )
+        return conversation
+
+    async def list_messages(
+        self, *, tenant_id: UUID, user_id: UUID, conversation_id: UUID
+    ) -> list[ChatMessage]:
+        """Real, fetchable history — added 2026-08-21 alongside the
+        delete/clear actions below (direct request: "keeping the
+        conversation should be same as JD Tailoring") so the AI Career
+        Coach conversation can be redisplayed in full whenever it's
+        shown, the same way JdTailoringSessionService.list_messages
+        already works, instead of only ever accumulating in the
+        frontend's in-memory chat-store as messages are sent this
+        session."""
+        await self.get_owned_or_raise(
+            tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id
+        )
+        return await self._messages.list_by_conversation(tenant_id, conversation_id)
+
+    async def clear_messages(
+        self, *, tenant_id: UUID, user_id: UUID, conversation_id: UUID
+    ) -> None:
+        """Wipes just the conversation — the conversation row itself
+        stays, so the same conversation_id keeps being reused for the
+        next message rather than starting a brand-new one. Mirrors
+        JdTailoringSessionService.clear_messages exactly (direct request
+        for consistency across every AI conversation surface)."""
+        await self.get_owned_or_raise(
+            tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id
+        )
+        await self._messages.delete_all_for_conversation(tenant_id, conversation_id)
+
+    async def delete_conversation(
+        self, *, tenant_id: UUID, user_id: UUID, conversation_id: UUID
+    ) -> None:
+        """Removes the conversation entirely — unlike clear_messages,
+        the next message this user sends starts a genuinely new
+        conversation (get_latest_conversation_id finds nothing to
+        resume). Messages are deleted first since there's no ON DELETE
+        CASCADE on the FK (same explicit-ordering convention as
+        SqlAlchemyAccountDeletionRepository)."""
+        await self.get_owned_or_raise(
+            tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id
+        )
+        await self._messages.delete_all_for_conversation(tenant_id, conversation_id)
+        await self._conversations.delete(tenant_id, conversation_id)
+
+    async def delete_message(
+        self, *, tenant_id: UUID, user_id: UUID, conversation_id: UUID, message_id: UUID
+    ) -> list[UUID]:
+        """Removes a whole question+answer turn — the message targeted
+        plus its paired counterpart, if one sits immediately adjacent to
+        it in conversation order. Identical pairing logic to
+        JdTailoringSessionService.delete_message (direct request for
+        consistency); see that method's docstring for the full
+        reasoning. Returns every id actually removed, same reason the
+        JD Tailoring endpoint does — so the caller's cache update can
+        remove every affected bubble, not just the one it clicked."""
+        await self.get_owned_or_raise(
+            tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id
+        )
+        history = await self._messages.list_by_conversation(tenant_id, conversation_id)
+        target_index = next((i for i, m in enumerate(history) if m.id == message_id), None)
+
+        ids_to_delete = [message_id]
+        if target_index is not None:
+            target = history[target_index]
+            if target.role == ChatMessageRole.USER:
+                paired = history[target_index + 1] if target_index + 1 < len(history) else None
+                if paired is not None and paired.role == ChatMessageRole.ASSISTANT:
+                    ids_to_delete.append(paired.id)
+            elif target.role == ChatMessageRole.ASSISTANT:
+                paired = history[target_index - 1] if target_index > 0 else None
+                if paired is not None and paired.role == ChatMessageRole.USER:
+                    ids_to_delete.append(paired.id)
+
+        for id_to_delete in ids_to_delete:
+            await self._messages.delete(tenant_id, conversation_id, id_to_delete)
+        return ids_to_delete
+
     async def _generate_reply(
         self, *, tenant_id: UUID, user_id: UUID, history: list[ChatMessage], content: str
     ) -> str:
@@ -153,11 +254,9 @@ class ChatService:
             )
             return conversation.id
 
-        existing_conversation = await self._conversations.get_by_id(tenant_id, conversation_id)
-        if existing_conversation is None or existing_conversation.user_id != user_id:
-            raise NotFoundError(
-                "Chat conversation not found.", code="CHAT_CONVERSATION_NOT_FOUND"
-            )
+        existing_conversation = await self.get_owned_or_raise(
+            tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id
+        )
         return existing_conversation.id
 
 
@@ -167,4 +266,13 @@ def _render_history(history: list[ChatMessage]) -> str:
 
     recent = history[-_MAX_HISTORY_MESSAGES:]
     speaker = {ChatMessageRole.USER: "User", ChatMessageRole.ASSISTANT: "Assistant"}
-    return "\n".join(f"{speaker[message.role]}: {message.content}" for message in recent)
+    lines = [f"{speaker[message.role]}: {message.content}" for message in recent]
+
+    # Drop the oldest lines first until the rendered history fits the
+    # character budget — see _MAX_HISTORY_CHARS above for why a
+    # message-count cap alone isn't enough. Always keeps at least the
+    # single most recent line, even if it alone exceeds the budget.
+    while len(lines) > 1 and sum(len(line) for line in lines) > _MAX_HISTORY_CHARS:
+        lines.pop(0)
+
+    return "\n".join(lines)

@@ -195,7 +195,8 @@ export function OpportunityIntelligencePage() {
                       {jobListings.listings.map((listing) => (
                         <div
                           key={listing.provider_id}
-                          className="flex items-start gap-3 rounded-md border border-border px-4 py-2"
+                          onClick={() => selectRow(listing.provider_id)}
+                          className="flex cursor-pointer items-start gap-3 rounded-md border border-border px-4 py-2 hover:bg-muted"
                         >
                           <input
                             type="radio"
@@ -203,6 +204,7 @@ export function OpportunityIntelligencePage() {
                             className="mt-1.5 h-3.5 w-3.5 shrink-0 accent-accent"
                             checked={selectedProviderId === listing.provider_id}
                             onChange={() => selectRow(listing.provider_id)}
+                            onClick={(event) => event.stopPropagation()}
                             aria-label={`Select ${listing.title} at ${listing.company ?? "this company"}`}
                           />
                           <div className="flex flex-1 flex-col gap-1">

@@ -12,7 +12,7 @@ import { useChatStore } from "@/stores/chat-store";
 export function useChatComposer() {
   const conversationId = useChatStore((state) => state.conversationId);
   const addUserMessage = useChatStore((state) => state.addUserMessage);
-  const addAssistantMessage = useChatStore((state) => state.addAssistantMessage);
+  const confirmTurn = useChatStore((state) => state.confirmTurn);
   const setSending = useChatStore((state) => state.setSending);
   const sendMessage = useSendChatMessage();
   // AppShell.tsx's own useLatestConversation() call resolves this and
@@ -31,14 +31,18 @@ export function useChatComposer() {
     const trimmed = content.trim();
     if (!trimmed || sendMessage.isPending || awaitingResume) return;
 
-    addUserMessage({ id: crypto.randomUUID(), role: "user", content: trimmed });
+    const tempUserId = crypto.randomUUID();
+    addUserMessage({ id: tempUserId, role: "user", content: trimmed });
     setSending(true);
 
     sendMessage.mutate(
       { conversation_id: conversationId, content: trimmed },
       {
         onSuccess: (data) => {
-          addAssistantMessage(data.conversation_id, {
+          // Reconciles the optimistic bubble above with its real
+          // server-assigned id — a delete on that bubble afterward
+          // otherwise silently no-ops against the throwaway client id.
+          confirmTurn(data.conversation_id, tempUserId, data.user_message.id, {
             id: data.assistant_message.id,
             role: "assistant",
             content: data.assistant_message.content,

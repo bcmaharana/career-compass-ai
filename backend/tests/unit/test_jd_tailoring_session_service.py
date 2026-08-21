@@ -11,10 +11,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app.adapters.documents.resume_data import ResumeData
-from app.application.jd_tailoring.jd_tailoring_session_service import (
-    JdTailoringSessionService,
-    _strip_markdown_formatting,
-)
+from app.application.jd_tailoring.jd_tailoring_session_service import JdTailoringSessionService
 from app.core.exceptions import CareerCompassError, NotFoundError
 from app.domain.career_profile.entities import CareerProfile, CoreCompetency, Experience
 from app.domain.identity.entities import User
@@ -387,7 +384,7 @@ class TestClearMessages:
 
 
 class TestDeleteMessage:
-    async def test_removes_only_the_targeted_message(self) -> None:
+    async def test_deleting_the_assistant_reply_also_deletes_its_question(self) -> None:
         service, _sessions_repo, messages_repo = _service()
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         session = await service.start_custom(
@@ -399,35 +396,165 @@ class TestDeleteMessage:
             role_title="Engineer",
         )
         now = datetime.now(UTC)
-        keep = await messages_repo.create(
+        question = await messages_repo.create(
             JdTailoringMessage(
                 id=uuid.uuid4(),
                 tenant_id=tenant_id,
                 session_id=session.id,
                 role="user",  # type: ignore[arg-type]
-                content="Keep me",
+                content="What's my fit?",
                 created_at=now,
             )
         )
-        to_delete = await messages_repo.create(
+        answer = await messages_repo.create(
             JdTailoringMessage(
                 id=uuid.uuid4(),
                 tenant_id=tenant_id,
                 session_id=session.id,
                 role="assistant",  # type: ignore[arg-type]
-                content="Delete me",
+                content="You're a strong match.",
                 created_at=now,
             )
         )
 
         await service.delete_message(
-            tenant_id=tenant_id, user_id=user_id, session_id=session.id, message_id=to_delete.id
+            tenant_id=tenant_id, user_id=user_id, session_id=session.id, message_id=answer.id
         )
 
         remaining = await service.list_messages(
             tenant_id=tenant_id, user_id=user_id, session_id=session.id
         )
-        assert [m.id for m in remaining] == [keep.id]
+        assert remaining == []
+        assert question.id not in [m.id for m in remaining]
+
+    async def test_deleting_the_question_also_deletes_its_assistant_reply(self) -> None:
+        service, _sessions_repo, messages_repo = _service()
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        session = await service.start_custom(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            target_role_id=None,
+            jd_text="JD",
+            company="Globex",
+            role_title="Engineer",
+        )
+        now = datetime.now(UTC)
+        question = await messages_repo.create(
+            JdTailoringMessage(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                session_id=session.id,
+                role="user",  # type: ignore[arg-type]
+                content="What's my fit?",
+                created_at=now,
+            )
+        )
+        await messages_repo.create(
+            JdTailoringMessage(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                session_id=session.id,
+                role="assistant",  # type: ignore[arg-type]
+                content="You're a strong match.",
+                created_at=now,
+            )
+        )
+
+        await service.delete_message(
+            tenant_id=tenant_id, user_id=user_id, session_id=session.id, message_id=question.id
+        )
+
+        remaining = await service.list_messages(
+            tenant_id=tenant_id, user_id=user_id, session_id=session.id
+        )
+        assert remaining == []
+
+    async def test_a_lone_message_with_no_adjacent_pair_deletes_just_itself(self) -> None:
+        # A user message that hasn't gotten a reply yet (e.g. the LLM call
+        # is still in flight, or the reply already failed to persist) has
+        # no assistant message to pair with — deleting it must not error
+        # or reach for a nonexistent neighbor.
+        service, _sessions_repo, messages_repo = _service()
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        session = await service.start_custom(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            target_role_id=None,
+            jd_text="JD",
+            company="Globex",
+            role_title="Engineer",
+        )
+        question = await messages_repo.create(
+            JdTailoringMessage(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                session_id=session.id,
+                role="user",  # type: ignore[arg-type]
+                content="Still waiting on a reply",
+                created_at=datetime.now(UTC),
+            )
+        )
+
+        await service.delete_message(
+            tenant_id=tenant_id, user_id=user_id, session_id=session.id, message_id=question.id
+        )
+
+        remaining = await service.list_messages(
+            tenant_id=tenant_id, user_id=user_id, session_id=session.id
+        )
+        assert remaining == []
+
+    async def test_deleting_one_turn_leaves_an_earlier_unrelated_turn_intact(self) -> None:
+        service, _sessions_repo, messages_repo = _service()
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        session = await service.start_custom(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            target_role_id=None,
+            jd_text="JD",
+            company="Globex",
+            role_title="Engineer",
+        )
+        now = datetime.now(UTC)
+        first_question = await messages_repo.create(
+            JdTailoringMessage(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                session_id=session.id,
+                role="user",  # type: ignore[arg-type]
+                content="First question",
+                created_at=now,
+            )
+        )
+        first_answer = await messages_repo.create(
+            JdTailoringMessage(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                session_id=session.id,
+                role="assistant",  # type: ignore[arg-type]
+                content="First answer",
+                created_at=now,
+            )
+        )
+        second_answer = await messages_repo.create(
+            JdTailoringMessage(
+                id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                session_id=session.id,
+                role="assistant",  # type: ignore[arg-type]
+                content="Second answer, no preceding question in this fixture",
+                created_at=now,
+            )
+        )
+
+        await service.delete_message(
+            tenant_id=tenant_id, user_id=user_id, session_id=session.id, message_id=second_answer.id
+        )
+
+        remaining = await service.list_messages(
+            tenant_id=tenant_id, user_id=user_id, session_id=session.id
+        )
+        assert {m.id for m in remaining} == {first_question.id, first_answer.id}
 
     async def test_a_message_id_from_a_different_session_is_a_silent_no_op(self) -> None:
         service, _sessions_repo, messages_repo = _service()
@@ -527,6 +654,45 @@ class TestSendMessage:
         assert turn.assistant_message.content == "Here's my assessment..."
         assert len(messages_repo.messages) == 2
         assert llm.call_count == 1
+
+    async def test_history_is_trimmed_by_character_budget_not_just_message_count(self) -> None:
+        # Same Groq-payload-too-large incident/fix as
+        # test_chat_service.py's identical test — a message-count cap
+        # alone doesn't bound total rendered size, since real replies
+        # (tables, bold-formatted advice) can each run several thousand
+        # characters.
+        llm = FakeLLMService()
+        service, _, messages_repo = _service(llm)
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        session = await service.start_custom(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            target_role_id=None,
+            jd_text="JD",
+            company="Globex",
+            role_title="Engineer",
+        )
+        for i in range(10):
+            await messages_repo.create(
+                JdTailoringMessage(
+                    id=uuid.uuid4(),
+                    tenant_id=tenant_id,
+                    session_id=session.id,
+                    role="user" if i % 2 == 0 else "assistant",  # type: ignore[arg-type]
+                    content=f"Message {i}: " + ("x" * 3500),
+                    created_at=datetime.now(UTC),
+                )
+            )
+
+        await service.send_message(
+            tenant_id=tenant_id, user_id=user_id, session_id=session.id, content="Latest question"
+        )
+
+        assert llm.last_input_variables is not None
+        history = llm.last_input_variables["conversation_history"]
+        assert len(history) <= 20000
+        assert "Message 9" in history
+        assert "Message 0" not in history
 
     async def test_grounds_the_prompt_in_the_jd_text_and_profile(self) -> None:
         llm = FakeLLMService()
@@ -666,10 +832,11 @@ class TestSendMessage:
         # The user's message is still persisted even though the LLM failed.
         assert any(m.content == "Hello" for m in messages_repo.messages)
 
-    async def test_strips_markdown_the_model_still_slips_in_despite_the_prompt(self) -> None:
-        # Confirmed live (2026-08-19): the prompt instructs plain text,
-        # but a real reply still contained a "### Gaps..." header even
-        # though it correctly avoided ** bold and tables that time.
+    async def test_preserves_markdown_the_model_uses(self) -> None:
+        # 2026-08-21: markdown is no longer stripped from replies — the
+        # frontend now renders it properly (renderMarkdownMessage), so a
+        # reply using headers/bold/bullets should reach the client as-is
+        # rather than being flattened into plain prose.
         raw = (
             "Some prose.\n\n"
             "### Gaps you should watch for\n"
@@ -692,31 +859,4 @@ class TestSendMessage:
             tenant_id=tenant_id, user_id=user_id, session_id=session.id, content="Hi"
         )
 
-        assert "#" not in turn.assistant_message.content
-        assert "**" not in turn.assistant_message.content
-        assert "Gaps you should watch for" in turn.assistant_message.content
-        assert "Overall fit: strong" in turn.assistant_message.content
-
-
-class TestStripMarkdownFormatting:
-    def test_strips_headers(self) -> None:
-        assert _strip_markdown_formatting("### A header\nBody text") == "A header\nBody text"
-
-    def test_strips_bold_and_bold_underscore(self) -> None:
-        assert _strip_markdown_formatting("This is **bold** and __also bold__.") == (
-            "This is bold and also bold."
-        )
-
-    def test_strips_horizontal_rules(self) -> None:
-        assert _strip_markdown_formatting("Above\n---\nBelow") == "Above\n\nBelow"
-
-    def test_strips_table_separator_row_and_flattens_pipes(self) -> None:
-        raw = "| A | B |\n|---|---|\n| 1 | 2 |"
-        result = _strip_markdown_formatting(raw)
-        assert "---" not in result
-        assert "A" in result and "B" in result and "1" in result and "2" in result
-
-    def test_leaves_plain_text_untouched(self) -> None:
-        assert _strip_markdown_formatting("Just plain prose, nothing special.") == (
-            "Just plain prose, nothing special."
-        )
+        assert turn.assistant_message.content == raw

@@ -116,7 +116,7 @@ export function AppFooter({ onLogout, lastLoginAt }: AppFooterProps) {
           <button
             type="button"
             onClick={onLogout}
-            aria-label="Sign out"
+            aria-label="Sign Out"
             className="flex h-7 w-7 items-center justify-center rounded-md text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground"
           >
             <LogOut className="h-4 w-4" />

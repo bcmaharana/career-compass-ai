@@ -7,6 +7,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Select } from "@/components/ui/select";
 import { CareerGoalsSection } from "@/features/career-profile/CareerGoalsSection";
 import { CareerHighlightsSection } from "@/features/career-profile/CareerHighlightsSection";
 import { CertificationSection } from "@/features/career-profile/CertificationSection";
@@ -80,12 +81,26 @@ export function CareerProfilePage() {
   // becomes the new app-wide default that AI Career Coach, Resume
   // Intelligence, Opportunity Intelligence, Learning Intelligence, and
   // Interview Prep all read. See target-role-scope-store.ts.
-  const { targetRoleId } = useRoleScopeParam();
+  const { targetRoleId, setSearchParams } = useRoleScopeParam();
   // Fed into every scope-dependent section's `key` below — see that
   // Component's key comment for why.
   const scopeKey = targetRoleId ?? "master";
   const { data: targetRoles } = useTargetRoles();
   const activeRole = targetRoleId ? targetRoles?.find((r) => r.id === targetRoleId) : null;
+
+  // Direct request (2026-08-21): the "Career Profile: <Role>" heading
+  // itself should be able to switch scope, not just the Right Nav's
+  // Target Roles widget — same setSearchParams-with-a-functional-updater
+  // shape ResumeIntelligencePage.tsx's own scope <Select> already uses,
+  // so any other param this page picks up later isn't clobbered.
+  function handleRoleChange(value: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set("role", value);
+      else next.delete("role");
+      return next;
+    });
+  }
 
   const { data: profile } = useCareerProfile(targetRoleId);
   const updateProfile = useUpdateCareerProfile(targetRoleId);
@@ -162,11 +177,21 @@ export function CareerProfilePage() {
         <div className="-mb-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <span className="text-base font-semibold text-foreground md:text-lg">
-              Career Profile:{" "}
-              <span className="bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] bg-clip-text text-transparent">
-                {activeRole ? activeRole.role_name : "Master"}
-              </span>
+              Career Profile:
             </span>
+            <Select
+              aria-label="Switch Career Profile scope"
+              value={targetRoleId ?? ""}
+              onChange={(e) => handleRoleChange(e.target.value)}
+              className="h-9 w-auto max-w-[16rem] bg-card px-2 text-sm font-medium text-foreground"
+            >
+              <option value="">Master</option>
+              {targetRoles?.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.role_name}
+                </option>
+              ))}
+            </Select>
             {activeRole && <Badge variant="accent">{activeRole.tag}</Badge>}
           </div>
           <Button

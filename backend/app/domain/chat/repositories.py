@@ -28,6 +28,13 @@ class ChatConversationRepository(Protocol):
         distinction moot. Revisit (order by latest message instead) if a
         genuine multi-conversation UI ever ships."""
         ...
+    async def delete(self, tenant_id: UUID, conversation_id: UUID) -> None:
+        """Hard delete — no `deleted_at` column exists on this table, and
+        this domain never needed one before this method. Caller must
+        delete this conversation's messages first (no ON DELETE CASCADE
+        on the FK), same explicit-ordering convention as
+        SqlAlchemyAccountDeletionRepository."""
+        ...
 
 
 class ChatMessageRepository(Protocol):
@@ -37,4 +44,13 @@ class ChatMessageRepository(Protocol):
     ) -> list[ChatMessage]:
         """Return the conversation's messages in chronological order —
         the context ChatService renders into the LLM prompt."""
+        ...
+    async def delete_all_for_conversation(self, tenant_id: UUID, conversation_id: UUID) -> None:
+        """Wipes every message in the conversation — the conversation row
+        itself is untouched (see ChatService.clear_messages)."""
+        ...
+    async def delete(self, tenant_id: UUID, conversation_id: UUID, message_id: UUID) -> None:
+        """Removes exactly one message row — scoped by conversation_id
+        too, so an id that doesn't actually belong to conversation_id
+        matches zero rows and is a silent no-op."""
         ...

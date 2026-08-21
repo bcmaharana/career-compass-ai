@@ -27,6 +27,7 @@ import { DeleteScopeChoiceDialog } from "@/features/interview-prep/DeleteScopeCh
 import { ScopeTagSelector, type ScopeOption } from "@/features/interview-prep/ScopeTagSelector";
 import { groupInterviewQuestionsByCategory } from "@/lib/group-interview-questions-by-category";
 import { getErrorMessage } from "@/lib/errors";
+import { renderMarkdownMessage } from "@/lib/markdown-message";
 import { cn } from "@/lib/utils";
 import { Bot, ChevronDown, ChevronRight, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { type Dispatch, type FormEvent, type SetStateAction, useState } from "react";
@@ -586,9 +587,9 @@ function QuestionCard({
             <ClampedText
               content={question.ai_answer ?? ""}
               label="AI-suggested answer"
-              className="whitespace-pre-line text-sm"
+              className="text-sm"
             >
-              {question.ai_answer}
+              {renderMarkdownMessage(question.ai_answer ?? "")}
             </ClampedText>
           )}
           {question.ai_answer_status === "failed" && (
@@ -983,9 +984,9 @@ function FollowUpQuestionCard({
               <ClampedText
                 content={followUp.ai_answer ?? ""}
                 label="AI-suggested answer"
-                className="whitespace-pre-line text-sm"
+                className="text-sm"
               >
-                {followUp.ai_answer}
+                {renderMarkdownMessage(followUp.ai_answer ?? "")}
               </ClampedText>
             )}
             {followUp.ai_answer_status === "failed" && (

@@ -1,7 +1,6 @@
-import { useLatestConversation } from "@/api/queries/chat";
+import { useChatMessages, useLatestConversation } from "@/api/queries/chat";
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { MobileShell } from "@/components/layout/MobileShell";
-import { matchNavItem } from "@/lib/nav-items";
 import { useAuthStore } from "@/stores/auth-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useQueryClient } from "@tanstack/react-query";
@@ -59,12 +58,10 @@ export function AppShell() {
   const isMobile = useIsMobileShell();
 
   const chatMessages = useChatStore((state) => state.messages);
-  const clearChat = useChatStore((state) => state.clear);
+  const setChatMessages = useChatStore((state) => state.setMessages);
   const chatConversationId = useChatStore((state) => state.conversationId);
   const setChatConversationId = useChatStore((state) => state.setConversationId);
   const mainRef = useRef<HTMLElement>(null);
-  const activeNavItem = matchNavItem(location.pathname);
-  const previousNavItemRef = useRef(activeNavItem);
 
   // Resumes the same AI chat conversation after a full page reload or a
   // fresh login — chat-store.ts's conversationId lives in memory only
@@ -84,16 +81,25 @@ export function AppShell() {
     }
   }, [latestConversation, chatConversationId, setChatConversationId]);
 
-  // Clears the visible chat thread on a genuine Left Nav / tab bar
-  // section change (brief Part 1.2) — the conversation itself stays
-  // persisted server-side regardless; this only resets what's rendered
-  // in the center panel (and MobileChatSheet's embedded thread).
+  // Hydrates the visible thread with the real saved history the moment
+  // a conversation id is known (2026-08-21, direct request for parity
+  // with JD Tailoring's own persistence) — this used to instead clear
+  // the thread on every Left Nav / tab bar section change, making the
+  // conversation look wiped even though it was still sitting in the
+  // database; now navigating around the app keeps showing the same
+  // conversation, matching JD Tailoring's own session view. Only
+  // populates the store when it's still empty (a mount-time or
+  // conversation-just-resolved fetch) — never overwrites messages
+  // already accumulating from an in-progress send in this tab, and
+  // never fights the optimistic bubble a fresh `sendTurn` call just
+  // added while its own request is still in flight.
+  const { data: fetchedMessages } = useChatMessages(chatConversationId);
   useEffect(() => {
-    if (previousNavItemRef.current !== activeNavItem) {
-      clearChat();
-      previousNavItemRef.current = activeNavItem;
-    }
-  }, [activeNavItem, clearChat]);
+    if (!fetchedMessages || chatMessages.length > 0) return;
+    setChatMessages(
+      fetchedMessages.map((m) => ({ id: m.id, role: m.role as "user" | "assistant", content: m.content })),
+    );
+  }, [fetchedMessages, chatMessages.length, setChatMessages]);
 
   // Resets the center panel's own scroll position on every navigation.
   // `<main>` (in whichever of DesktopShell/MobileShell is mounted) is a

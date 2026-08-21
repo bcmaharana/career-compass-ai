@@ -2,9 +2,9 @@ import { useCareerProfile } from "@/api/queries/career-profile";
 import { useQuoteOfTheDay } from "@/api/queries/quotes";
 import { MobileAccountMenu } from "@/components/layout/MobileAccountMenu";
 import { MobileNavMenu } from "@/components/layout/MobileNavMenu";
+import { ProfileIconMenu } from "@/components/layout/ProfileIconMenu";
 import { matchNavItem } from "@/lib/nav-items";
-import { Compass, UserCircle } from "lucide-react";
-import { useState } from "react";
+import { Compass } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 interface AppHeaderProps {
@@ -38,8 +38,11 @@ interface AppHeaderProps {
  * /dashboard, matching Left Nav's logo) above MobileNavMenu's hamburger
  * (opens the nav dropdown, replacing what was a fixed bottom tab bar — a
  * tab bar has a hard width budget the nav list was expected to outgrow);
- * right is the profile photo (links to /profile, matching Right Nav's
- * photo) above MobileAccountMenu's hamburger (opens a matching compact
+ * right is the profile photo (opens a small Career Profile/Sign Out menu
+ * via ProfileIconMenu, matching Right Nav's own photo — 2026-08-21,
+ * direct request that Sign Out be reachable from the profile icon itself
+ * everywhere, not only through Settings/the hamburger) above
+ * MobileAccountMenu's hamburger (opens a matching compact
  * dropdown — the account panel used to be a full-height right-edge
  * drawer, changed to mirror the left dropdown's interaction pattern after
  * live feedback). Both icons and both hamburgers share the exact same
@@ -76,7 +79,6 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
   const { label, purpose } = matchNavItem(location.pathname);
   const { data: quote } = useQuoteOfTheDay();
   const { data: profile } = useCareerProfile();
-  const [photoLoadFailed, setPhotoLoadFailed] = useState(false);
   const isMobile = Boolean(onLogout);
 
   return (
@@ -115,24 +117,14 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
         <p className="truncate text-xs text-primary-foreground/80 md:text-base">{purpose}</p>
       </div>
 
-      {isMobile && (
+      {isMobile && onLogout && (
         <div className="flex shrink-0 flex-col items-center justify-center gap-px border-l border-white/15 pl-3 md:hidden">
-          <Link
-            to="/profile"
-            aria-label="Career Profile"
-            className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-white/10"
-          >
-            {profile?.photo_url && !photoLoadFailed ? (
-              <img
-                src={profile.photo_url}
-                alt=""
-                className="h-4 w-4 shrink-0 rounded-full object-cover"
-                onError={() => setPhotoLoadFailed(true)}
-              />
-            ) : (
-              <UserCircle className="h-4 w-4 shrink-0 text-primary-foreground/80" strokeWidth={1.5} />
-            )}
-          </Link>
+          <ProfileIconMenu
+            photoUrl={profile?.photo_url}
+            onLogout={onLogout}
+            triggerClassName="flex h-7 w-7 items-center justify-center rounded-md hover:bg-white/10"
+            iconClassName="h-4 w-4"
+          />
           <MobileAccountMenu />
         </div>
       )}

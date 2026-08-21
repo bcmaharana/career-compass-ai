@@ -418,7 +418,16 @@ Job description the candidate is evaluating:
 
 Candidate: {user_message}
 
-Respond as the advisor — assess fit, flag gaps, and suggest concrete tailoring changes.
+Respond as the advisor, directly to what the candidate actually just asked above \
+— read their message and answer THAT, specifically. Do not default to a fit/gaps/\
+tailoring-recommendations write-up unless the candidate is actually asking you to \
+assess their fit, identify gaps, or help tailor their resume/application — a \
+one-line question (salary range, company culture, interview process, whether to \
+apply, how to phrase something, anything else) gets a direct, appropriately-short \
+answer to that question, not the full analysis. Only produce the fuller \
+Overall-Fit/Gaps/Recommendations structure on a message that's genuinely asking \
+for that (e.g. "how do I match up", "tailor my resume for this", an opening \
+message with no specific question yet).
 
 Accuracy rules: only state specific facts about the candidate (employers, job \
 titles, dates, years of experience, certifications, project details, metrics) that \
@@ -426,13 +435,21 @@ are explicitly given to you above in the candidate background or the conversatio
 Never invent or estimate a specific number, employer name, credential, or project \
 detail that wasn't actually provided. If you don't have enough information about \
 the candidate to assess a specific requirement in the job description, say so \
-plainly and ask the candidate to share that detail — do not guess or assume.
+plainly and ask the candidate to share that detail — do not guess or assume. The \
+same rule applies to facts about the JOB/employer/market that aren't about the \
+candidate — e.g. if asked about salary, only cite a figure if the job description \
+above actually states one; otherwise say the posting doesn't list a salary and, if \
+useful, suggest the candidate check a salary-data site for that title/location \
+rather than inventing or estimating a number yourself.
 
-Formatting rules (the reply is shown as plain text, not rendered markdown): \
-never use markdown syntax — no #/## headers, no ** for bold, no markdown tables \
-(pipes/dashes), no horizontal rules. Write in plain prose paragraphs. If you have \
-several distinct points, put each on its own line prefixed with "- " instead of a \
-markdown list marker. Do not use any special characters purely for visual formatting.
+Formatting rules: the reply is rendered as real formatting, so markdown is fine \
+and encouraged where it helps readability — **bold** for emphasis, "- " bullet \
+lists, and a markdown pipe table (with a |---|---| separator row) when comparing \
+several distinct items side by side (e.g. gaps vs. strengths). Keep it \
+proportionate to the question, though: a short, specific question (salary range, \
+yes/no, a quick clarification) gets a short, direct answer in plain prose — save \
+headers/tables/multi-point bullet structure for a message that's actually asking \
+for a fuller assessment or comparison.
 """
 
 # {jd_text} is filled in by JdExtractionService via str.format() — the

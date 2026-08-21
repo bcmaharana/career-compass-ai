@@ -21,6 +21,7 @@ from app.api.dependencies import (
     get_tailored_resume_service,
 )
 from app.api.v1.jd_tailoring.schemas import (
+    DeleteMessageResponse,
     JdExtractionRequest,
     JdExtractionResponse,
     JdTailoringMessageResponse,
@@ -238,22 +239,22 @@ async def clear_session_messages(
     )
 
 
-@router.delete(
-    "/jd-tailoring/sessions/{session_id}/messages/{message_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
+@router.delete("/jd-tailoring/sessions/{session_id}/messages/{message_id}")
 async def delete_session_message(
     session_id: UUID,
     message_id: UUID,
     identity: IdentityClaims = Depends(get_current_identity),
     service: JdTailoringSessionService = Depends(get_jd_tailoring_session_service),
-) -> None:
-    """Removes exactly one message — e.g. one piece of AI-suggested
-    advice the person doesn't want to keep — leaving every other
-    message and the session itself untouched."""
-    await service.delete_message(
+) -> DeleteMessageResponse:
+    """Removes a whole question+answer turn — the message targeted plus
+    its paired counterpart, if one sits immediately adjacent to it (see
+    JdTailoringSessionService.delete_message). Returns which ids were
+    actually removed (not a bare 204) so the caller's cache update can
+    remove every affected bubble, not just the one it clicked."""
+    deleted_ids = await service.delete_message(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         session_id=session_id,
         message_id=message_id,
     )
+    return DeleteMessageResponse(deleted_message_ids=deleted_ids)

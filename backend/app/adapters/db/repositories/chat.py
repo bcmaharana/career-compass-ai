@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import desc, select
+from sqlalchemy import delete, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.db.models import ChatConversationModel, ChatMessageModel
@@ -75,6 +75,18 @@ class SqlAlchemyChatConversationRepository:
         model = result.scalar_one_or_none()
         return _conversation_to_domain(model) if model else None
 
+    async def delete(self, tenant_id: UUID, conversation_id: UUID) -> None:
+        result = await self._session.execute(
+            select(ChatConversationModel).where(
+                ChatConversationModel.tenant_id == tenant_id,
+                ChatConversationModel.id == conversation_id,
+            )
+        )
+        model = result.scalar_one_or_none()
+        if model is not None:
+            await self._session.delete(model)
+            await self._session.flush()
+
 
 class SqlAlchemyChatMessageRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -105,3 +117,24 @@ class SqlAlchemyChatMessageRepository:
             .order_by(ChatMessageModel.created_at)
         )
         return [_message_to_domain(model) for model in result.scalars().all()]
+
+    async def delete_all_for_conversation(self, tenant_id: UUID, conversation_id: UUID) -> None:
+        # A single bulk DELETE, not a per-row loop — same convention as
+        # every other domain's bulk-clear repository method.
+        await self._session.execute(
+            delete(ChatMessageModel).where(
+                ChatMessageModel.tenant_id == tenant_id,
+                ChatMessageModel.conversation_id == conversation_id,
+            )
+        )
+        await self._session.flush()
+
+    async def delete(self, tenant_id: UUID, conversation_id: UUID, message_id: UUID) -> None:
+        await self._session.execute(
+            delete(ChatMessageModel).where(
+                ChatMessageModel.tenant_id == tenant_id,
+                ChatMessageModel.conversation_id == conversation_id,
+                ChatMessageModel.id == message_id,
+            )
+        )
+        await self._session.flush()

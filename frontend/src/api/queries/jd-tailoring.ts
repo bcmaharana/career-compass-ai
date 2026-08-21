@@ -11,6 +11,7 @@ type JdTailoringSessionResponse = components["schemas"]["JdTailoringSessionRespo
 type JdTailoringMessageResponse = components["schemas"]["JdTailoringMessageResponse"];
 type SendMessageRequest = components["schemas"]["SendMessageRequest"];
 type SendMessageResponse = components["schemas"]["SendMessageResponse"];
+type DeleteMessageResponse = components["schemas"]["DeleteMessageResponse"];
 
 const KEYS = {
   sessions: ["jd-tailoring", "sessions"] as const,
@@ -158,17 +159,25 @@ export function useClearJdTailoringMessages() {
   });
 }
 
-/** Removes exactly one message — e.g. one specific piece of AI-
- * suggested advice the user doesn't want to keep — leaving every other
- * message and the session itself untouched. */
+/** Removes a whole question+answer turn — the message clicked plus its
+ * paired counterpart, if the backend found one immediately adjacent to
+ * it (see JdTailoringSessionService.delete_message). The response body
+ * lists every id actually removed (not just the one requested) —
+ * relying on the passed-in `messageId` alone here (an earlier version
+ * did exactly that) left the paired bubble stuck on screen until a full
+ * refetch, since the cache update had no way to know a second row had
+ * also gone (caught from a direct user report, 2026-08-21). */
 export function useDeleteJdTailoringMessage(sessionId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (messageId: string) =>
-      apiClient.delete<void>(`/api/v1/jd-tailoring/sessions/${sessionId}/messages/${messageId}`),
-    onSuccess: (_data, messageId) => {
+      apiClient.delete<DeleteMessageResponse>(
+        `/api/v1/jd-tailoring/sessions/${sessionId}/messages/${messageId}`,
+      ),
+    onSuccess: (data) => {
+      const deletedIds = new Set(data.deleted_message_ids);
       queryClient.setQueryData<JdTailoringMessageResponse[]>(KEYS.messages(sessionId), (old) =>
-        old?.filter((message) => message.id !== messageId),
+        old?.filter((message) => !deletedIds.has(message.id)),
       );
     },
   });

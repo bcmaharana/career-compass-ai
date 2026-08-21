@@ -767,6 +767,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/conversations/{conversation_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Chat Messages
+         * @description Real, fetchable history (2026-08-21) — lets the AI Career Coach
+         *     conversation be redisplayed in full whenever it's shown, matching
+         *     JD Tailoring's own GET messages endpoint.
+         */
+        get: operations["list_chat_messages_api_v1_chat_conversations__conversation_id__messages_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Clear Chat Messages
+         * @description Clears just the conversation — the conversation row itself (and
+         *     its id) stays, so the next message keeps using it. Matching JD
+         *     Tailoring's "Clear conversation" action.
+         */
+        delete: operations["clear_chat_messages_api_v1_chat_conversations__conversation_id__messages_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/conversations/{conversation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Chat Conversation
+         * @description Removes the whole conversation — the next message this user sends
+         *     starts a genuinely new one. Matching JD Tailoring's session delete.
+         */
+        delete: operations["delete_chat_conversation_api_v1_chat_conversations__conversation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/conversations/{conversation_id}/messages/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Chat Message
+         * @description Removes a whole question+answer turn — the message targeted plus
+         *     its paired counterpart, if one sits immediately adjacent to it.
+         *     Matching JD Tailoring's per-message delete exactly.
+         */
+        delete: operations["delete_chat_message_api_v1_chat_conversations__conversation_id__messages__message_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quote-of-the-day": {
         parameters: {
             query?: never;
@@ -1824,9 +1895,11 @@ export interface paths {
         post?: never;
         /**
          * Delete Session Message
-         * @description Removes exactly one message — e.g. one piece of AI-suggested
-         *     advice the person doesn't want to keep — leaving every other
-         *     message and the session itself untouched.
+         * @description Removes a whole question+answer turn — the message targeted plus
+         *     its paired counterpart, if one sits immediately adjacent to it (see
+         *     JdTailoringSessionService.delete_message). Returns which ids were
+         *     actually removed (not a bare 204) so the caller's cache update can
+         *     remove every affected bubble, not just the one it clicked.
          */
         delete: operations["delete_session_message_api_v1_jd_tailoring_sessions__session_id__messages__message_id__delete"];
         options?: never;
@@ -2509,6 +2582,16 @@ export interface components {
             /** Roles */
             roles: string[];
         };
+        /** DeleteChatMessageResponse */
+        DeleteChatMessageResponse: {
+            /** Deleted Message Ids */
+            deleted_message_ids: string[];
+        };
+        /** DeleteMessageResponse */
+        DeleteMessageResponse: {
+            /** Deleted Message Ids */
+            deleted_message_ids: string[];
+        };
         /** EducationRequest */
         EducationRequest: {
             /** Institution */
@@ -3012,8 +3095,9 @@ export interface components {
             /**
              * Status
              * @default considering
+             * @enum {string}
              */
-            status: string;
+            status: "considering" | "applied" | "phone_screen" | "interview" | "offer" | "rejected" | "withdrawn" | "didnt_hear_back" | "other";
             /** Applied At */
             applied_at?: string | null;
             /** Notes */
@@ -3084,8 +3168,11 @@ export interface components {
             company: string;
             /** Role Title */
             role_title: string;
-            /** Status */
-            status: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "considering" | "applied" | "phone_screen" | "interview" | "offer" | "rejected" | "withdrawn" | "didnt_hear_back" | "other";
             /** Target Role Id */
             target_role_id?: string | null;
             /** Applied At */
@@ -6423,6 +6510,127 @@ export interface operations {
             };
         };
     };
+    list_chat_messages_api_v1_chat_conversations__conversation_id__messages_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatMessageResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_chat_messages_api_v1_chat_conversations__conversation_id__messages_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_chat_conversation_api_v1_chat_conversations__conversation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_chat_message_api_v1_chat_conversations__conversation_id__messages__message_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteChatMessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_quote_of_the_day_api_v1_quote_of_the_day_get: {
         parameters: {
             query?: never;
@@ -8626,11 +8834,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DeleteMessageResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
