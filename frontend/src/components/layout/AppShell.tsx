@@ -68,15 +68,33 @@ export function AppShell() {
   // (deliberately: it must not survive a *different* user logging in on
   // the same browser tab), which otherwise meant every reload/relogin
   // started a brand-new, historyless conversation even though the old
-  // one and its messages were still sitting in the database. The `only
-  // if nothing's set yet` guard matters here: this effect can re-run
-  // (react-query refetch, StrictMode) after the user has already sent a
-  // message in this tab, and must never clobber that in-progress
-  // conversation with an older one from the server.
+  // one and its messages were still sitting in the database.
+  //
+  // `hasAttemptedResumeRef` makes this a one-shot: a real bug caught live
+  // (2026-08-21) had this effect keyed only on "is chatConversationId
+  // currently null," which re-fired the moment "Delete conversation"
+  // (CoachPage.tsx) reset it to null — `useLatestConversation()` has
+  // `staleTime: Infinity` and was fetched once at mount, so its cached
+  // data still held the just-deleted conversation's id, and this effect
+  // immediately wrote that dead id straight back into the store. The
+  // very next message then went out carrying a conversation_id the
+  // backend had already removed, and silently 404'd
+  // (CHAT_CONVERSATION_NOT_FOUND) instead of starting the fresh
+  // conversation the user actually just asked for. A plain "only if
+  // nothing's set yet" check can't distinguish "never resolved yet" from
+  // "deliberately cleared" — a ref that never resets once the resume
+  // attempt has happened (successful or not) can.
   const { data: latestConversation } = useLatestConversation();
+  const hasAttemptedResumeRef = useRef(false);
   useEffect(() => {
-    if (chatConversationId) return;
-    if (latestConversation?.conversation_id) {
+    if (hasAttemptedResumeRef.current) return;
+    if (chatConversationId) {
+      hasAttemptedResumeRef.current = true;
+      return;
+    }
+    if (latestConversation === undefined) return; // still loading — wait for a real answer
+    hasAttemptedResumeRef.current = true;
+    if (latestConversation.conversation_id) {
       setChatConversationId(latestConversation.conversation_id);
     }
   }, [latestConversation, chatConversationId, setChatConversationId]);

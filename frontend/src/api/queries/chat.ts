@@ -64,11 +64,25 @@ export function useClearChatMessages() {
 /** Removes the whole conversation — matching JD Tailoring's
  * useDeleteJdTailoringSession. The caller is responsible for resetting
  * chat-store.ts's conversationId afterward (see CoachPage.tsx), since
- * this hook only knows about the TanStack Query cache, not that store. */
+ * this hook only knows about the TanStack Query cache, not that store.
+ *
+ * Also corrects the cached "latest conversation" query to `null` here —
+ * a real bug caught live (2026-08-21): that query has `staleTime:
+ * Infinity` and is fetched once at mount, so without this its cached
+ * data kept pointing at the conversation this very mutation just
+ * deleted, which AppShell.tsx's resume effect would otherwise read and
+ * write straight back into the store the moment conversationId became
+ * null again. */
 export function useDeleteChatConversation() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (conversationId: string) =>
       apiClient.delete<void>(`/api/v1/chat/conversations/${conversationId}`),
+    onSuccess: () => {
+      queryClient.setQueryData<LatestConversationResponse>(["chat", "latest-conversation"], {
+        conversation_id: null,
+      });
+    },
   });
 }
 
