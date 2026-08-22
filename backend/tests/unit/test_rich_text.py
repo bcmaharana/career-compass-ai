@@ -86,8 +86,30 @@ class TestSanitizeRichText:
     def test_img_onerror_is_stripped(self) -> None:
         assert sanitize_rich_text('<img src=x onerror="alert(1)">text') == "text"
 
-    def test_javascript_href_is_stripped(self) -> None:
-        assert sanitize_rich_text('<a href="javascript:alert(1)">click</a>') == "click"
+    def test_javascript_href_is_stripped_but_link_text_and_tag_kept(self) -> None:
+        # <a> is now an allowed tag (2026-08-24 link feature) — bleach's
+        # `protocols` allowlist strips just the disallowed href
+        # attribute, not the whole tag/text (confirmed against bleach's
+        # actual behavior, not guessed).
+        assert sanitize_rich_text('<a href="javascript:alert(1)">click</a>') == "<a>click</a>"
+
+    def test_data_href_is_stripped_but_link_text_and_tag_kept(self) -> None:
+        assert sanitize_rich_text('<a href="data:text/html,evil">click</a>') == "<a>click</a>"
+
+    def test_safe_link_survives_with_target_and_rel(self) -> None:
+        # RichTextEditor's applyLink() always sets target="_blank"
+        # rel="noreferrer" directly on the element it creates (see that
+        # function's own docstring for why, over execCommand).
+        html = '<a href="https://example.com" target="_blank" rel="noreferrer">click</a>'
+        assert sanitize_rich_text(html) == html
+
+    def test_mailto_link_survives(self) -> None:
+        html = '<a href="mailto:test@example.com">mail</a>'
+        assert sanitize_rich_text(html) == html
+
+    def test_link_combined_with_bold_and_color_survives(self) -> None:
+        html = '<b style="color: red;"><a href="https://example.com">link</a></b>'
+        assert sanitize_rich_text(html) == html
 
 
 class TestPlainTextToRichHtml:

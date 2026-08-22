@@ -1,15 +1,17 @@
 import { cn } from "@/lib/utils";
-import { Bold, IndentDecrease, IndentIncrease, Italic, List, Underline } from "lucide-react";
+import { Bold, IndentDecrease, IndentIncrease, Italic, Link2, List, Underline, Unlink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 /**
- * A small hand-rolled rich-text editor (Bold/Italic/Underline/text
- * color) — not a real editor library. Matches this app's "no heavy UI
- * kit" convention (see Dialog's own docstring). Backed by a plain
- * contenteditable div driven by the deprecated-but-still-universally-
- * supported document.execCommand — proportionate to "bold, color,
- * italics, underline" as literally requested, not a general-purpose
- * editor.
+ * A small hand-rolled rich-text editor (Bold/Italic/Underline/Link/
+ * text color/bullet-list/indent) — not a real editor library. Matches
+ * this app's "no heavy UI kit" convention (see Dialog's own docstring).
+ * Backed by a plain contenteditable div driven by the deprecated-but-
+ * still-universally-supported document.execCommand for most formats;
+ * Link (2026-08-24: "highlight/select a text string and be able to add
+ * a link to that text string in any box we have text") is built by
+ * directly wrapping the selection's Range in a real `<a>` instead — see
+ * applyLink's own docstring for why.
  *
  * Uncontrolled by design: `defaultValue` seeds the DOM exactly once, in
  * a mount-only effect (`el.innerHTML = ...`, not a `dangerouslySetInnerHTML`
@@ -35,6 +37,39 @@ import { useEffect, useRef, useState } from "react";
  * HTML is never the enforcement boundary, just what the user sees while
  * editing.
  */
+
+//: A bare host/path like "example.com" or "linkedin.com/in/x" has no
+//: scheme for a browser to resolve as absolute — left as-is, an <a
+//: href="example.com"> resolves RELATIVE to the current page, not as an
+//: external link (direct 2026-08-24 correction: "the url doesn't need
+//: to have https://"). Same scheme-detection regex as this app's other
+//: free-text-URL entry point (app/domain/interview_prep/entities.py's
+//: is_safe_reference_url) — a leading ALPHA then any mix of
+//: letters/digits/+/-/. before a colon; a value that already has one
+//: (https:, mailto:, ...) is left untouched, anything else gets
+//: "https://" prepended.
+const _SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
+
+//: Requires a real-looking domain (at least one label, then a final
+//: TLD of 2+ letters — "example.com", "sub.example.co.uk", optionally
+//: followed by a port/path/query/fragment) before it's trusted to get
+//: "https://" prepended (direct 2026-08-24 follow-up: "The URL must
+//: check if .com or .xxx is there or not") — rejects plain non-URL text
+//: like "hello" that would otherwise silently become a broken
+//: "https://hello" link. Only applied when there's no explicit scheme
+//: already (mailto:/etc. isn't a domain-shaped string at all); an
+//: explicit scheme is trusted as-is, same as normalizeLinkUrl above.
+const _DOMAIN_LIKE_RE =
+  /^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}(?::\d+)?(?:[/?#].*)?$/;
+
+function isLikelyValidLinkUrl(url: string): boolean {
+  return _SCHEME_RE.test(url) || _DOMAIN_LIKE_RE.test(url);
+}
+
+function normalizeLinkUrl(url: string): string {
+  return _SCHEME_RE.test(url) ? url : `https://${url}`;
+}
+
 export function RichTextEditor({
   id,
   defaultValue,
@@ -65,7 +100,12 @@ export function RichTextEditor({
   // beforehand about which way it's about to go. Tracking + highlighting
   // the actual state turns that into predictable, visible behavior
   // instead of trying to change execCommand's own (correct) semantics.
-  const [activeFormats, setActiveFormats] = useState({ bold: false, italic: false, underline: false });
+  const [activeFormats, setActiveFormats] = useState({
+    bold: false,
+    italic: false,
+    underline: false,
+    link: false,
+  });
 
   function refreshActiveFormats() {
     if (!editorRef.current) return;
@@ -79,6 +119,11 @@ export function RichTextEditor({
       bold: document.queryCommandState("bold"),
       italic: document.queryCommandState("italic"),
       underline: document.queryCommandState("underline"),
+      // queryCommandState has no "am I on a link" concept — unlink has
+      // no on/off state to toggle, so queryCommandEnabled (true whenever
+      // unlink would actually do something, i.e. the selection/cursor
+      // intersects an <a>) is the correct signal here instead.
+      link: document.queryCommandEnabled("unlink"),
     });
   }
 
@@ -152,6 +197,88 @@ export function RichTextEditor({
     onChange(editorRef.current?.innerHTML ?? "");
   }
 
+  // Highlight a text string, add a link to it (direct 2026-08-24
+  // request: "in any box we have text"). Built the same way as
+  // applyRainbow above — directly wrapping the selection's Range in a
+  // real `<a>` — rather than document.execCommand('createLink', ...),
+  // specifically so target="_blank"/rel="noreferrer" can be set on the
+  // element deterministically rather than relying on execCommand's own
+  // more limited output shape (no attribute control at all). The
+  // popover steals focus the moment its URL input is clicked, which
+  // collapses/changes window.getSelection() on most browsers — the
+  // Range must be captured and cloned at "Link" click time, before that
+  // happens, and reused later at "Apply" time rather than re-queried.
+  const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
+  const [linkUrlDraft, setLinkUrlDraft] = useState("");
+  const [linkUrlError, setLinkUrlError] = useState(false);
+  const savedRangeRef = useRef<Range | null>(null);
+  const linkPopoverRef = useRef<HTMLDivElement>(null);
+  const linkUrlInputRef = useRef<HTMLInputElement>(null);
+
+  function openLinkPopover() {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (range.collapsed) return; // nothing highlighted — matches the rainbow swatch's own silent no-op
+    if (!editorRef.current?.contains(range.commonAncestorContainer)) return;
+    savedRangeRef.current = range.cloneRange();
+    setLinkUrlDraft("");
+    setLinkUrlError(false);
+    setLinkPopoverOpen(true);
+  }
+
+  function applyLink(event: React.FormEvent) {
+    event.preventDefault();
+    const range = savedRangeRef.current;
+    const trimmed = linkUrlDraft.trim();
+    if (!range || !trimmed) return;
+    if (!isLikelyValidLinkUrl(trimmed)) {
+      setLinkUrlError(true);
+      return;
+    }
+    const url = normalizeLinkUrl(trimmed);
+    editorRef.current?.focus();
+
+    const anchor = document.createElement("a");
+    anchor.setAttribute("href", url);
+    anchor.setAttribute("target", "_blank");
+    anchor.setAttribute("rel", "noreferrer");
+    try {
+      range.surroundContents(anchor);
+    } catch {
+      const contents = range.extractContents();
+      anchor.appendChild(contents);
+      range.insertNode(anchor);
+    }
+    onChange(editorRef.current?.innerHTML ?? "");
+    refreshActiveFormats();
+    setLinkPopoverOpen(false);
+    savedRangeRef.current = null;
+  }
+
+  function removeLink() {
+    exec("unlink");
+  }
+
+  useEffect(() => {
+    if (!linkPopoverOpen) return;
+    linkUrlInputRef.current?.focus();
+    function handlePointerDown(event: MouseEvent) {
+      if (linkPopoverRef.current && !linkPopoverRef.current.contains(event.target as Node)) {
+        setLinkPopoverOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setLinkPopoverOpen(false);
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [linkPopoverOpen]);
+
   return (
     <div className="flex flex-col gap-0">
       <div className="flex items-center gap-1 rounded-t-md border border-b-0 border-border bg-muted/40 p-1">
@@ -202,6 +329,79 @@ export function RichTextEditor({
           )}
         >
           <Underline className="h-4 w-4" />
+        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={openLinkPopover}
+            aria-label="Add link"
+            aria-pressed={linkPopoverOpen}
+            title="Add link (select text first)"
+            className={cn(
+              "rounded p-1.5 hover:bg-muted",
+              linkPopoverOpen
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Link2 className="h-4 w-4" />
+          </button>
+          {linkPopoverOpen && (
+            <div
+              ref={linkPopoverRef}
+              className="absolute left-0 top-full z-30 mt-1 flex w-64 flex-col gap-1 rounded-md border border-border bg-card p-2 shadow-md"
+            >
+              <form className="flex w-full items-center gap-1.5" onSubmit={applyLink}>
+                <input
+                  ref={linkUrlInputRef}
+                  // Plain text, not type="url" — native URL validation
+                  // requires a scheme, which would block exactly the
+                  // "example.com" case normalizeLinkUrl() exists to
+                  // accept (direct 2026-08-24 correction: "the url
+                  // doesn't need to have https://").
+                  type="text"
+                  value={linkUrlDraft}
+                  onChange={(e) => {
+                    setLinkUrlDraft(e.target.value);
+                    if (linkUrlError) setLinkUrlError(false);
+                  }}
+                  placeholder="example.com or https://..."
+                  className={cn(
+                    "h-7 min-w-0 flex-1 rounded border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    linkUrlError ? "border-destructive" : "border-border",
+                  )}
+                />
+                <button
+                  type="submit"
+                  className="rounded bg-foreground px-2 py-1 text-xs font-medium text-background hover:opacity-90"
+                >
+                  Add
+                </button>
+              </form>
+              {linkUrlError && (
+                <p role="alert" className="text-xs text-destructive">
+                  Enter a real web address, like example.com
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={removeLink}
+          disabled={!activeFormats.link}
+          aria-label="Remove link"
+          title={activeFormats.link ? "Remove link" : "Place the cursor in a link to remove it"}
+          className={cn(
+            "rounded p-1.5 hover:bg-muted",
+            activeFormats.link
+              ? "text-muted-foreground hover:text-foreground"
+              : "text-muted-foreground/40 hover:bg-transparent",
+          )}
+        >
+          <Unlink className="h-4 w-4" />
         </button>
         <div className="mx-1 h-4 w-px bg-border" />
         {RICH_TEXT_COLOR_SWATCHES.map((color) => (
@@ -284,7 +484,8 @@ const RICH_TEXT_COLOR_SWATCHES = ["#0f172a", "#dc2626", "#2563eb", "#16a34a", "#
 //: padding — restored explicitly here so a bullet list actually shows
 //: bullets, in both the live editor and the readonly display below.
 const RICH_TEXT_CONTENT_CLASSES =
-  "[&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5 [&_blockquote]:border-l-2 [&_blockquote]:border-border";
+  "[&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5 [&_blockquote]:border-l-2 [&_blockquote]:border-border " +
+  "[&_a]:text-accent [&_a]:underline [&_a]:underline-offset-2 [&_a]:hover:text-accent/80";
 
 /** Readonly rendering of sanitized rich-text HTML — the display half of
  * RichTextEditor. Trusts the HTML it's given (dangerouslySetInnerHTML)

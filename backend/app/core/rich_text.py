@@ -1,16 +1,19 @@
-"""Server-side sanitization for the small amount of hand-rolled rich
-text this app accepts (Interview Prep's Answer/Discussion fields —
-see frontend/src/components/ui/rich-text-editor.tsx). The frontend
-editor is a plain contenteditable div with a Bold/Italic/Color/Bullet-
-list/Indent toolbar, not a real editor library (this app deliberately
-avoids heavy UI kits) — but a contenteditable div can end up holding
-*arbitrary* HTML via paste, browser quirks, or a modified client, so
-every write is re-sanitized here regardless of what the client sent.
-Reads are trusted (rendered via dangerouslySetInnerHTML) precisely
-because every write path goes through this function first — this is
-the one enforcement point, not a defense someone could route around
-by hitting a different endpoint, since InterviewQuestionService/
-InterviewTopicService call this for every add/update.
+"""Server-side sanitization for the hand-rolled rich text this app
+accepts app-wide (Career Profile's headline/summary/experience/etc.,
+Interview Prep's Answer/Discussion/Article content, Showcase Page
+content columns, Learning Log notes — see
+frontend/src/components/ui/rich-text-editor.tsx, the one shared editor
+component every one of these fields renders through). The frontend
+editor is a plain contenteditable div with a Bold/Italic/Underline/
+Link/Color/Bullet-list/Indent toolbar, not a real editor library (this
+app deliberately avoids heavy UI kits) — but a contenteditable div can
+end up holding *arbitrary* HTML via paste, browser quirks, or a
+modified client, so every write is re-sanitized here regardless of what
+the client sent. Reads are trusted (rendered via dangerouslySetInnerHTML)
+precisely because every write path goes through this function first —
+this is the one enforcement point, not a defense someone could route
+around by hitting a different endpoint, since every domain service that
+persists rich text calls this for every add/update.
 
 The tag/attribute/CSS allowlists below are deliberately shaped around
 Chromium's *actual* execCommand output (probed live, not guessed —
@@ -31,7 +34,7 @@ import html as _html
 import bleach
 from bleach.css_sanitizer import CSSSanitizer
 
-_ALLOWED_TAGS = ["b", "strong", "i", "em", "u", "span", "div", "p", "br", "ul", "li", "blockquote"]
+_ALLOWED_TAGS = ["b", "strong", "i", "em", "u", "span", "div", "p", "br", "ul", "li", "blockquote", "a"]
 #: `style` is allowed on every inline formatting tag, not just span/div/p
 #: — combining two formats on the same selection (e.g. bold + color)
 #: produces a single tag carrying both, like `<b style="color:...">`,
@@ -42,6 +45,20 @@ _ALLOWED_TAGS = ["b", "strong", "i", "em", "u", "span", "div", "p", "br", "ul", 
 _ALLOWED_ATTRIBUTES: dict[str, list[str]] = {
     tag: ["style"] for tag in ("b", "strong", "i", "em", "u", "span", "div", "p", "blockquote")
 }
+#: A link (2026-08-24: "highlight/select a text string and add a link to
+#: that text string in any box we have text") is built client-side by
+#: directly wrapping the selection's Range in a real `<a>` element
+#: (frontend/src/components/ui/rich-text-editor.tsx's applyLink — same
+#: direct-DOM-manipulation approach the "rainbow" color swatch already
+#: uses, not document.execCommand('createLink'), specifically so
+#: target="_blank"/rel="noreferrer" can be set deterministically rather
+#: than relying on execCommand's own, more limited output shape).
+#: `href`'s scheme is validated below via bleach's `protocols` allowlist
+#: — same three schemes (http/https/mailto) as
+#: app/domain/interview_prep/entities.py's is_safe_reference_url, this
+#: app's other free-text-URL enforcement point.
+_ALLOWED_ATTRIBUTES["a"] = ["href", "target", "rel", "style"]
+_ALLOWED_PROTOCOLS = ["http", "https", "mailto"]
 #: The "rainbow" text-color swatch (frontend/src/components/ui/rich-text-editor.tsx)
 #: is a genuine CSS gradient on the glyphs, which document.execCommand
 #: can't apply as an inline style (foreColor only accepts a solid
@@ -64,6 +81,7 @@ def sanitize_rich_text(value: str | None) -> str | None:
         value,
         tags=_ALLOWED_TAGS,
         attributes=_ALLOWED_ATTRIBUTES,
+        protocols=_ALLOWED_PROTOCOLS,
         css_sanitizer=_CSS_SANITIZER,
         strip=True,
     )
