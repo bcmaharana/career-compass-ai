@@ -21,7 +21,7 @@ from app.domain.career_profile.entities import (
     CoreCompetency,
     TargetRole,
 )
-from app.domain.interview_prep.entities import InterviewQuestion, InterviewTopic
+from app.domain.interview_prep.entities import ArticleBlock, ArticleColumn, InterviewQuestion, InterviewTopic
 
 pytestmark = pytest.mark.unit
 
@@ -319,7 +319,19 @@ class TestGenerateAnswer:
                 tenant_id=tenant_id,
                 user_id=user_id,
                 name="System Design",
-                discussion="Focus on trade-offs between consistency and availability.",
+                blocks=[
+                    ArticleBlock(
+                        id=uuid.uuid4(),
+                        columns=[
+                            ArticleColumn(
+                                id=uuid.uuid4(),
+                                type="rich_text",
+                                label="Notes",
+                                html="Focus on trade-offs between consistency and availability.",
+                            )
+                        ],
+                    )
+                ],
                 scope_target_role_ids=[None],
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
@@ -351,7 +363,19 @@ class TestGenerateAnswer:
                 tenant_id=tenant_id,
                 user_id=user_id,
                 name="System Design",
-                discussion="Focus on trade-offs between consistency and availability.",
+                blocks=[
+                    ArticleBlock(
+                        id=uuid.uuid4(),
+                        columns=[
+                            ArticleColumn(
+                                id=uuid.uuid4(),
+                                type="rich_text",
+                                label="Notes",
+                                html="Focus on trade-offs between consistency and availability.",
+                            )
+                        ],
+                    )
+                ],
                 scope_target_role_ids=[None],
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),

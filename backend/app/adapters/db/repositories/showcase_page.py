@@ -20,21 +20,44 @@ from app.domain.showcase_page.entities import (
     PublicShareLink,
     ShareableResourceType,
     ShowcaseBlock,
+    ShowcaseColumn,
     ShowcasePage,
 )
+
+
+def _column_to_json(column: ShowcaseColumn) -> dict[str, Any]:
+    return {
+        "id": str(column.id),
+        "type": column.type,
+        "label": column.label,
+        "html": column.html,
+        "image_url": column.image_url,
+        "video_embed_url": column.video_embed_url,
+        "article_topic_id": str(column.article_topic_id) if column.article_topic_id else None,
+        "external_url": column.external_url,
+    }
+
+
+def _column_from_json(item: dict[str, Any]) -> ShowcaseColumn:
+    return ShowcaseColumn(
+        id=uuid.UUID(item["id"]),
+        type=item["type"],
+        label=item["label"],
+        html=item.get("html"),
+        image_url=item.get("image_url"),
+        video_embed_url=item.get("video_embed_url"),
+        article_topic_id=(
+            uuid.UUID(item["article_topic_id"]) if item.get("article_topic_id") else None
+        ),
+        external_url=item.get("external_url"),
+    )
 
 
 def _blocks_to_json(blocks: list[ShowcaseBlock]) -> list[dict[str, Any]]:
     return [
         {
             "id": str(block.id),
-            "type": block.type,
-            "label": block.label,
-            "html": block.html,
-            "image_url": block.image_url,
-            "video_embed_url": block.video_embed_url,
-            "article_topic_id": str(block.article_topic_id) if block.article_topic_id else None,
-            "external_url": block.external_url,
+            "columns": [_column_to_json(column) for column in block.columns],
         }
         for block in blocks
     ]
@@ -44,15 +67,7 @@ def _blocks_from_json(raw: list[dict[str, Any]]) -> list[ShowcaseBlock]:
     return [
         ShowcaseBlock(
             id=uuid.UUID(item["id"]),
-            type=item["type"],
-            label=item["label"],
-            html=item.get("html"),
-            image_url=item.get("image_url"),
-            video_embed_url=item.get("video_embed_url"),
-            article_topic_id=(
-                uuid.UUID(item["article_topic_id"]) if item.get("article_topic_id") else None
-            ),
-            external_url=item.get("external_url"),
+            columns=[_column_from_json(column) for column in item["columns"]],
         )
         for item in raw
     ]

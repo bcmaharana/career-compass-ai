@@ -18,9 +18,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.dependencies import get_public_showcase_service
 from app.api.v1.public_sharing.schemas import (
+    PublicArticleBlock,
+    PublicArticleColumn,
     PublicArticleResponse,
-    PublicReferenceLink,
     PublicShowcaseBlock,
+    PublicShowcaseColumn,
     PublicShowcasePageResponse,
 )
 from app.application.showcase_page.public_showcase_service import PublicShowcaseService
@@ -46,17 +48,23 @@ async def get_public_showcase_page(
         blocks=[
             PublicShowcaseBlock(
                 id=block.id,
-                type=block.type,
-                label=block.label,
-                html=block.html,
-                image_url=block.image_url,
-                video_embed_url=block.video_embed_url,
-                article_share_key=(
-                    view.article_share_keys.get(block.article_topic_id)
-                    if block.article_topic_id is not None
-                    else None
-                ),
-                external_url=block.external_url,
+                columns=[
+                    PublicShowcaseColumn(
+                        id=column.id,
+                        type=column.type,
+                        label=column.label,
+                        html=column.html,
+                        image_url=column.image_url,
+                        video_embed_url=column.video_embed_url,
+                        article_share_key=(
+                            view.article_share_keys.get(column.article_topic_id)
+                            if column.article_topic_id is not None
+                            else None
+                        ),
+                        external_url=column.external_url,
+                    )
+                    for column in block.columns
+                ],
             )
             for block in view.page.blocks
         ],
@@ -76,10 +84,27 @@ async def get_public_article(
         owner_display_name=view.owner_display_name,
         owner_handle=view.owner_handle,
         name=view.topic.name,
-        discussion=view.topic.discussion,
-        image_url=view.image_url,
-        reference_links=[
-            PublicReferenceLink(url=link.url, label=link.label)
-            for link in view.topic.reference_links
+        blocks=[
+            PublicArticleBlock(
+                id=block.id,
+                columns=[
+                    PublicArticleColumn(
+                        id=column.id,
+                        type=column.type,
+                        label=column.label,
+                        html=column.html,
+                        image_url=view.image_urls.get(column.id),
+                        video_embed_url=column.video_embed_url,
+                        article_share_key=(
+                            view.article_share_keys.get(column.article_topic_id)
+                            if column.article_topic_id is not None
+                            else None
+                        ),
+                        external_url=column.external_url,
+                    )
+                    for column in block.columns
+                ],
+            )
+            for block in view.topic.blocks
         ],
     )

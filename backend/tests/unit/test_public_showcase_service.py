@@ -15,8 +15,13 @@ import pytest
 from app.application.showcase_page.public_showcase_service import PublicShowcaseService
 from app.domain.career_profile.entities import TargetRole
 from app.domain.identity.entities import User
-from app.domain.interview_prep.entities import InterviewTopic
-from app.domain.showcase_page.entities import PublicShareLink, ShowcaseBlock, ShowcasePage
+from app.domain.interview_prep.entities import ArticleBlock, ArticleColumn, InterviewTopic
+from app.domain.showcase_page.entities import (
+    PublicShareLink,
+    ShowcaseBlock,
+    ShowcaseColumn,
+    ShowcasePage,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -260,9 +265,14 @@ class TestGetShowcasePage:
             blocks=[
                 ShowcaseBlock(
                     id=uuid.uuid4(),
-                    type="article_link",
-                    label="Read more",
-                    article_topic_id=topic.id,
+                    columns=[
+                        ShowcaseColumn(
+                            id=uuid.uuid4(),
+                            type="article_link",
+                            label="Read more",
+                            article_topic_id=topic.id,
+                        )
+                    ],
                 )
             ],
         )
@@ -315,9 +325,14 @@ class TestGetShowcasePage:
             blocks=[
                 ShowcaseBlock(
                     id=uuid.uuid4(),
-                    type="article_link",
-                    label="Read more",
-                    article_topic_id=topic.id,
+                    columns=[
+                        ShowcaseColumn(
+                            id=uuid.uuid4(),
+                            type="article_link",
+                            label="Read more",
+                            article_topic_id=topic.id,
+                        )
+                    ],
                 )
             ],
         )
@@ -406,17 +421,27 @@ class TestGetArticle:
     async def test_returns_the_article_view_when_public(self) -> None:
         fx = _Fixture()
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        image_column = ArticleColumn(
+            id=uuid.uuid4(), type="image", label="Photo", image_key="interview-topics/x.jpg"
+        )
         topic = InterviewTopic(
             id=uuid.uuid4(),
             tenant_id=tenant_id,
             user_id=user_id,
             name="System Design",
-            discussion="<p>Notes</p>",
+            blocks=[
+                ArticleBlock(
+                    id=uuid.uuid4(),
+                    columns=[
+                        ArticleColumn(id=uuid.uuid4(), type="rich_text", label="Notes", html="<p>Notes</p>")
+                    ],
+                ),
+                ArticleBlock(id=uuid.uuid4(), columns=[image_column]),
+            ],
             scope_target_role_ids=[None],
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
             is_public=True,
-            image_key="interview-topics/x.jpg",
         )
         fx.topics.topics[topic.id] = topic
         fx.users.users[user_id] = _make_user(tenant_id=tenant_id)
@@ -434,4 +459,4 @@ class TestGetArticle:
         assert view is not None
         assert view.topic.name == "System Design"
         assert view.owner_handle == "JR"
-        assert view.image_url == "https://example.test/interview-topics/x.jpg"
+        assert view.image_urls[image_column.id] == "https://example.test/interview-topics/x.jpg"

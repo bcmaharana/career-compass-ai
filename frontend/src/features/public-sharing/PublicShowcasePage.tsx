@@ -8,7 +8,8 @@ import { ApiError } from "@/api/client";
 import { ExternalLink } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
-type PublicShowcaseBlock = components["schemas"]["PublicShowcaseBlock"];
+type PublicShowcaseRow = components["schemas"]["PublicShowcaseBlock"];
+type PublicShowcaseColumn = components["schemas"]["PublicShowcaseColumn"];
 
 /**
  * Anonymous, read-only route at `/:handle/:roleTag/:key` — registered
@@ -24,7 +25,14 @@ export function PublicShowcasePage() {
   return (
     <div className="min-h-screen bg-[hsl(218,25%,93%)]">
       <PublicPageHeader />
-      <main className="mx-auto max-w-2xl px-6 py-10 sm:px-10">
+      {/* Mobile stays a comfortable reading column (max-w-2xl, effectively
+          full-width minus padding on any real phone anyway). From `md` up
+          — this app's own mobile/desktop split, see globals.css — widens
+          to a genuine 80% of the viewport (direct 2026-08-24 report: the
+          page read as unnecessarily narrow for a recruiter viewing it on
+          a real monitor). `md:max-w-none` cancels the mobile max-w-2xl
+          cap, which would otherwise still win over w-4/5 above 672px. */}
+      <main className="mx-auto max-w-2xl px-6 py-10 sm:px-10 md:w-4/5 md:max-w-none">
         {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
         {isError && (
           <Card>
@@ -45,8 +53,8 @@ export function PublicShowcasePage() {
               </h1>
               <p className="text-sm text-muted-foreground">{page.role_name}</p>
             </div>
-            {page.blocks.map((block) => (
-              <ShowcaseBlockView key={block.id} block={block} ownerHandle={page.owner_handle} />
+            {page.blocks.map((row) => (
+              <ShowcaseRowView key={row.id} row={row} ownerHandle={page.owner_handle} />
             ))}
           </div>
         )}
@@ -55,76 +63,79 @@ export function PublicShowcasePage() {
   );
 }
 
-function ShowcaseBlockView({
-  block,
-  ownerHandle,
-}: {
-  block: PublicShowcaseBlock;
-  ownerHandle: string;
-}) {
+/** Each row renders its columns side by side (equal width) on desktop
+ * and stacked vertically on mobile — same convention the editor's own
+ * ShowcaseRowCard establishes. A 1-column row (everything created
+ * before multi-column support existed) is visually identical to the
+ * old single-block layout. */
+function ShowcaseRowView({ row, ownerHandle }: { row: PublicShowcaseRow; ownerHandle: string }) {
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-2 py-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {block.label}
-        </p>
-        <ShowcaseBlockContent block={block} ownerHandle={ownerHandle} />
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-4 md:flex-row">
+      {row.columns.map((column) => (
+        <Card key={column.id} className="min-w-0 flex-1 basis-0">
+          <CardContent className="flex flex-col gap-2 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {column.label}
+            </p>
+            <ShowcaseColumnContent column={column} ownerHandle={ownerHandle} />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
   );
 }
 
-function ShowcaseBlockContent({
-  block,
+function ShowcaseColumnContent({
+  column,
   ownerHandle,
 }: {
-  block: PublicShowcaseBlock;
+  column: PublicShowcaseColumn;
   ownerHandle: string;
 }) {
-  switch (block.type) {
+  switch (column.type) {
     case "rich_text":
-      return block.html ? <RichTextDisplay html={block.html} /> : null;
+      return column.html ? <RichTextDisplay html={column.html} /> : null;
     case "image":
-      return block.image_url ? (
+      return column.image_url ? (
         <img
-          src={block.image_url}
+          src={column.image_url}
           alt=""
-          className="max-h-[75vh] w-full max-w-2xl rounded-md border border-border object-contain"
+          className="max-h-[75vh] w-full rounded-md border border-border object-contain"
         />
       ) : null;
     case "video_embed":
-      return block.video_embed_url ? (
+      return column.video_embed_url ? (
         <div className="aspect-video w-full overflow-hidden rounded-md border border-border">
           <iframe
-            src={block.video_embed_url}
-            title={block.label}
+            src={column.video_embed_url}
+            title={column.label}
             className="h-full w-full"
             allowFullScreen
           />
         </div>
       ) : null;
     case "external_link":
-      return block.external_url ? (
+      return column.external_url ? (
         <a
-          href={block.external_url}
+          href={column.external_url}
           target="_blank"
           rel="noreferrer"
           className="flex items-center gap-1 text-sm font-medium text-accent underline underline-offset-2 hover:text-accent/80"
         >
           <ExternalLink className="h-3.5 w-3.5" />
-          {block.external_url}
+          {column.external_url}
         </a>
       ) : null;
     case "article_link":
-      return block.article_share_key ? (
+      return column.article_share_key ? (
         <Link
-          to={`/${ownerHandle}/article/${block.article_share_key}`}
+          to={`/${ownerHandle}/article/${column.article_share_key}`}
           className="text-sm font-medium text-accent underline underline-offset-2 hover:text-accent/80"
         >
           Read the full article &rarr;
         </Link>
       ) : (
-        <p className="text-sm text-muted-foreground">{block.label}</p>
+        <p className="text-sm text-muted-foreground">{column.label}</p>
       );
   }
 }

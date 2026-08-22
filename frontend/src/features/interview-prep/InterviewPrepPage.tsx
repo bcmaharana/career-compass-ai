@@ -450,6 +450,32 @@ function questionHasContent(question: components["schemas"]["InterviewQuestionRe
   return !!question.manual_answer || question.ai_answer_status === "generated";
 }
 
+/** "Content" for an Article is at least one block whose column actually
+ * carries something to show (2026-08-24: Articles moved from a fixed
+ * discussion/image/reference_links shape to the same freeform blocks
+ * model Showcase Page uses) — mirrors the exact per-type emptiness
+ * checks ArticleColumnPreview (InterviewTopicsSection.tsx) already uses
+ * for its own "No content yet"/"No URL yet" states, combined into one
+ * signal for the TOC's red-if-nothing-prepared highlight. */
+function topicHasContent(topic: components["schemas"]["InterviewTopicResponse"]): boolean {
+  return topic.blocks.some((block) =>
+    block.columns.some((column) => {
+      switch (column.type) {
+        case "rich_text":
+          return !!column.html;
+        case "image":
+          return !!column.image_url;
+        case "video_embed":
+          return !!column.video_embed_url;
+        case "external_link":
+          return !!column.external_url;
+        case "article_link":
+          return !!column.article_topic_id;
+      }
+    }),
+  );
+}
+
 function TopicsTableOfContents({
   topics,
   sectionFilter,
@@ -481,7 +507,7 @@ function TopicsTableOfContents({
                   <li key={topic.id}>
                     <TocEntryLink
                       onSelect={() => onSelectTopic(topic.id)}
-                      hasContent={!!topic.discussion}
+                      hasContent={topicHasContent(topic)}
                     >
                       {topic.name}
                     </TocEntryLink>

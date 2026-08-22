@@ -40,11 +40,12 @@ class InterviewTopicModel(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     section: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    discussion: Mapped[str | None] = mapped_column(Text, nullable=True)
-    image_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    # list[{"url": str, "label": str}] — same "nested value type inside a
-    # JSON blob" pattern InterviewQuestionModel.reference_links uses.
-    reference_links: Mapped[list[dict[str, str]]] = mapped_column(JSON, nullable=False, default=list)
+    # list[{"id": str, "columns": [{"id": str, "type": str, "label": str,
+    # "html": str|None, "image_key": str|None, ...}]}] — same row/column
+    # content-block shape as ShowcasePageModel.blocks (see
+    # app/domain/content_blocks/entities.py), replacing the old fixed
+    # discussion/image_key/reference_links columns (2026-08-24).
+    blocks: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

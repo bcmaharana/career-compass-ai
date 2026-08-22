@@ -25,7 +25,7 @@ from app.application.showcase_page.showcase_page_service import (
 from app.core.exceptions import NotFoundError, ValidationError
 from app.domain.career_profile.entities import CareerProfile, Experience, TargetRole
 from app.domain.identity.entities import User
-from app.domain.showcase_page.entities import ShowcaseBlock, ShowcasePage
+from app.domain.showcase_page.entities import ShowcaseBlock, ShowcaseColumn, ShowcasePage
 
 pytestmark = pytest.mark.unit
 
@@ -263,7 +263,9 @@ class TestGetOrCreate:
         )
 
         assert page.is_public is False
-        about = next(b for b in page.blocks if b.label == "About")
+        about_block = next(b for b in page.blocks if b.columns[0].label == "About")
+        assert len(about_block.columns) == 1
+        about = about_block.columns[0]
         assert "Senior Engineer" in (about.html or "")
         assert "Builds reliable systems." in (about.html or "")
 
@@ -291,10 +293,11 @@ class TestGetOrCreate:
             tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id
         )
 
-        experience_block = next(b for b in page.blocks if b.label == "Experience")
-        assert "Staff Engineer" in (experience_block.html or "")
-        assert "Acme Corp" in (experience_block.html or "")
-        assert "Shipped things." in (experience_block.html or "")
+        experience_block = next(b for b in page.blocks if b.columns[0].label == "Experience")
+        experience_html = experience_block.columns[0].html or ""
+        assert "Staff Engineer" in experience_html
+        assert "Acme Corp" in experience_html
+        assert "Shipped things." in experience_html
 
     async def test_second_call_reuses_the_existing_page_without_reseeding(self) -> None:
         fx = _Fixture()
@@ -321,18 +324,19 @@ class TestUpdate:
         await fx.service.get_or_create(
             tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id
         )
-        block = ShowcaseBlock(
+        column = ShowcaseColumn(
             id=uuid.uuid4(),
             type="rich_text",
             label="Custom",
             html="<p>Hello</p><script>alert(1)</script>",
         )
+        block = ShowcaseBlock(id=uuid.uuid4(), columns=[column])
 
         updated = await fx.service.update(
             tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id, blocks=[block]
         )
 
-        assert updated.blocks[0].html == "<p>Hello</p>alert(1)"
+        assert updated.blocks[0].columns[0].html == "<p>Hello</p>alert(1)"
 
     async def test_leaves_non_rich_text_blocks_untouched(self) -> None:
         fx = _Fixture()
@@ -340,18 +344,19 @@ class TestUpdate:
         await fx.service.get_or_create(
             tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id
         )
-        block = ShowcaseBlock(
+        column = ShowcaseColumn(
             id=uuid.uuid4(),
             type="external_link",
             label="My site",
             external_url="https://example.com",
         )
+        block = ShowcaseBlock(id=uuid.uuid4(), columns=[column])
 
         updated = await fx.service.update(
             tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id, blocks=[block]
         )
 
-        assert updated.blocks[0].external_url == "https://example.com"
+        assert updated.blocks[0].columns[0].external_url == "https://example.com"
 
     async def test_replaces_the_whole_block_list(self) -> None:
         fx = _Fixture()
@@ -389,32 +394,63 @@ class TestSetPublic:
         assert page.is_public is False
 
 
+def _image_block() -> ShowcaseBlock:
+    return ShowcaseBlock(
+        id=uuid.uuid4(),
+        columns=[ShowcaseColumn(id=uuid.uuid4(), type="image", label="Photo")],
+    )
+
+
 class TestUploadImage:
-    async def test_sets_the_block_image_url(self) -> None:
+    async def test_sets_the_column_image_url(self) -> None:
         fx = _Fixture()
         role = fx.register_role_with_profile()
         page = await fx.service.update(
             tenant_id=fx.tenant_id,
             user_id=fx.user_id,
             target_role_id=role.id,
-            blocks=[ShowcaseBlock(id=uuid.uuid4(), type="image", label="Photo")],
+            blocks=[_image_block()],
         )
-        block_id = page.blocks[0].id
+        column_id = page.blocks[0].columns[0].id
 
         updated = await fx.service.upload_image(
             tenant_id=fx.tenant_id,
             user_id=fx.user_id,
             target_role_id=role.id,
-            block_id=block_id,
+            column_id=column_id,
             content=b"fake-bytes",
             content_type="image/png",
         )
 
-        image_url = updated.blocks[0].image_url
+        image_url = updated.blocks[0].columns[0].image_url
         assert image_url is not None
         assert image_url.startswith("https://example.test/showcase-pages/")
 
-    async def test_raises_not_found_for_an_unknown_block(self) -> None:
+    async def test_finds_the_column_even_when_its_row_has_multiple_columns(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+        text_column = ShowcaseColumn(id=uuid.uuid4(), type="rich_text", label="Text", html="<p>Hi</p>")
+        image_column = ShowcaseColumn(id=uuid.uuid4(), type="image", label="Photo")
+        row = ShowcaseBlock(id=uuid.uuid4(), columns=[text_column, image_column])
+        await fx.service.update(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id, blocks=[row]
+        )
+
+        updated = await fx.service.upload_image(
+            tenant_id=fx.tenant_id,
+            user_id=fx.user_id,
+            target_role_id=role.id,
+            column_id=image_column.id,
+            content=b"fake-bytes",
+            content_type="image/png",
+        )
+
+        assert len(updated.blocks) == 1
+        assert len(updated.blocks[0].columns) == 2
+        assert updated.blocks[0].columns[0].html == "<p>Hi</p>"  # untouched
+        assert updated.blocks[0].columns[1].image_url is not None
+
+    async def test_raises_not_found_for_an_unknown_column(self) -> None:
         fx = _Fixture()
         role = fx.register_role_with_profile()
         await fx.service.get_or_create(
@@ -426,7 +462,7 @@ class TestUploadImage:
                 tenant_id=fx.tenant_id,
                 user_id=fx.user_id,
                 target_role_id=role.id,
-                block_id=uuid.uuid4(),
+                column_id=uuid.uuid4(),
                 content=b"data",
                 content_type="image/png",
             )
@@ -438,7 +474,7 @@ class TestUploadImage:
             tenant_id=fx.tenant_id,
             user_id=fx.user_id,
             target_role_id=role.id,
-            blocks=[ShowcaseBlock(id=uuid.uuid4(), type="image", label="Photo")],
+            blocks=[_image_block()],
         )
 
         with pytest.raises(ValidationError):
@@ -446,7 +482,7 @@ class TestUploadImage:
                 tenant_id=fx.tenant_id,
                 user_id=fx.user_id,
                 target_role_id=role.id,
-                block_id=page.blocks[0].id,
+                column_id=page.blocks[0].columns[0].id,
                 content=b"data",
                 content_type="application/pdf",
             )
@@ -458,7 +494,7 @@ class TestUploadImage:
             tenant_id=fx.tenant_id,
             user_id=fx.user_id,
             target_role_id=role.id,
-            blocks=[ShowcaseBlock(id=uuid.uuid4(), type="image", label="Photo")],
+            blocks=[_image_block()],
         )
 
         with pytest.raises(ValidationError):
@@ -466,7 +502,65 @@ class TestUploadImage:
                 tenant_id=fx.tenant_id,
                 user_id=fx.user_id,
                 target_role_id=role.id,
-                block_id=page.blocks[0].id,
+                column_id=page.blocks[0].columns[0].id,
                 content=b"x" * (MAX_IMAGE_SIZE_BYTES + 1),
                 content_type="image/png",
             )
+
+
+class TestMultiColumnRows:
+    async def test_a_row_can_hold_several_columns_of_different_types(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+        row = ShowcaseBlock(
+            id=uuid.uuid4(),
+            columns=[
+                ShowcaseColumn(id=uuid.uuid4(), type="image", label="Photo"),
+                ShowcaseColumn(id=uuid.uuid4(), type="rich_text", label="Bio", html="<p>Hi</p>"),
+                ShowcaseColumn(
+                    id=uuid.uuid4(),
+                    type="video_embed",
+                    label="Demo",
+                    video_embed_url="https://www.youtube.com/embed/xyz",
+                ),
+            ],
+        )
+
+        updated = await fx.service.update(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id, blocks=[row]
+        )
+
+        assert len(updated.blocks) == 1
+        assert [c.type for c in updated.blocks[0].columns] == ["image", "rich_text", "video_embed"]
+
+    async def test_an_existing_single_column_row_can_be_extended_to_multiple_columns(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+        original_column = ShowcaseColumn(
+            id=uuid.uuid4(), type="rich_text", label="Text", html="<p>Original</p>"
+        )
+        row = ShowcaseBlock(id=uuid.uuid4(), columns=[original_column])
+        page = await fx.service.update(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id, blocks=[row]
+        )
+        assert len(page.blocks[0].columns) == 1
+
+        # Same row id, now with a second column appended — mirrors what
+        # the frontend's "+ Add column" control sends: the whole blocks
+        # array, replaced atomically (same convention every other
+        # structural change to this page already uses).
+        new_column = ShowcaseColumn(id=uuid.uuid4(), type="image", label="Photo")
+        extended_row = ShowcaseBlock(id=row.id, columns=[original_column, new_column])
+
+        updated = await fx.service.update(
+            tenant_id=fx.tenant_id,
+            user_id=fx.user_id,
+            target_role_id=role.id,
+            blocks=[extended_row],
+        )
+
+        assert len(updated.blocks) == 1
+        assert updated.blocks[0].id == row.id
+        assert len(updated.blocks[0].columns) == 2
+        assert updated.blocks[0].columns[0].html == "<p>Original</p>"
+        assert updated.blocks[0].columns[1].type == "image"

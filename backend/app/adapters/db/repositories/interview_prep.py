@@ -11,6 +11,7 @@ module docstring for the full "why".
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -25,7 +26,13 @@ from app.adapters.db.models import (
     InterviewTopicScopeTagModel,
 )
 from app.adapters.db.reorder import Direction, move_item, next_display_order
-from app.domain.interview_prep.entities import InterviewQuestion, InterviewTopic, ReferenceLink
+from app.domain.interview_prep.entities import (
+    ArticleBlock,
+    ArticleColumn,
+    InterviewQuestion,
+    InterviewTopic,
+    ReferenceLink,
+)
 
 
 def _links_to_domain(raw: list[dict[str, str]]) -> list[ReferenceLink]:
@@ -34,6 +41,61 @@ def _links_to_domain(raw: list[dict[str, str]]) -> list[ReferenceLink]:
 
 def _links_to_json(links: list[ReferenceLink]) -> list[dict[str, str]]:
     return [{"url": link.url, "label": link.label} for link in links]
+
+
+def _article_column_to_json(column: ArticleColumn) -> dict[str, Any]:
+    return {
+        "id": str(column.id),
+        "type": column.type,
+        "label": column.label,
+        "html": column.html,
+        "image_url": column.image_url,
+        "image_key": column.image_key,
+        "video_embed_url": column.video_embed_url,
+        "article_topic_id": str(column.article_topic_id) if column.article_topic_id else None,
+        "external_url": column.external_url,
+    }
+
+
+def _article_column_from_json(item: dict[str, Any]) -> ArticleColumn:
+    return ArticleColumn(
+        id=uuid.UUID(item["id"]),
+        type=item["type"],
+        label=item["label"],
+        html=item.get("html"),
+        # image_url is deliberately never read back from storage — Article
+        # image columns are private-bucket, so the only real persisted
+        # value is image_key; image_url is populated transiently at
+        # response time (see InterviewTopicService.get_presigned_image_urls),
+        # never trusted from what's stored here (it's always None on write).
+        image_url=None,
+        image_key=item.get("image_key"),
+        video_embed_url=item.get("video_embed_url"),
+        article_topic_id=(
+            uuid.UUID(item["article_topic_id"]) if item.get("article_topic_id") else None
+        ),
+        external_url=item.get("external_url"),
+    )
+
+
+def _article_blocks_to_json(blocks: list[ArticleBlock]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": str(block.id),
+            "columns": [_article_column_to_json(column) for column in block.columns],
+        }
+        for block in blocks
+    ]
+
+
+def _article_blocks_from_json(raw: list[dict[str, Any]]) -> list[ArticleBlock]:
+    return [
+        ArticleBlock(
+            id=uuid.UUID(item["id"]),
+            columns=[_article_column_from_json(column) for column in item["columns"]],
+        )
+        for item in raw
+    ]
 
 
 def _scope_condition(model_cls: type[Any], target_role_id: UUID | None) -> Any:
@@ -56,9 +118,7 @@ def _topic_to_domain(model: InterviewTopicModel, scope_target_role_ids: list[UUI
         user_id=model.user_id,
         name=model.name,
         section=model.section,
-        discussion=model.discussion,
-        image_key=model.image_key,
-        reference_links=_links_to_domain(model.reference_links),
+        blocks=_article_blocks_from_json(model.blocks),
         is_public=model.is_public,
         scope_target_role_ids=scope_target_role_ids,
         created_at=model.created_at,
@@ -99,9 +159,7 @@ class SqlAlchemyInterviewTopicRepository:
             user_id=topic.user_id,
             name=topic.name,
             section=topic.section,
-            discussion=topic.discussion,
-            image_key=topic.image_key,
-            reference_links=_links_to_json(topic.reference_links),
+            blocks=_article_blocks_to_json(topic.blocks),
         )
         self._session.add(model)
         await self._session.flush()
@@ -163,9 +221,7 @@ class SqlAlchemyInterviewTopicRepository:
         assert model is not None, "update() called with a topic id that no longer exists"
         model.name = topic.name
         model.section = topic.section
-        model.discussion = topic.discussion
-        model.image_key = topic.image_key
-        model.reference_links = _links_to_json(topic.reference_links)
+        model.blocks = _article_blocks_to_json(topic.blocks)
         model.is_public = topic.is_public
 
         current = await self._session.execute(

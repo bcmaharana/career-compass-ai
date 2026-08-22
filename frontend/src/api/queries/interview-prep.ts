@@ -154,12 +154,12 @@ export function useMoveInterviewTopic(scope: Scope = null) {
   });
 }
 
-export function useUploadTopicImage(scope: Scope = null) {
+export function useUploadTopicColumnImage(scope: Scope = null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, file }: { id: string; file: File }) =>
+    mutationFn: ({ id, columnId, file }: { id: string; columnId: string; file: File }) =>
       apiClient.uploadFile<InterviewTopicResponse>(
-        `/api/v1/interview-prep/topics/${id}/image`,
+        `/api/v1/interview-prep/topics/${id}/blocks/${columnId}/image`,
         file,
       ),
     onSuccess: (data) => {
@@ -196,21 +196,6 @@ export function useToggleTopicPublic(scope: Scope = null) {
       if (body.is_public) {
         queryClient.invalidateQueries({ queryKey: ["current-user"] });
       }
-    },
-  });
-}
-
-export function useDeleteTopicImage(scope: Scope = null) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      apiClient.delete<InterviewTopicResponse>(`/api/v1/interview-prep/topics/${id}/image`),
-    onSuccess: (data) => {
-      queryClient.setQueryData(
-        KEYS.topics(scope),
-        (old: InterviewTopicResponse[] | undefined) =>
-          old?.map((t) => (t.id === data.id ? data : t)) ?? [data],
-      );
     },
   });
 }

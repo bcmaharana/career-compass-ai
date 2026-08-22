@@ -18,6 +18,7 @@ own tenant, which this file's tenant-scoped deletes can't reach.
 
 from __future__ import annotations
 
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import delete, select, update
@@ -65,6 +66,16 @@ from app.adapters.db.models.showcase_page import PublicShareLinkModel, ShowcaseP
 from app.domain.identity.account_deletion import TenantDeletionArtifacts
 
 
+def _columns_of(block: dict[str, object]) -> list[dict[str, Any]]:
+    """`ShowcasePageModel.blocks`/`InterviewTopicModel.blocks` are typed
+    `list[dict[str, object]]` at the ORM layer (SQLAlchemy's JSON type has
+    no finer-grained shape) — `object` isn't iterable to mypy's strict
+    check, so this narrows a block's "columns" entry to the actual
+    `list[dict[str, Any]]` shape both blocks JSON columns really hold,
+    once, for both loops below that need to walk into a block's columns."""
+    return cast("list[dict[str, Any]]", block.get("columns", []))
+
+
 class SqlAlchemyAccountDeletionRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -90,17 +101,22 @@ class SqlAlchemyAccountDeletionRepository:
         )
         profile_photos = [(row.id, row.photo_url) for row in photo_result]
 
-        # Collect Interview Topic image keys before deleting the rows —
-        # same best-effort "DB is the source of truth" convention as
-        # profile_photos/resume_file_keys above.
-        topic_image_result = await self._session.execute(
-            select(InterviewTopicModel.image_key).where(
-                InterviewTopicModel.tenant_id == tenant_id,
-                InterviewTopicModel.image_key.is_not(None),
-            )
+        # Collect Interview Topic (Article) image keys before deleting the
+        # rows — same best-effort "DB is the source of truth" convention
+        # as profile_photos/resume_file_keys above. Since the 2026-08-24
+        # content-blocks restructuring, an image key is no longer a single
+        # column — it lives per image-type column inside each topic's
+        # `blocks` JSON (private-bucket keys, unlike ShowcasePage's own
+        # blocks above which hold public-bucket URLs directly).
+        topic_blocks_result = await self._session.execute(
+            select(InterviewTopicModel.blocks).where(InterviewTopicModel.tenant_id == tenant_id)
         )
         interview_topic_image_keys = [
-            key for key in topic_image_result.scalars().all() if key is not None
+            str(column["image_key"])
+            for blocks in topic_blocks_result.scalars().all()
+            for block in blocks
+            for column in _columns_of(block)
+            if column.get("type") == "image" and column.get("image_key")
         ]
 
         # Collect tailored-resume file keys before deleting the rows —
@@ -126,14 +142,23 @@ class SqlAlchemyAccountDeletionRepository:
         # separately persisted (see
         # showcase_page_service.showcase_block_image_key_from_url,
         # which the caller uses to reconstruct it from the URL).
+        # Each block is now a ROW of one or more COLUMNS (2026-08-24
+        # multi-column restructuring) — a real bug caught building the
+        # Articles equivalent of this same collection logic: this loop
+        # still checked block.get("type")/block.get("image_url"), which
+        # no longer exist at the block level at all (only "id"/"columns"
+        # do now), so it was silently collecting zero image URLs for
+        # cleanup ever since that restructuring — fixed by iterating each
+        # row's columns instead.
         showcase_pages_result = await self._session.execute(
             select(ShowcasePageModel.blocks).where(ShowcasePageModel.tenant_id == tenant_id)
         )
         showcase_block_image_urls = [
-            str(block["image_url"])
+            str(column["image_url"])
             for blocks in showcase_pages_result.scalars().all()
             for block in blocks
-            if block.get("type") == "image" and block.get("image_url")
+            for column in _columns_of(block)
+            if column.get("type") == "image" and column.get("image_url")
         ]
 
         # 1. Career-profile sub-entities (-> career_profiles.id)

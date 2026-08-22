@@ -14,10 +14,45 @@ class ReferenceLinkPayload(BaseModel):
     label: str
 
 
+ArticleColumnTypePayload = Literal[
+    "rich_text", "image", "video_embed", "article_link", "external_link"
+]
+
+
+class ArticleColumnPayload(BaseModel):
+    """Same generic content-column shape as
+    app/api/v1/showcase_page/schemas.py's ShowcaseColumnPayload (both
+    wrap app/domain/content_blocks/entities.py's ContentColumn) — kept as
+    its own, separately-named class rather than imported/reused directly,
+    so each domain's OpenAPI schema names its own payload rather than one
+    leaking the other's ("Showcase") name; see that module for the
+    field-by-field rationale, identical here except image_key (Article
+    images are private-bucket, unlike ShowcasePage's public-bucket ones —
+    image_key is never sent by the client, only ever set server-side by
+    the image-upload endpoint, and image_url in a response is always a
+    fresh short-TTL presigned URL, never persisted)."""
+
+    id: UUID
+    type: ArticleColumnTypePayload
+    label: str
+    html: str | None = None
+    image_url: str | None = None
+    video_embed_url: str | None = None
+    article_topic_id: UUID | None = None
+    external_url: str | None = None
+
+
+class ArticleBlockPayload(BaseModel):
+    id: UUID
+    #: 1 or more columns rendered side by side (equal width) on desktop,
+    #: stacked vertically on mobile — see ContentBlock's own domain
+    #: docstring. No cap on column count.
+    columns: list[ArticleColumnPayload]
+
+
 class InterviewTopicRequest(BaseModel):
     name: str
     section: str | None = None
-    discussion: str | None = None
     #: Every scope (Master and/or one or more Target Roles — None
     #: entries mean Master) this topic should be tagged into and
     #: visible under. Must contain at least one entry (enforced by
@@ -30,8 +65,7 @@ class InterviewTopicRequest(BaseModel):
 class InterviewTopicUpdateRequest(BaseModel):
     name: str
     section: str | None = None
-    discussion: str | None = None
-    reference_links: list[ReferenceLinkPayload] = []
+    blocks: list[ArticleBlockPayload] = []
     scope_target_role_ids: list[UUID | None]
 
 
@@ -39,9 +73,7 @@ class InterviewTopicResponse(BaseModel):
     id: UUID
     name: str
     section: str | None
-    discussion: str | None
-    image_url: str | None
-    reference_links: list[ReferenceLinkPayload]
+    blocks: list[ArticleBlockPayload]
     scope_target_role_ids: list[UUID | None]
     is_public: bool
     #: The public URL's last path segment ("Article" when framed

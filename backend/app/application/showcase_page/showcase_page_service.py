@@ -39,7 +39,7 @@ from app.application.career_profile.target_role_service import TargetRoleService
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.rich_text import sanitize_rich_text
 from app.domain.career_profile.storage import ObjectStorageRepository
-from app.domain.showcase_page.entities import ShowcaseBlock, ShowcasePage
+from app.domain.showcase_page.entities import ShowcaseBlock, ShowcaseColumn, ShowcasePage
 from app.domain.showcase_page.repositories import ShowcasePageRepository
 
 ALLOWED_IMAGE_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
@@ -49,15 +49,15 @@ _IMAGE_KEY_PREFIX = "showcase-pages/"
 
 
 def showcase_block_image_key_from_url(image_url: str) -> str | None:
-    """Reconstructs the storage key from a block's stored image_url —
+    """Reconstructs the storage key from a column's stored image_url —
     same "the key itself is never persisted separately" reasoning as
     app/application/career_profile/career_profile_service.py's
     photo_key_from_url, just locating the key by its known
     `showcase-pages/` prefix (upload_image's own key format) rather than
-    reassembling it from tenant/profile/extension parts, since the block
-    id needed to reassemble it isn't otherwise available at deletion
-    time. Used by app/adapters/db/account_deletion.py for best-effort
-    public-bucket cleanup on account deletion."""
+    reassembling it from tenant/profile/extension parts, since the
+    column id needed to reassemble it isn't otherwise available at
+    deletion time. Used by app/adapters/db/account_deletion.py for
+    best-effort public-bucket cleanup on account deletion."""
     path = urlsplit(image_url).path
     idx = path.find(_IMAGE_KEY_PREFIX)
     return path[idx:] if idx != -1 else None
@@ -69,8 +69,8 @@ def _escape(text: str) -> str:
 
 def _seed_blocks_from_resume_data(data: ResumeData) -> list[ShowcaseBlock]:
     """Turns a gathered resume's data into an initial, editable block
-    list — one rich_text block per non-empty resume section, in the
-    same order a downloaded resume already presents them. Entry
+    list — one single-column rich_text row per non-empty resume section,
+    in the same order a downloaded resume already presents them. Entry
     descriptions are embedded as-is (already sanitized rich HTML from
     their own save path — see app/core/rich_text.py's module docstring
     on "reads are trusted"); anything else interpolated here (titles,
@@ -80,7 +80,8 @@ def _seed_blocks_from_resume_data(data: ResumeData) -> list[ShowcaseBlock]:
 
     def add(label: str, html: str) -> None:
         if html.strip():
-            blocks.append(ShowcaseBlock(id=uuid.uuid4(), type="rich_text", label=label, html=html))
+            column = ShowcaseColumn(id=uuid.uuid4(), type="rich_text", label=label, html=html)
+            blocks.append(ShowcaseBlock(id=uuid.uuid4(), columns=[column]))
 
     about = "".join(part for part in (data.profile.headline, data.profile.summary) if part)
     add("About", about)
@@ -229,9 +230,15 @@ class ShowcasePageService:
             tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
         )
         page.blocks = [
-            replace(block, html=sanitize_rich_text(block.html))
-            if block.type == "rich_text"
-            else block
+            replace(
+                block,
+                columns=[
+                    replace(column, html=sanitize_rich_text(column.html))
+                    if column.type == "rich_text"
+                    else column
+                    for column in block.columns
+                ],
+            )
             for block in blocks
         ]
         page.updated_at = datetime.now(UTC)
@@ -253,7 +260,7 @@ class ShowcasePageService:
         tenant_id: UUID,
         user_id: UUID,
         target_role_id: UUID,
-        block_id: UUID,
+        column_id: UUID,
         content: bytes,
         content_type: str,
     ) -> ShowcasePage:
@@ -271,18 +278,20 @@ class ShowcasePageService:
         page = await self.get_or_create(
             tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
         )
-        block = next((b for b in page.blocks if b.id == block_id), None)
-        if block is None:
-            raise NotFoundError("Showcase block not found.", code="SHOWCASE_BLOCK_NOT_FOUND")
+        column = next(
+            (col for block in page.blocks for col in block.columns if col.id == column_id), None
+        )
+        if column is None:
+            raise NotFoundError("Showcase column not found.", code="SHOWCASE_COLUMN_NOT_FOUND")
 
         extension = _EXTENSION_BY_CONTENT_TYPE[content_type]
-        key = f"showcase-pages/{tenant_id}/{page.id}/{block_id}.{extension}"
+        key = f"showcase-pages/{tenant_id}/{page.id}/{column_id}.{extension}"
         url = await self._storage.upload(key=key, content=content, content_type=content_type)
         # Cache-busting query param — same reasoning as
         # CareerProfileService.upload_photo (the storage key is stable
-        # per block so re-uploads don't accumulate objects, which means
+        # per column so re-uploads don't accumulate objects, which means
         # a stable URL the browser's image cache won't otherwise re-fetch).
-        block.image_url = f"{url}?v={int(datetime.now(UTC).timestamp())}"
+        column.image_url = f"{url}?v={int(datetime.now(UTC).timestamp())}"
 
         page.updated_at = datetime.now(UTC)
         return await self._pages.update(page)

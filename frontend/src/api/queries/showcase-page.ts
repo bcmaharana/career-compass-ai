@@ -58,12 +58,12 @@ export function useToggleShowcasePagePublic(targetRoleId: string | null) {
   });
 }
 
-export function useUploadShowcaseBlockImage(targetRoleId: string | null) {
+export function useUploadShowcaseColumnImage(targetRoleId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ blockId, file }: { blockId: string; file: File }) =>
+    mutationFn: ({ columnId, file }: { columnId: string; file: File }) =>
       apiClient.uploadFile<ShowcasePageResponse>(
-        `/api/v1/showcase-pages/${targetRoleId}/blocks/${blockId}/image`,
+        `/api/v1/showcase-pages/${targetRoleId}/columns/${columnId}/image`,
         file,
       ),
     onSuccess: (data) => {

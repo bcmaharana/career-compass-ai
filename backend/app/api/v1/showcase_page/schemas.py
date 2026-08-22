@@ -13,7 +13,7 @@ ShowcaseBlockTypePayload = Literal[
 ]
 
 
-class ShowcaseBlockPayload(BaseModel):
+class ShowcaseColumnPayload(BaseModel):
     id: UUID
     type: ShowcaseBlockTypePayload
     label: str
@@ -22,6 +22,14 @@ class ShowcaseBlockPayload(BaseModel):
     video_embed_url: str | None = None
     article_topic_id: UUID | None = None
     external_url: str | None = None
+
+
+class ShowcaseBlockPayload(BaseModel):
+    id: UUID
+    #: 1 or more columns rendered side by side (equal width) on desktop,
+    #: stacked vertically on mobile — see ShowcaseBlock's own domain
+    #: docstring for the full "why". No cap on column count.
+    columns: list[ShowcaseColumnPayload]
 
 
 class ShowcasePageUpdateRequest(BaseModel):

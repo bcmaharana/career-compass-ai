@@ -2,12 +2,11 @@ import { useCurrentUser } from "@/api/queries/auth";
 import {
   useCreateInterviewTopic,
   useDeleteInterviewTopic,
-  useDeleteTopicImage,
   useInterviewTopics,
   useMoveInterviewTopic,
   useToggleTopicPublic,
   useUpdateInterviewTopic,
-  useUploadTopicImage,
+  useUploadTopicColumnImage,
 } from "@/api/queries/interview-prep";
 import type { components } from "@/api/schema.gen";
 import { Button } from "@/components/ui/button";
@@ -20,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
 import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
+import { Select } from "@/components/ui/select";
 import { DeleteScopeChoiceDialog } from "@/features/interview-prep/DeleteScopeChoiceDialog";
 import { ScopeTagSelector, type ScopeOption } from "@/features/interview-prep/ScopeTagSelector";
 import { TopicVisibilityToggle } from "@/features/interview-prep/TopicVisibilityToggle";
@@ -27,12 +27,45 @@ import { groupInterviewTopicsBySection } from "@/lib/group-interview-topics-by-s
 import { getErrorMessage } from "@/lib/errors";
 import { publicArticleUrl } from "@/lib/public-sharing-url";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronRight, ImageOff, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
-import { type Dispatch, type FormEvent, type SetStateAction, useRef, useState } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  ImageOff,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
+import { type Dispatch, type FormEvent, type SetStateAction, useEffect, useRef, useState } from "react";
 
 type InterviewTopic = components["schemas"]["InterviewTopicResponse"];
-type ReferenceLink = components["schemas"]["ReferenceLinkPayload"];
 type TargetRole = components["schemas"]["TargetRoleResponse"];
+type ArticleRow = components["schemas"]["ArticleBlockPayload"];
+type ArticleColumn = components["schemas"]["ArticleColumnPayload"];
+type ArticleColumnType = ArticleColumn["type"];
+
+const COLUMN_TYPE_LABELS: Record<ArticleColumnType, string> = {
+  rich_text: "Text",
+  image: "Image",
+  video_embed: "Video",
+  article_link: "Article link",
+  external_link: "External link",
+};
+
+function newColumn(type: ArticleColumnType): ArticleColumn {
+  return {
+    id: crypto.randomUUID(),
+    type,
+    label: COLUMN_TYPE_LABELS[type],
+    html: type === "rich_text" ? "" : null,
+    image_url: null,
+    video_embed_url: null,
+    article_topic_id: null,
+    external_url: null,
+  };
+}
 
 interface FormState {
   name: string;
@@ -53,6 +86,23 @@ function toFormState(topic: InterviewTopic): FormState {
 function scopeLabelFor(targetRoleId: string | null, targetRoles: TargetRole[]): string {
   if (targetRoleId === null) return "Master";
   return targetRoles.find((r) => r.id === targetRoleId)?.role_name ?? "this role";
+}
+
+/** Merges Master + this scope's own Articles into one deduplicated list
+ * an article_link column can point at — same "this user's topics
+ * regardless of scope" merge ShowcasePageSection.tsx's own mergeTopics
+ * already does (when scope is already Master, this is just a harmless
+ * self-merge — useInterviewTopics(null) and useInterviewTopics(scope)
+ * share the same query cache key in that case). */
+function mergeTopicsForLinking(
+  master: InterviewTopic[] | undefined,
+  scoped: InterviewTopic[] | undefined,
+): InterviewTopic[] {
+  const byId = new Map<string, InterviewTopic>();
+  for (const topic of [...(master ?? []), ...(scoped ?? [])]) {
+    byId.set(topic.id, topic);
+  }
+  return [...byId.values()];
 }
 
 export function InterviewTopicsSection({
@@ -90,18 +140,20 @@ export function InterviewTopicsSection({
   const updateTopic = useUpdateInterviewTopic(scope);
   const deleteTopic = useDeleteInterviewTopic(scope);
   const moveTopic = useMoveInterviewTopic(scope);
-  const uploadImage = useUploadTopicImage(scope);
-  const deleteImage = useDeleteTopicImage(scope);
   const togglePublic = useToggleTopicPublic(scope);
   const { data: currentUser } = useCurrentUser();
+  // Article-link columns can point at any of this user's own Articles —
+  // merged from Master and this scope, same "this user's topics
+  // regardless of exactly which scope" set ShowcasePageSection.tsx's own
+  // article_link column editor already uses.
+  const { data: masterTopicsForLinking } = useInterviewTopics(null);
+  const articleLinkOptions = mergeTopicsForLinking(masterTopicsForLinking, topics);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>({ name: "", section: "", scopeTargetRoleIds: [scope] });
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<InterviewTopic | null>(null);
-  const [imageError, setImageError] = useState<string | null>(null);
-  const fileInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   const scopeOptions: ScopeOption[] = [
     { id: null, label: "Master (generic)" },
@@ -136,8 +188,7 @@ export function InterviewTopicsSection({
           body: {
             name,
             section,
-            discussion: existing?.discussion ?? null,
-            reference_links: existing?.reference_links ?? [],
+            blocks: existing?.blocks ?? [],
             scope_target_role_ids: form.scopeTargetRoleIds,
           },
         })
@@ -145,24 +196,13 @@ export function InterviewTopicsSection({
         .catch(() => {});
     } else {
       addTopic
-        .mutateAsync({ name, section, discussion: null, scope_target_role_ids: form.scopeTargetRoleIds })
+        .mutateAsync({ name, section, scope_target_role_ids: form.scopeTargetRoleIds })
         .then((created) => {
           setDialogOpen(false);
           setExpandedId(created.id);
         })
         .catch(() => {});
     }
-  }
-
-  function handleFileChange(topicId: string, event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    setImageError(null);
-    uploadImage.mutate(
-      { id: topicId, file },
-      { onError: (error) => setImageError(getErrorMessage(error)) },
-    );
   }
 
   const sectionOptions = Array.from(
@@ -202,11 +242,6 @@ export function InterviewTopicsSection({
         {topics && topics.length > 0 && visibleGroups.length === 0 && (
           <p className="text-sm text-muted-foreground">No articles in this section.</p>
         )}
-        {imageError && (
-          <p role="alert" className="text-sm text-destructive">
-            {imageError}
-          </p>
-        )}
 
         {visibleGroups.map((group) => (
           <div key={group.section ?? "__ungrouped"} className="flex flex-col gap-2">
@@ -232,12 +267,9 @@ export function InterviewTopicsSection({
                   onMove={(direction) => moveTopic.mutate({ id: topic.id, direction })}
                   moveDisabled={moveTopic.isPending}
                   scope={scope}
-                  uploadImage={uploadImage}
-                  deleteImage={deleteImage}
-                  onFileChange={handleFileChange}
-                  fileInputRefs={fileInputRefs}
                   togglePublic={togglePublic}
                   handle={currentUser?.handle}
+                  articleLinkOptions={articleLinkOptions}
                 />
               );
             })}
@@ -343,6 +375,10 @@ export function InterviewTopicsSection({
   );
 }
 
+type RemoveTarget =
+  | { kind: "row"; row: ArticleRow }
+  | { kind: "column"; rowId: string; column: ArticleColumn };
+
 function TopicCard({
   topic,
   scopeIndex,
@@ -355,12 +391,9 @@ function TopicCard({
   onMove,
   moveDisabled,
   scope,
-  uploadImage,
-  deleteImage,
-  onFileChange,
-  fileInputRefs,
   togglePublic,
   handle,
+  articleLinkOptions,
 }: {
   topic: InterviewTopic;
   scopeIndex: number;
@@ -373,89 +406,97 @@ function TopicCard({
   onMove: (direction: "up" | "down") => void;
   moveDisabled: boolean;
   scope: string | null;
-  uploadImage: ReturnType<typeof useUploadTopicImage>;
-  deleteImage: ReturnType<typeof useDeleteTopicImage>;
-  onFileChange: (topicId: string, event: React.ChangeEvent<HTMLInputElement>) => void;
-  fileInputRefs: React.MutableRefObject<Map<string, HTMLInputElement>>;
   togglePublic: ReturnType<typeof useToggleTopicPublic>;
   handle: string | null | undefined;
+  articleLinkOptions: InterviewTopic[];
 }) {
   const updateTopic = useUpdateInterviewTopic(scope);
+  const [removeTarget, setRemoveTarget] = useState<RemoveTarget | null>(null);
+  // The column id of a block just added — handed down to that specific
+  // ArticleColumnCard once it mounts so it can scroll itself into view
+  // and open its own editor immediately, same fix already applied to
+  // Showcase Page's identical block editor (direct 2026-08-24 report:
+  // "when I add a block it always goes to the end").
+  const [focusColumnId, setFocusColumnId] = useState<string | null>(null);
 
-  // Discussion gets its own sub-card, mirroring InterviewQuestionsSection's
-  // Answer sub-card: readonly display + Edit button by default, swapping
-  // to a RichTextEditor + Save/Cancel only while actively editing. Draft
-  // is seeded fresh each time editing starts (not kept in sync
-  // reactively), same "initialize once at the moment edit opens"
-  // convention every other edit form in this app already follows.
-  const [isEditingDiscussion, setIsEditingDiscussion] = useState(false);
-  const [discussionDraft, setDiscussionDraft] = useState(topic.discussion ?? "");
-
-  function startEditingDiscussion() {
-    setDiscussionDraft(topic.discussion ?? "");
-    setIsEditingDiscussion(true);
+  function commit(blocks: ArticleRow[], focusOnColumnId?: string) {
+    // Set BEFORE calling mutate, not inside onSuccess — react-query calls
+    // the hook-level onSuccess (which writes the new blocks into the
+    // query cache, the thing that actually mounts the new column) and
+    // this call's own onSuccess as two separate microtask-chained
+    // callbacks, not one batched React update; setting it here instead
+    // means it's already correct by the time the new column's first
+    // render happens, rather than racing to catch up one render late
+    // (real bug caught live: the mount-only focus effect below always
+    // saw shouldFocus=false with the onSuccess-based version).
+    if (focusOnColumnId) setFocusColumnId(focusOnColumnId);
+    updateTopic.mutate({
+      id: topic.id,
+      body: {
+        name: topic.name,
+        section: topic.section,
+        blocks,
+        scope_target_role_ids: topic.scope_target_role_ids,
+      },
+    });
   }
 
-  function saveDiscussion() {
-    updateTopic.mutate(
-      {
-        id: topic.id,
-        body: {
-          name: topic.name,
-          section: topic.section,
-          discussion: discussionDraft || null,
-          reference_links: topic.reference_links,
-          scope_target_role_ids: topic.scope_target_role_ids,
-        },
-      },
-      { onSuccess: () => setIsEditingDiscussion(false) },
+  function addRow(type: ArticleColumnType) {
+    const column = newColumn(type);
+    commit([...topic.blocks, { id: crypto.randomUUID(), columns: [column] }], column.id);
+  }
+
+  function insertRowAfter(afterRowId: string, type: ArticleColumnType) {
+    const column = newColumn(type);
+    const rows = topic.blocks;
+    const index = rows.findIndex((r) => r.id === afterRowId);
+    const next = [...rows];
+    next.splice(index + 1, 0, { id: crypto.randomUUID(), columns: [column] });
+    commit(next, column.id);
+  }
+
+  function addColumn(rowId: string, type: ArticleColumnType) {
+    const column = newColumn(type);
+    commit(
+      topic.blocks.map((row) => (row.id === rowId ? { ...row, columns: [...row.columns, column] } : row)),
+      column.id,
     );
   }
 
-  // Reference Links, mirroring InterviewQuestionsSection's own inline
-  // add/remove UX exactly — same quick-add-without-a-dialog form, and
-  // the same confirm-before-delete convention this app uses everywhere
-  // else, applied here after a real user report caught the "x" button
-  // deleting immediately with no confirmation on Questions' own list.
-  const [linkUrl, setLinkUrl] = useState("");
-  const [linkLabel, setLinkLabel] = useState("");
-  const [deleteLinkIndex, setDeleteLinkIndex] = useState<number | null>(null);
-
-  function addLink(event: FormEvent) {
-    event.preventDefault();
-    if (!linkUrl.trim() || !linkLabel.trim()) return;
-    const nextLinks: ReferenceLink[] = [
-      ...topic.reference_links,
-      { url: linkUrl.trim(), label: linkLabel.trim() },
-    ];
-    updateTopic.mutate({
-      id: topic.id,
-      body: {
-        name: topic.name,
-        section: topic.section,
-        discussion: topic.discussion,
-        reference_links: nextLinks,
-        scope_target_role_ids: topic.scope_target_role_ids,
-      },
-    });
-    setLinkUrl("");
-    setLinkLabel("");
+  function saveColumn(rowId: string, updated: ArticleColumn) {
+    commit(
+      topic.blocks.map((row) =>
+        row.id === rowId
+          ? { ...row, columns: row.columns.map((c) => (c.id === updated.id ? updated : c)) }
+          : row,
+      ),
+    );
   }
 
-  function confirmRemoveLink() {
-    if (deleteLinkIndex === null) return;
-    const nextLinks = topic.reference_links.filter((_, i) => i !== deleteLinkIndex);
-    updateTopic.mutate({
-      id: topic.id,
-      body: {
-        name: topic.name,
-        section: topic.section,
-        discussion: topic.discussion,
-        reference_links: nextLinks,
-        scope_target_role_ids: topic.scope_target_role_ids,
-      },
-    });
-    setDeleteLinkIndex(null);
+  function confirmRemove() {
+    if (!removeTarget) return;
+    if (removeTarget.kind === "row") {
+      commit(topic.blocks.filter((row) => row.id !== removeTarget.row.id));
+    } else {
+      commit(
+        topic.blocks.map((row) =>
+          row.id === removeTarget.rowId
+            ? { ...row, columns: row.columns.filter((c) => c.id !== removeTarget.column.id) }
+            : row,
+        ),
+      );
+    }
+    setRemoveTarget(null);
+  }
+
+  function moveRow(rowId: string, direction: "up" | "down") {
+    const rows = topic.blocks;
+    const index = rows.findIndex((r) => r.id === rowId);
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (index === -1 || targetIndex < 0 || targetIndex >= rows.length) return;
+    const next = [...rows];
+    [next[index], next[targetIndex]] = [next[targetIndex]!, next[index]!];
+    commit(next);
   }
 
   return (
@@ -528,56 +569,447 @@ function TopicCard({
 
       {isOpen && (
         <div className="flex flex-col gap-3 border-t border-border p-3">
-          <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Discussion
-              </p>
-              {!isEditingDiscussion && (
-                <Button variant="ghost" size="sm" onClick={startEditingDiscussion}>
-                  <Pencil className="h-3.5 w-3.5" />
-                  Edit
-                </Button>
-              )}
-            </div>
-            {isEditingDiscussion ? (
-              <>
-                <RichTextEditor
-                  defaultValue={discussionDraft}
-                  onChange={setDiscussionDraft}
-                  placeholder="Notes to help you understand this article..."
-                  autoFocus
-                />
-                <div className={cn("flex", ACTION_BUTTON_ROW_GAP)}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={saveDiscussion}
-                    disabled={updateTopic.isPending}
-                  >
-                    {updateTopic.isPending ? "Saving..." : "Save discussion"}
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setIsEditingDiscussion(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </>
-            ) : topic.discussion ? (
-              <RichTextDisplay html={topic.discussion} className="max-h-48 overflow-y-auto scrollbar-hide" />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No discussion yet — click Edit to add one.
-              </p>
-            )}
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Content
+            </p>
+            <ArticleBlockTypeMenu triggerLabel="Add block" onSelect={addRow} disabled={updateTopic.isPending} />
           </div>
 
-          <div className="flex flex-col gap-2 rounded-md border border-border bg-background p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Image</p>
-            {topic.image_url ? (
+          {topic.blocks.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No content yet — use "Add block" above to start building this article.
+            </p>
+          )}
+
+          <div className="flex flex-col gap-3">
+            {topic.blocks.map((row, index) => (
+              <ArticleRowCard
+                key={row.id}
+                row={row}
+                index={index}
+                total={topic.blocks.length}
+                topicId={topic.id}
+                scope={scope}
+                articleLinkOptions={articleLinkOptions}
+                onMove={(direction) => moveRow(row.id, direction)}
+                onAddColumn={(type) => addColumn(row.id, type)}
+                onInsertBelow={(type) => insertRowAfter(row.id, type)}
+                onRemoveRow={() => setRemoveTarget({ kind: "row", row })}
+                onRemoveColumn={(column) => setRemoveTarget({ kind: "column", rowId: row.id, column })}
+                onSaveColumn={(column) => saveColumn(row.id, column)}
+                isSaving={updateTopic.isPending}
+                focusColumnId={focusColumnId}
+                onFocusHandled={() => setFocusColumnId(null)}
+              />
+            ))}
+          </div>
+
+          {updateTopic.isError && (
+            <p role="alert" className="text-sm text-destructive">
+              {getErrorMessage(updateTopic.error)}
+            </p>
+          )}
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={removeTarget !== null}
+        onCancel={() => setRemoveTarget(null)}
+        onConfirm={confirmRemove}
+        title={removeTarget?.kind === "row" ? "Remove this block?" : "Remove this column?"}
+        description={
+          removeTarget === null
+            ? ""
+            : removeTarget.kind === "row"
+              ? `Remove the "${removeTarget.row.columns.map((c) => c.label).join(", ")}" block${
+                  removeTarget.row.columns.length > 1 ? " and all its columns" : ""
+                }? This can't be undone.`
+              : `Remove the "${removeTarget.column.label}" column? This can't be undone.`
+        }
+        isPending={updateTopic.isPending}
+      />
+    </div>
+  );
+}
+
+/** A trigger button that opens a small popover menu of block/column
+ * types — selecting one fires `onSelect` immediately. Mirrors Showcase
+ * Page's own BlockTypeMenu exactly (see ShowcasePageSection.tsx) — kept
+ * as a separate local copy rather than a shared component, since the
+ * two domains' column type unions, while identical in shape today, are
+ * independently-defined API types. */
+function ArticleBlockTypeMenu({
+  triggerLabel,
+  onSelect,
+  disabled,
+  variant = "outline",
+}: {
+  triggerLabel: string;
+  onSelect: (type: ArticleColumnType) => void;
+  disabled?: boolean;
+  variant?: "outline" | "ghost";
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <Button
+        type="button"
+        variant={variant}
+        size="sm"
+        onClick={() => setOpen((o) => !o)}
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <Plus className="h-3.5 w-3.5" />
+        {triggerLabel}
+      </Button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-md border border-border bg-card shadow-md"
+        >
+          {Object.entries(COLUMN_TYPE_LABELS).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="menuitem"
+              className="block w-full px-3 py-2 text-left text-sm hover:bg-muted"
+              onClick={() => {
+                onSelect(value as ArticleColumnType);
+                setOpen(false);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArticleRowCard({
+  row,
+  index,
+  total,
+  topicId,
+  scope,
+  articleLinkOptions,
+  onMove,
+  onAddColumn,
+  onInsertBelow,
+  onRemoveRow,
+  onRemoveColumn,
+  onSaveColumn,
+  isSaving,
+  focusColumnId,
+  onFocusHandled,
+}: {
+  row: ArticleRow;
+  index: number;
+  total: number;
+  topicId: string;
+  scope: string | null;
+  articleLinkOptions: InterviewTopic[];
+  onMove: (direction: "up" | "down") => void;
+  onAddColumn: (type: ArticleColumnType) => void;
+  onInsertBelow: (type: ArticleColumnType) => void;
+  onRemoveRow: () => void;
+  onRemoveColumn: (column: ArticleColumn) => void;
+  onSaveColumn: (column: ArticleColumn) => void;
+  isSaving: boolean;
+  focusColumnId: string | null;
+  onFocusHandled: () => void;
+}) {
+  return (
+    <div
+      className={cn("rounded-md border border-border", index % 2 === 0 ? "bg-card" : "bg-muted")}
+    >
+      <div className="flex items-center justify-between gap-3 px-3 py-2">
+        <div className="flex items-center gap-2">
+          <MoveButtons
+            onMoveUp={() => onMove("up")}
+            onMoveDown={() => onMove("down")}
+            isFirst={index === 0}
+            isLast={index === total - 1}
+            disabled={isSaving}
+            className="h-7 w-7 p-0"
+          />
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {row.columns.length > 1 ? `${row.columns.length} columns` : "Block"}
+          </span>
+        </div>
+        <div className={cn("flex items-center", ACTION_BUTTON_ROW_GAP)}>
+          <ArticleBlockTypeMenu triggerLabel="Add column" onSelect={onAddColumn} disabled={isSaving} />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={onRemoveRow}
+            aria-label="Remove block"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-border p-3 md:flex-row">
+        {row.columns.map((column) => (
+          <ArticleColumnCard
+            key={column.id}
+            column={column}
+            topicId={topicId}
+            scope={scope}
+            articleLinkOptions={articleLinkOptions}
+            canRemoveIndividually={row.columns.length > 1}
+            onRemove={() => onRemoveColumn(column)}
+            onSave={onSaveColumn}
+            isSaving={isSaving}
+            shouldFocus={focusColumnId === column.id}
+            onFocusHandled={onFocusHandled}
+          />
+        ))}
+      </div>
+
+      {/* Insert a new block right where you're working, rather than only
+          ever being able to add at the very end of the article. */}
+      <div className="flex justify-center border-t border-border px-3 py-1">
+        <ArticleBlockTypeMenu
+          triggerLabel="Add block below"
+          onSelect={onInsertBelow}
+          disabled={isSaving}
+          variant="ghost"
+        />
+      </div>
+    </div>
+  );
+}
+
+function ArticleColumnCard({
+  column,
+  topicId,
+  scope,
+  articleLinkOptions,
+  canRemoveIndividually,
+  onRemove,
+  onSave,
+  isSaving,
+  shouldFocus,
+  onFocusHandled,
+}: {
+  column: ArticleColumn;
+  topicId: string;
+  scope: string | null;
+  articleLinkOptions: InterviewTopic[];
+  canRemoveIndividually: boolean;
+  onRemove: () => void;
+  onSave: (updated: ArticleColumn) => void;
+  isSaving: boolean;
+  shouldFocus: boolean;
+  onFocusHandled: () => void;
+}) {
+  const uploadImage = useUploadTopicColumnImage(scope);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState<ArticleColumn>(column);
+
+  // Re-seeds the draft only when the column identity changes or edit
+  // mode is freshly entered — not reactively on every background
+  // refetch, matching this app's "initialize once, don't clobber
+  // in-progress edits" convention.
+  useEffect(() => {
+    if (!isEditing) setDraft(column);
+  }, [column, isEditing]);
+
+  // Runs once, only for a freshly-added column (this component only
+  // ever mounts once per column id) — scrolls it into view and opens
+  // its own editor immediately, same fix as Showcase Page's identical
+  // block editor.
+  useEffect(() => {
+    if (!shouldFocus) return;
+    containerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (column.type !== "image") {
+      setDraft(column);
+      setIsEditing(true);
+    }
+    onFocusHandled();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function startEditing() {
+    setDraft(column);
+    setIsEditing(true);
+  }
+
+  function save() {
+    onSave(draft);
+    setIsEditing(false);
+  }
+
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) uploadImage.mutate({ id: topicId, columnId: column.id, file });
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="min-w-0 flex-1 basis-0 rounded-md border border-border bg-background"
+    >
+      <div className="flex items-center justify-between gap-2 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {COLUMN_TYPE_LABELS[column.type]}
+          </span>
+          <p className="truncate text-sm font-medium">{column.label}</p>
+        </div>
+        <div className={cn("flex shrink-0 items-center", ACTION_BUTTON_ROW_GAP)}>
+          {!isEditing && column.type !== "image" && (
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={startEditing}>
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {canRemoveIndividually && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={onRemove}
+              aria-label="Remove column"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-border p-3">
+        {isEditing ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`article-column-label-${column.id}`}>Label</Label>
+              <Input
+                id={`article-column-label-${column.id}`}
+                value={draft.label}
+                onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+                maxLength={100}
+              />
+            </div>
+
+            {draft.type === "rich_text" && (
+              <RichTextEditor
+                defaultValue={draft.html}
+                onChange={(html) => setDraft({ ...draft, html })}
+                placeholder="Notes to help you understand this article..."
+                autoFocus
+              />
+            )}
+
+            {draft.type === "video_embed" && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`article-column-video-${column.id}`}>Embed URL</Label>
+                <Input
+                  id={`article-column-video-${column.id}`}
+                  type="url"
+                  placeholder="https://www.youtube.com/embed/..."
+                  value={draft.video_embed_url ?? ""}
+                  onChange={(e) => setDraft({ ...draft, video_embed_url: e.target.value })}
+                />
+              </div>
+            )}
+
+            {draft.type === "external_link" && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`article-column-url-${column.id}`}>URL</Label>
+                <Input
+                  id={`article-column-url-${column.id}`}
+                  type="url"
+                  placeholder="https://..."
+                  value={draft.external_url ?? ""}
+                  onChange={(e) => setDraft({ ...draft, external_url: e.target.value })}
+                />
+              </div>
+            )}
+
+            {draft.type === "article_link" && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`article-column-link-${column.id}`}>Article</Label>
+                <Select
+                  id={`article-column-link-${column.id}`}
+                  value={draft.article_topic_id ?? ""}
+                  onChange={(e) => setDraft({ ...draft, article_topic_id: e.target.value || null })}
+                >
+                  <option value="">Choose an article...</option>
+                  {articleLinkOptions
+                    .filter((t) => t.id !== topicId)
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                        {!t.is_public ? " (currently private)" : ""}
+                      </option>
+                    ))}
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Only renders as a real link on the public page while that article is itself
+                  public — otherwise it shows as plain text.
+                </p>
+              </div>
+            )}
+
+            <div className={cn("flex", ACTION_BUTTON_ROW_GAP)}>
+              <Button variant="outline" size="sm" onClick={save} disabled={isSaving}>
+                {isSaving ? "Saving..." : "Save"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <ArticleColumnPreview column={column} />
+        )}
+
+        {column.type === "image" && (
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`article-column-label-${column.id}`}>Label</Label>
+              <Input
+                id={`article-column-label-${column.id}`}
+                value={column.label}
+                onChange={(e) => onSave({ ...column, label: e.target.value })}
+                onBlur={(e) => onSave({ ...column, label: e.target.value })}
+                maxLength={100}
+              />
+            </div>
+            {column.image_url ? (
               <img
-                src={topic.image_url}
+                src={column.image_url}
                 alt=""
-                className="max-h-[75vh] w-full max-w-2xl rounded-md border border-border object-contain"
+                className="max-h-[60vh] w-full rounded-md border border-border object-contain"
               />
             ) : (
               <div className="flex h-24 w-24 items-center justify-center rounded-md border border-dashed border-border text-muted-foreground">
@@ -588,98 +1020,71 @@ function TopicCard({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => fileInputRefs.current.get(topic.id)?.click()}
+                onClick={() => fileInputRef.current?.click()}
                 disabled={uploadImage.isPending}
               >
                 <Upload className="h-3.5 w-3.5" />
-                {uploadImage.isPending ? "Uploading..." : topic.image_url ? "Replace image" : "Add image"}
+                {uploadImage.isPending
+                  ? "Uploading..."
+                  : column.image_url
+                    ? "Replace image"
+                    : "Add image"}
               </Button>
-              {topic.image_url && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => deleteImage.mutate(topic.id)}
-                  disabled={deleteImage.isPending}
-                >
-                  Remove image
-                </Button>
-              )}
               <input
-                ref={(el) => {
-                  if (el) fileInputRefs.current.set(topic.id, el);
-                  else fileInputRefs.current.delete(topic.id);
-                }}
+                ref={fileInputRef}
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 className="hidden"
-                onChange={(e) => onFileChange(topic.id, e)}
+                onChange={handleFileChange}
               />
             </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Reference Links
-            </p>
-            {topic.reference_links.length > 0 && (
-              <ul className="flex flex-col gap-1">
-                {topic.reference_links.map((link, i) => (
-                  <li key={`${link.url}-${i}`} className="flex items-center gap-2">
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sm font-medium text-accent underline underline-offset-2 hover:text-accent/80"
-                    >
-                      {link.label}
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => setDeleteLinkIndex(i)}
-                      aria-label={`Remove link "${link.label}"`}
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            {uploadImage.isError && (
+              <p role="alert" className="text-sm text-destructive">
+                {getErrorMessage(uploadImage.error)}
+              </p>
             )}
-            <form className="flex flex-wrap items-center gap-2" onSubmit={addLink}>
-              <Input
-                value={linkLabel}
-                onChange={(e) => setLinkLabel(e.target.value)}
-                placeholder="Label"
-                className="w-40"
-              />
-              <Input
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-                placeholder="https://..."
-                type="url"
-                className="w-64"
-              />
-              <Button type="submit" variant="ghost" size="sm" disabled={updateTopic.isPending}>
-                <Plus className="h-3.5 w-3.5" />
-                Add link
-              </Button>
-            </form>
           </div>
-        </div>
-      )}
-
-      <ConfirmDialog
-        open={deleteLinkIndex !== null}
-        onCancel={() => setDeleteLinkIndex(null)}
-        onConfirm={confirmRemoveLink}
-        title="Remove reference link?"
-        description={
-          deleteLinkIndex !== null
-            ? `Remove "${topic.reference_links[deleteLinkIndex]?.label}"? This can't be undone.`
-            : ""
-        }
-        isPending={updateTopic.isPending}
-      />
+        )}
+      </div>
     </div>
   );
+}
+
+function ArticleColumnPreview({ column }: { column: ArticleColumn }) {
+  switch (column.type) {
+    case "rich_text":
+      return column.html ? (
+        <RichTextDisplay html={column.html} className="max-h-48 overflow-y-auto scrollbar-hide" />
+      ) : (
+        <p className="text-sm text-muted-foreground">No content yet — click Edit to add some.</p>
+      );
+    case "video_embed":
+      return column.video_embed_url ? (
+        <p className="truncate text-sm text-muted-foreground">{column.video_embed_url}</p>
+      ) : (
+        <p className="text-sm text-muted-foreground">No embed URL yet — click Edit to add one.</p>
+      );
+    case "external_link":
+      return column.external_url ? (
+        <a
+          href={column.external_url}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1 text-sm font-medium text-accent underline underline-offset-2 hover:text-accent/80"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          {column.external_url}
+        </a>
+      ) : (
+        <p className="text-sm text-muted-foreground">No URL yet — click Edit to add one.</p>
+      );
+    case "article_link":
+      return column.article_topic_id ? (
+        <p className="text-sm text-muted-foreground">Links to an Article.</p>
+      ) : (
+        <p className="text-sm text-muted-foreground">No article chosen yet — click Edit to pick one.</p>
+      );
+    case "image":
+      return null;
+  }
 }

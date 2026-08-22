@@ -4,10 +4,10 @@ A per-Target-Role, freeform public-sharing document (direct 2026-08-22
 request) — deliberately NOT the Career Profile made public. Seeded once
 from that role's generated tailored-resume content
 (ResumeExportService.gather_resume_data_with_master_fallback), then fully
-independent and user-editable afterward: block content, block labels, and
-block order can all diverge freely from the profile that seeded them,
-matching the same "one-time copy, not a sync" precedent Master -> Target
-Role Profile already established elsewhere in this app.
+independent and user-editable afterward: content, labels, and order can
+all diverge freely from the profile that seeded them, matching the same
+"one-time copy, not a sync" precedent Master -> Target Role Profile
+already established elsewhere in this app.
 
 `blocks` is a single ordered list stored as one JSON column on the page
 row, not a separate child table with its own repository/move() endpoints
@@ -15,6 +15,24 @@ row, not a separate child table with its own repository/move() endpoints
 atomically on every save (same shape as CareerProfile.core_competencies /
 resume_section_toggles), so reordering is just rewriting array order in
 one `update()` call rather than per-row move() plumbing.
+
+Every block is a ROW that can hold one or more COLUMNS side by side
+(direct 2026-08-24 request: "in a row, put an image in the first column,
+2nd column a paragraph, third one may be a video" — column count is
+freely chosen per row, not a fixed layout). What used to be the block's
+own single set of content fields (type/label/html/image_url/...) now
+lives on each column instead — a block that's never been split still
+works exactly the same, it's just a row with one column. Columns render
+equal-width side by side on desktop and stacked vertically on mobile (no
+per-column width customization — direct 2026-08-24 decision), and there's
+no cap on how many columns a row can have.
+
+`ShowcaseBlock`/`ShowcaseColumn` are this domain's own local names for
+the generic `ContentBlock`/`ContentColumn` shape defined in
+app/domain/content_blocks/entities.py (extracted 2026-08-24 once
+InterviewTopic/Article needed the identical shape) — re-exported here so
+every existing call site in this domain keeps reading `ShowcaseBlock`
+unchanged.
 """
 
 from __future__ import annotations
@@ -24,46 +42,18 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-#: Kept intentionally small — enough to build a cover-letter-style page
-#: (prose, a photo, a video walkthrough, links out to public Articles or
-#: anywhere else) without becoming a general-purpose page builder.
-ShowcaseBlockType = Literal["rich_text", "image", "video_embed", "article_link", "external_link"]
+from app.domain.content_blocks.entities import ContentBlock as ShowcaseBlock
+from app.domain.content_blocks.entities import ContentColumn as ShowcaseColumn
+from app.domain.content_blocks.entities import ContentColumnType as ShowcaseBlockType
 
-
-@dataclass(slots=True)
-class ShowcaseBlock:
-    """One section of a Showcase Page. Every block carries a user-editable
-    `label` (the whole point of "freeform, including labels") plus exactly
-    one populated content field, chosen by `type` — the others stay None
-    for that block. Sanitization of `html` happens in the application
-    service (ShowcasePageService.update), the same enforcement-point
-    convention app/core/rich_text.py's own docstring establishes for every
-    other rich-text field in this app: reads are trusted because every
-    write path already went through sanitize_rich_text.
-    """
-
-    id: UUID
-    type: ShowcaseBlockType
-    label: str
-    html: str | None = None
-    #: A bare, non-expiring public URL (app/domain/career_profile/storage.py's
-    #: ObjectStorageRepository.upload() already returns one directly — this
-    #: field stores that return value as-is, not a storage key to resolve
-    #: later, unlike Interview Prep's private-bucket image_key which needs a
-    #: fresh presigned URL generated on every read).
-    image_url: str | None = None
-    #: A ready-to-embed URL (e.g. "https://www.youtube.com/embed/XXXX") —
-    #: the user pastes an embed URL directly rather than this app parsing
-    #: an arbitrary watch-page URL into one; no video upload/storage of
-    #: our own (direct 2026-08-22 decision — no new video infra).
-    video_embed_url: str | None = None
-    #: Points at one of this user's own InterviewTopic rows — only
-    #: meaningful (and only ever rendered as a real link) once that topic
-    #: is itself public; a page referencing a topic that's since gone
-    #: private just renders as plain text on the public page rather than a
-    #: broken/private link.
-    article_topic_id: UUID | None = None
-    external_url: str | None = None
+__all__ = [
+    "ShowcaseBlock",
+    "ShowcaseColumn",
+    "ShowcaseBlockType",
+    "ShowcasePage",
+    "ShareableResourceType",
+    "PublicShareLink",
+]
 
 
 @dataclass(slots=True)

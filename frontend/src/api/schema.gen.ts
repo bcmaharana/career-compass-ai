@@ -1599,7 +1599,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/interview-prep/topics/{topic_id}/image": {
+    "/api/v1/interview-prep/topics/{topic_id}/blocks/{column_id}/image": {
         parameters: {
             query?: never;
             header?: never;
@@ -1608,10 +1608,9 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upload Interview Topic Image */
-        post: operations["upload_interview_topic_image_api_v1_interview_prep_topics__topic_id__image_post"];
-        /** Delete Interview Topic Image */
-        delete: operations["delete_interview_topic_image_api_v1_interview_prep_topics__topic_id__image_delete"];
+        /** Upload Interview Topic Column Image */
+        post: operations["upload_interview_topic_column_image_api_v1_interview_prep_topics__topic_id__blocks__column_id__image_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2151,7 +2150,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/showcase-pages/{target_role_id}/blocks/{block_id}/image": {
+    "/api/v1/showcase-pages/{target_role_id}/columns/{column_id}/image": {
         parameters: {
             query?: never;
             header?: never;
@@ -2160,8 +2159,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upload Showcase Block Image */
-        post: operations["upload_showcase_block_image_api_v1_showcase_pages__target_role_id__blocks__block_id__image_post"];
+        /** Upload Showcase Column Image */
+        post: operations["upload_showcase_column_image_api_v1_showcase_pages__target_role_id__columns__column_id__image_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2226,6 +2225,54 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** ArticleBlockPayload */
+        ArticleBlockPayload: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Columns */
+            columns: components["schemas"]["ArticleColumnPayload"][];
+        };
+        /**
+         * ArticleColumnPayload
+         * @description Same generic content-column shape as
+         *     app/api/v1/showcase_page/schemas.py's ShowcaseColumnPayload (both
+         *     wrap app/domain/content_blocks/entities.py's ContentColumn) — kept as
+         *     its own, separately-named class rather than imported/reused directly,
+         *     so each domain's OpenAPI schema names its own payload rather than one
+         *     leaking the other's ("Showcase") name; see that module for the
+         *     field-by-field rationale, identical here except image_key (Article
+         *     images are private-bucket, unlike ShowcasePage's public-bucket ones —
+         *     image_key is never sent by the client, only ever set server-side by
+         *     the image-upload endpoint, and image_url in a response is always a
+         *     fresh short-TTL presigned URL, never persisted).
+         */
+        ArticleColumnPayload: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link";
+            /** Label */
+            label: string;
+            /** Html */
+            html?: string | null;
+            /** Image Url */
+            image_url?: string | null;
+            /** Video Embed Url */
+            video_embed_url?: string | null;
+            /** Article Topic Id */
+            article_topic_id?: string | null;
+            /** External Url */
+            external_url?: string | null;
+        };
         /** AuditEventResponse */
         AuditEventResponse: {
             /**
@@ -2261,8 +2308,8 @@ export interface components {
              */
             import_batch_id: string;
         };
-        /** Body_upload_interview_topic_image_api_v1_interview_prep_topics__topic_id__image_post */
-        Body_upload_interview_topic_image_api_v1_interview_prep_topics__topic_id__image_post: {
+        /** Body_upload_interview_topic_column_image_api_v1_interview_prep_topics__topic_id__blocks__column_id__image_post */
+        Body_upload_interview_topic_column_image_api_v1_interview_prep_topics__topic_id__blocks__column_id__image_post: {
             /** File */
             file: string;
         };
@@ -2280,8 +2327,8 @@ export interface components {
             /** Upload Token */
             upload_token?: string | null;
         };
-        /** Body_upload_showcase_block_image_api_v1_showcase_pages__target_role_id__blocks__block_id__image_post */
-        Body_upload_showcase_block_image_api_v1_showcase_pages__target_role_id__blocks__block_id__image_post: {
+        /** Body_upload_showcase_column_image_api_v1_showcase_pages__target_role_id__columns__column_id__image_post */
+        Body_upload_showcase_column_image_api_v1_showcase_pages__target_role_id__columns__column_id__image_post: {
             /** File */
             file: string;
         };
@@ -3095,8 +3142,6 @@ export interface components {
             name: string;
             /** Section */
             section?: string | null;
-            /** Discussion */
-            discussion?: string | null;
             /** Scope Target Role Ids */
             scope_target_role_ids: (string | null)[];
         };
@@ -3111,12 +3156,8 @@ export interface components {
             name: string;
             /** Section */
             section: string | null;
-            /** Discussion */
-            discussion: string | null;
-            /** Image Url */
-            image_url: string | null;
-            /** Reference Links */
-            reference_links: components["schemas"]["ReferenceLinkPayload"][];
+            /** Blocks */
+            blocks: components["schemas"]["ArticleBlockPayload"][];
             /** Scope Target Role Ids */
             scope_target_role_ids: (string | null)[];
             /** Is Public */
@@ -3135,13 +3176,11 @@ export interface components {
             name: string;
             /** Section */
             section?: string | null;
-            /** Discussion */
-            discussion?: string | null;
             /**
-             * Reference Links
+             * Blocks
              * @default []
              */
-            reference_links: components["schemas"]["ReferenceLinkPayload"][];
+            blocks: components["schemas"]["ArticleBlockPayload"][];
             /** Scope Target Role Ids */
             scope_target_role_ids: (string | null)[];
         };
@@ -3779,6 +3818,41 @@ export interface components {
             /** Import Batch Id */
             import_batch_id?: string | null;
         };
+        /** PublicArticleBlock */
+        PublicArticleBlock: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Columns */
+            columns: components["schemas"]["PublicArticleColumn"][];
+        };
+        /** PublicArticleColumn */
+        PublicArticleColumn: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link";
+            /** Label */
+            label: string;
+            /** Html */
+            html?: string | null;
+            /** Image Url */
+            image_url?: string | null;
+            /** Video Embed Url */
+            video_embed_url?: string | null;
+            /** Article Share Key */
+            article_share_key?: string | null;
+            /** External Url */
+            external_url?: string | null;
+        };
         /** PublicArticleResponse */
         PublicArticleResponse: {
             /** Owner Display Name */
@@ -3787,22 +3861,21 @@ export interface components {
             owner_handle: string;
             /** Name */
             name: string;
-            /** Discussion */
-            discussion: string | null;
-            /** Image Url */
-            image_url: string | null;
-            /** Reference Links */
-            reference_links: components["schemas"]["PublicReferenceLink"][];
-        };
-        /** PublicReferenceLink */
-        PublicReferenceLink: {
-            /** Url */
-            url: string;
-            /** Label */
-            label: string;
+            /** Blocks */
+            blocks: components["schemas"]["PublicArticleBlock"][];
         };
         /** PublicShowcaseBlock */
         PublicShowcaseBlock: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Columns */
+            columns: components["schemas"]["PublicShowcaseColumn"][];
+        };
+        /** PublicShowcaseColumn */
+        PublicShowcaseColumn: {
             /**
              * Id
              * Format: uuid
@@ -4203,6 +4276,16 @@ export interface components {
         };
         /** ShowcaseBlockPayload */
         ShowcaseBlockPayload: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Columns */
+            columns: components["schemas"]["ShowcaseColumnPayload"][];
+        };
+        /** ShowcaseColumnPayload */
+        ShowcaseColumnPayload: {
             /**
              * Id
              * Format: uuid
@@ -8404,51 +8487,21 @@ export interface operations {
             };
         };
     };
-    upload_interview_topic_image_api_v1_interview_prep_topics__topic_id__image_post: {
+    upload_interview_topic_column_image_api_v1_interview_prep_topics__topic_id__blocks__column_id__image_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 topic_id: string;
+                column_id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_upload_interview_topic_image_api_v1_interview_prep_topics__topic_id__image_post"];
+                "multipart/form-data": components["schemas"]["Body_upload_interview_topic_column_image_api_v1_interview_prep_topics__topic_id__blocks__column_id__image_post"];
             };
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InterviewTopicResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_interview_topic_image_api_v1_interview_prep_topics__topic_id__image_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                topic_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -9737,19 +9790,19 @@ export interface operations {
             };
         };
     };
-    upload_showcase_block_image_api_v1_showcase_pages__target_role_id__blocks__block_id__image_post: {
+    upload_showcase_column_image_api_v1_showcase_pages__target_role_id__columns__column_id__image_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 target_role_id: string;
-                block_id: string;
+                column_id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_upload_showcase_block_image_api_v1_showcase_pages__target_role_id__blocks__block_id__image_post"];
+                "multipart/form-data": components["schemas"]["Body_upload_showcase_column_image_api_v1_showcase_pages__target_role_id__columns__column_id__image_post"];
             };
         };
         responses: {

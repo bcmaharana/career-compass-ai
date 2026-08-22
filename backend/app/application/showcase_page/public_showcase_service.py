@@ -59,7 +59,17 @@ class PublicArticleView:
     topic: InterviewTopic
     owner_display_name: str
     owner_handle: str
-    image_url: str | None
+    #: Presigned URL per image-type column id — Article images are
+    #: private-bucket, so unlike ShowcasePage's own image_url (a direct,
+    #: non-expiring public-bucket URL persisted on the column itself)
+    #: these are resolved fresh on every read and never persisted.
+    image_urls: dict[UUID, str] = field(default_factory=dict)
+    #: share_key for every `article_link` column (this Article can link
+    #: to another one) whose target InterviewTopic is CURRENTLY public —
+    #: same "omitted entirely, never a None entry, for anything that
+    #: doesn't currently resolve" rule as
+    #: PublicShowcasePageView.article_share_keys.
+    article_share_keys: dict[UUID, str] = field(default_factory=dict)
 
 
 class PublicShowcaseService:
@@ -102,16 +112,17 @@ class PublicShowcaseService:
 
         article_share_keys: dict[UUID, str] = {}
         for block in page.blocks:
-            if block.type != "article_link" or block.article_topic_id is None:
-                continue
-            topic = await self._topics.get_by_id(link.tenant_id, block.article_topic_id)
-            if topic is None or not topic.is_public:
-                continue
-            article_link = await self._share_links.get_by_resource(
-                "interview_topic", topic.id
-            )
-            if article_link is not None:
-                article_share_keys[topic.id] = article_link.share_key
+            for column in block.columns:
+                if column.type != "article_link" or column.article_topic_id is None:
+                    continue
+                topic = await self._topics.get_by_id(link.tenant_id, column.article_topic_id)
+                if topic is None or not topic.is_public:
+                    continue
+                article_link = await self._share_links.get_by_resource(
+                    "interview_topic", topic.id
+                )
+                if article_link is not None:
+                    article_share_keys[topic.id] = article_link.share_key
 
         return PublicShowcasePageView(
             page=page,
@@ -137,15 +148,30 @@ class PublicShowcaseService:
         if owner is None:
             return None
 
-        image_url = None
-        if topic.image_key is not None:
-            image_url = await self._storage.get_presigned_url(
-                key=topic.image_key, expires_in_seconds=300
-            )
+        image_urls: dict[UUID, str] = {}
+        article_share_keys: dict[UUID, str] = {}
+        for block in topic.blocks:
+            for column in block.columns:
+                if column.type == "image" and column.image_key:
+                    image_urls[column.id] = await self._storage.get_presigned_url(
+                        key=column.image_key, expires_in_seconds=300
+                    )
+                elif column.type == "article_link" and column.article_topic_id is not None:
+                    linked_topic = await self._topics.get_by_id(
+                        link.tenant_id, column.article_topic_id
+                    )
+                    if linked_topic is None or not linked_topic.is_public:
+                        continue
+                    article_link = await self._share_links.get_by_resource(
+                        "interview_topic", linked_topic.id
+                    )
+                    if article_link is not None:
+                        article_share_keys[linked_topic.id] = article_link.share_key
 
         return PublicArticleView(
             topic=topic,
             owner_display_name=owner.display_name,
             owner_handle=owner.handle or "",
-            image_url=image_url,
+            image_urls=image_urls,
+            article_share_keys=article_share_keys,
         )

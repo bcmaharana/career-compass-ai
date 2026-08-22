@@ -21,16 +21,34 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
+from app.adapters.documents.rich_text_export import plain_text
 from app.ai_platform.llm_service.service import LLMServiceInterface
 from app.application.career_profile.career_profile_service import CareerProfileService
 from app.application.career_profile.target_role_service import TargetRoleService
 from app.core.exceptions import CareerCompassError, NotFoundError
 from app.core.rich_text import sanitize_rich_text
-from app.domain.interview_prep.entities import InterviewQuestion
+from app.domain.interview_prep.entities import InterviewQuestion, InterviewTopic
 from app.domain.interview_prep.repositories import InterviewQuestionRepository, InterviewTopicRepository
 
 _USE_CASE = "interview_answer_generation"
 _MAX_RESPONSE_TOKENS = 600
+
+
+def _topic_notes_text(topic: InterviewTopic) -> str:
+    """Flattens every rich_text column across a topic's blocks into plain
+    text for LLM grounding — the block-based replacement for what used to
+    be a single `topic.discussion` field (2026-08-24). Reuses
+    ResumeExportService's own HTML-to-plain-text walker
+    (app/adapters/documents/rich_text_export.py) rather than duplicating
+    that logic; non-text column types (image/video/links) carry nothing
+    meaningful to ground an answer in, so they're skipped."""
+    texts = [
+        plain_text(column.html)
+        for block in topic.blocks
+        for column in block.columns
+        if column.type == "rich_text" and column.html
+    ]
+    return "\n".join(t for t in texts if t)
 
 
 class InterviewAnswerService:
@@ -109,8 +127,10 @@ class InterviewAnswerService:
         topic_context = ""
         if grounding_source.topic_id is not None:
             topic = await self._topics.get_by_id(tenant_id, grounding_source.topic_id)
-            if topic is not None and topic.discussion:
-                topic_context = f"Notes on this topic from the candidate's own prep:\n{topic.discussion}\n"
+            if topic is not None:
+                notes = _topic_notes_text(topic)
+                if notes:
+                    topic_context = f"Notes on this topic from the candidate's own prep:\n{notes}\n"
 
         try:
             answer = await self._llm.generate(

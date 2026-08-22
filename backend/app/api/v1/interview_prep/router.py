@@ -24,6 +24,8 @@ from app.api.dependencies import (
 from app.api.v1.career_profile.schemas import MoveRequest
 from app.api.v1.interview_prep.schemas import (
     AddFollowUpQuestionRequest,
+    ArticleBlockPayload,
+    ArticleColumnPayload,
     InterviewPrepMoveRequest,
     InterviewPrepScopeSummaryResponse,
     InterviewPrepSummaryResponse,
@@ -46,15 +48,42 @@ from app.application.interview_prep.interview_topic_service import InterviewTopi
 from app.application.showcase_page.public_share_link_service import PublicShareLinkService
 from app.application.showcase_page.public_sharing_service import PublicSharingService
 from app.core.identity_provider_interface import IdentityClaims
-from app.domain.interview_prep.entities import InterviewQuestion, InterviewTopic, ReferenceLink
+from app.domain.interview_prep.entities import ArticleBlock, ArticleColumn, InterviewQuestion, InterviewTopic, ReferenceLink
 
 router = APIRouter(tags=["interview-prep"])
+
+
+def _article_column_payload(column: ArticleColumn, image_urls: dict[UUID, str]) -> ArticleColumnPayload:
+    return ArticleColumnPayload(
+        id=column.id,
+        type=column.type,
+        label=column.label,
+        html=column.html,
+        image_url=image_urls.get(column.id),
+        video_embed_url=column.video_embed_url,
+        article_topic_id=column.article_topic_id,
+        external_url=column.external_url,
+    )
+
+
+def _article_column_from_payload(column: ArticleColumnPayload) -> ArticleColumn:
+    return ArticleColumn(
+        id=column.id,
+        type=column.type,
+        label=column.label,
+        html=column.html,
+        image_url=None,
+        image_key=None,  # never set by the client — only the image-upload endpoint sets this
+        video_embed_url=column.video_embed_url,
+        article_topic_id=column.article_topic_id,
+        external_url=column.external_url,
+    )
 
 
 async def _topic_response(
     service: InterviewTopicService, share_links: PublicShareLinkService, topic: InterviewTopic
 ) -> InterviewTopicResponse:
-    image_url = await service.get_presigned_image_url(topic)
+    image_urls = await service.get_presigned_image_urls(topic)
     share_key = await share_links.get_existing_key(
         resource_type="interview_topic", resource_id=topic.id
     )
@@ -62,10 +91,12 @@ async def _topic_response(
         id=topic.id,
         name=topic.name,
         section=topic.section,
-        discussion=topic.discussion,
-        image_url=image_url,
-        reference_links=[
-            ReferenceLinkPayload(url=link.url, label=link.label) for link in topic.reference_links
+        blocks=[
+            ArticleBlockPayload(
+                id=block.id,
+                columns=[_article_column_payload(column, image_urls) for column in block.columns],
+            )
+            for block in topic.blocks
         ],
         scope_target_role_ids=topic.scope_target_role_ids,
         is_public=topic.is_public,
@@ -124,7 +155,6 @@ async def add_interview_topic(
         user_id=UUID(identity.user_id),
         name=request.name,
         section=request.section,
-        discussion=request.discussion,
         scope_target_role_ids=request.scope_target_role_ids,
     )
     return await _topic_response(service, share_links, topic)
@@ -138,14 +168,20 @@ async def update_interview_topic(
     service: InterviewTopicService = Depends(get_interview_topic_service),
     share_links: PublicShareLinkService = Depends(get_public_share_link_service),
 ) -> InterviewTopicResponse:
+    blocks = [
+        ArticleBlock(
+            id=block.id,
+            columns=[_article_column_from_payload(column) for column in block.columns],
+        )
+        for block in request.blocks
+    ]
     topic = await service.update(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         topic_id=topic_id,
         name=request.name,
         section=request.section,
-        discussion=request.discussion,
-        reference_links=[ReferenceLink(url=link.url, label=link.label) for link in request.reference_links],
+        blocks=blocks,
         scope_target_role_ids=request.scope_target_role_ids,
     )
     return await _topic_response(service, share_links, topic)
@@ -191,9 +227,13 @@ async def move_interview_topic(
     return [await _topic_response(service, share_links, t) for t in topics]
 
 
-@router.post("/interview-prep/topics/{topic_id}/image", response_model=InterviewTopicResponse)
-async def upload_interview_topic_image(
+@router.post(
+    "/interview-prep/topics/{topic_id}/blocks/{column_id}/image",
+    response_model=InterviewTopicResponse,
+)
+async def upload_interview_topic_column_image(
     topic_id: UUID,
+    column_id: UUID,
     file: UploadFile,
     identity: IdentityClaims = Depends(get_current_identity),
     service: InterviewTopicService = Depends(get_interview_topic_service),
@@ -204,21 +244,9 @@ async def upload_interview_topic_image(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         topic_id=topic_id,
+        column_id=column_id,
         content=content,
         content_type=file.content_type or "application/octet-stream",
-    )
-    return await _topic_response(service, share_links, topic)
-
-
-@router.delete("/interview-prep/topics/{topic_id}/image", response_model=InterviewTopicResponse)
-async def delete_interview_topic_image(
-    topic_id: UUID,
-    identity: IdentityClaims = Depends(get_current_identity),
-    service: InterviewTopicService = Depends(get_interview_topic_service),
-    share_links: PublicShareLinkService = Depends(get_public_share_link_service),
-) -> InterviewTopicResponse:
-    topic = await service.delete_image(
-        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id), topic_id=topic_id
     )
     return await _topic_response(service, share_links, topic)
 

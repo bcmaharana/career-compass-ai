@@ -6,6 +6,13 @@ FakeInterviewTopicRepository simulates the real many-to-many scope-tag
 join table as a plain `dict[topic_id, dict[target_role_id, display_order]]`
 — close enough to the real SqlAlchemyInterviewTopicRepository's shape
 (same list_for_scope/move/remove_scope semantics) without a database.
+
+Content is a freeform `blocks` document (2026-08-24 restructuring —
+see app/domain/content_blocks/entities.py) rather than the old fixed
+discussion/image_key/reference_links shape; the small `_rich_text_block`/
+`_image_block`/`_external_link_block` helpers below build single-column
+rows for test data, mirroring how the real frontend/API constructs one
+column per new block.
 """
 
 from __future__ import annotations
@@ -20,9 +27,32 @@ from app.application.interview_prep.interview_topic_service import (
     InterviewTopicService,
 )
 from app.core.exceptions import CareerCompassError, NotFoundError, ValidationError
-from app.domain.interview_prep.entities import InterviewTopic, ReferenceLink
+from app.domain.interview_prep.entities import ArticleBlock, ArticleColumn, InterviewTopic
 
 pytestmark = pytest.mark.unit
+
+
+def _rich_text_block(html: str | None, *, label: str = "Discussion") -> ArticleBlock:
+    return ArticleBlock(
+        id=uuid.uuid4(),
+        columns=[ArticleColumn(id=uuid.uuid4(), type="rich_text", label=label, html=html)],
+    )
+
+
+def _image_block(*, image_key: str | None = None, label: str = "Image") -> ArticleBlock:
+    return ArticleBlock(
+        id=uuid.uuid4(),
+        columns=[ArticleColumn(id=uuid.uuid4(), type="image", label=label, image_key=image_key)],
+    )
+
+
+def _external_link_block(url: str, label: str) -> ArticleBlock:
+    return ArticleBlock(
+        id=uuid.uuid4(),
+        columns=[
+            ArticleColumn(id=uuid.uuid4(), type="external_link", label=label, external_url=url)
+        ],
+    )
 
 
 class FakeInterviewTopicRepository:
@@ -150,29 +180,13 @@ class TestAdd:
             user_id=user_id,
             name="System Design",
             section="Technical",
-            discussion="Notes here.",
             scope_target_role_ids=[None],
         )
 
         assert topic.name == "System Design"
         assert topic.section == "Technical"
+        assert topic.blocks == []
         assert repo.topics[topic.id] is topic
-
-    async def test_discussion_is_sanitized_on_save(self) -> None:
-        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
-        repo = FakeInterviewTopicRepository()
-        service = InterviewTopicService(repo, FakePrivateObjectStorage())
-
-        topic = await service.add(
-            tenant_id=tenant_id,
-            user_id=user_id,
-            name="System Design",
-            section=None,
-            discussion='<i>Notes</i><script>alert(1)</script>',
-            scope_target_role_ids=[None],
-        )
-
-        assert topic.discussion == "<i>Notes</i>alert(1)"
 
     async def test_rejects_an_empty_scope_list(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
@@ -184,7 +198,6 @@ class TestAdd:
                 user_id=user_id,
                 name="System Design",
                 section=None,
-                discussion=None,
                 scope_target_role_ids=[],
             )
 
@@ -199,7 +212,6 @@ class TestAdd:
             user_id=user_id,
             name="Cross-tagged topic",
             section=None,
-            discussion=None,
             scope_target_role_ids=[None, role_id],
         )
 
@@ -220,7 +232,6 @@ class TestAdd:
             user_id=user_id,
             name="Deduped topic",
             section=None,
-            discussion=None,
             scope_target_role_ids=[role_id, role_id, role_id],
         )
 
@@ -228,7 +239,7 @@ class TestAdd:
 
 
 class TestUpdateAndDelete:
-    async def test_update_sanitizes_discussion(self) -> None:
+    async def test_update_sanitizes_rich_text_block_html(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         repo = FakeInterviewTopicRepository()
         topic = await repo.create(_make_topic(tenant_id, user_id))
@@ -240,14 +251,13 @@ class TestUpdateAndDelete:
             topic_id=topic.id,
             name=topic.name,
             section=None,
-            discussion='<span style="color: red; background: url(x)">colored</span>',
-            reference_links=[],
+            blocks=[_rich_text_block('<span style="color: red; background: url(x)">colored</span>')],
             scope_target_role_ids=[None],
         )
 
-        assert updated.discussion == '<span style="color: red;">colored</span>'
+        assert updated.blocks[0].columns[0].html == '<span style="color: red;">colored</span>'
 
-    async def test_update_saves_reference_links(self) -> None:
+    async def test_update_saves_an_external_link_block(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         repo = FakeInterviewTopicRepository()
         topic = await repo.create(_make_topic(tenant_id, user_id))
@@ -259,14 +269,15 @@ class TestUpdateAndDelete:
             topic_id=topic.id,
             name=topic.name,
             section=None,
-            discussion=None,
-            reference_links=[ReferenceLink(url="https://example.com", label="Example")],
+            blocks=[_external_link_block("https://example.com", "Example")],
             scope_target_role_ids=[None],
         )
 
-        assert updated.reference_links == [ReferenceLink(url="https://example.com", label="Example")]
+        column = updated.blocks[0].columns[0]
+        assert column.external_url == "https://example.com"
+        assert column.label == "Example"
 
-    async def test_update_rejects_a_javascript_scheme_reference_link(self) -> None:
+    async def test_update_rejects_a_javascript_scheme_external_link(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         repo = FakeInterviewTopicRepository()
         topic = await repo.create(_make_topic(tenant_id, user_id))
@@ -279,10 +290,7 @@ class TestUpdateAndDelete:
                 topic_id=topic.id,
                 name=topic.name,
                 section=None,
-                discussion=None,
-                reference_links=[
-                    ReferenceLink(url="javascript:alert(document.cookie)", label="Evil")
-                ],
+                blocks=[_external_link_block("javascript:alert(document.cookie)", "Evil")],
                 scope_target_role_ids=[None],
             )
 
@@ -299,8 +307,7 @@ class TestUpdateAndDelete:
                 topic_id=topic.id,
                 name="Renamed",
                 section=None,
-                discussion=None,
-                reference_links=[],
+                blocks=[],
                 scope_target_role_ids=[None],
             )
 
@@ -317,8 +324,7 @@ class TestUpdateAndDelete:
                 topic_id=topic.id,
                 name=topic.name,
                 section=None,
-                discussion=None,
-                reference_links=[],
+                blocks=[],
                 scope_target_role_ids=[],
             )
 
@@ -335,8 +341,7 @@ class TestUpdateAndDelete:
             topic_id=topic.id,
             name=topic.name,
             section=None,
-            discussion=None,
-            reference_links=[],
+            blocks=[],
             scope_target_role_ids=[None, role_id],
         )
 
@@ -357,14 +362,57 @@ class TestUpdateAndDelete:
             topic_id=topic.id,
             name=topic.name,
             section=None,
-            discussion=None,
-            reference_links=[],
+            blocks=[],
             scope_target_role_ids=[role_id],
         )
 
         assert updated.scope_target_role_ids == [role_id]
         master_list = await repo.list_for_scope(tenant_id, user_id, None)
         assert master_list == []
+
+    async def test_update_removing_an_image_column_deletes_its_object(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        topic = await repo.create(
+            _make_topic(
+                tenant_id, user_id, blocks=[_image_block(image_key="interview-topics/x/old.jpg")]
+            )
+        )
+        storage = FakePrivateObjectStorage()
+        service = InterviewTopicService(repo, storage)
+
+        updated = await service.update(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            topic_id=topic.id,
+            name=topic.name,
+            section=None,
+            blocks=[],  # image block removed entirely
+            scope_target_role_ids=[None],
+        )
+
+        assert updated.blocks == []
+        assert storage.deleted_keys == ["interview-topics/x/old.jpg"]
+
+    async def test_update_keeping_an_image_column_does_not_delete_its_object(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        image_block = _image_block(image_key="interview-topics/x/keep.jpg")
+        topic = await repo.create(_make_topic(tenant_id, user_id, blocks=[image_block]))
+        storage = FakePrivateObjectStorage()
+        service = InterviewTopicService(repo, storage)
+
+        await service.update(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            topic_id=topic.id,
+            name=topic.name,
+            section=None,
+            blocks=[image_block],  # unchanged
+            scope_target_role_ids=[None],
+        )
+
+        assert storage.deleted_keys == []
 
     async def test_delete_removes_everywhere_when_only_one_scope(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
@@ -420,10 +468,30 @@ class TestUpdateAndDelete:
 
         assert topic.id not in repo.topics
 
-    async def test_delete_best_effort_removes_image(self) -> None:
+    async def test_delete_best_effort_removes_every_image_column(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         repo = FakeInterviewTopicRepository()
-        topic = await repo.create(_make_topic(tenant_id, user_id, image_key="interview-topics/x.jpg"))
+        topic = await repo.create(
+            _make_topic(
+                tenant_id,
+                user_id,
+                blocks=[
+                    _image_block(image_key="interview-topics/x/a.jpg"),
+                    ArticleBlock(
+                        id=uuid.uuid4(),
+                        columns=[
+                            ArticleColumn(
+                                id=uuid.uuid4(),
+                                type="image",
+                                label="Second",
+                                image_key="interview-topics/x/b.jpg",
+                            ),
+                            ArticleColumn(id=uuid.uuid4(), type="rich_text", label="Text", html="<p>hi</p>"),
+                        ],
+                    ),
+                ],
+            )
+        )
         storage = FakePrivateObjectStorage()
         service = InterviewTopicService(repo, storage)
 
@@ -435,13 +503,15 @@ class TestUpdateAndDelete:
             delete_everywhere=False,
         )
 
-        assert storage.deleted_keys == ["interview-topics/x.jpg"]
+        assert set(storage.deleted_keys) == {"interview-topics/x/a.jpg", "interview-topics/x/b.jpg"}
         assert topic.id not in repo.topics
 
     async def test_delete_survives_storage_failure(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         repo = FakeInterviewTopicRepository()
-        topic = await repo.create(_make_topic(tenant_id, user_id, image_key="interview-topics/x.jpg"))
+        topic = await repo.create(
+            _make_topic(tenant_id, user_id, blocks=[_image_block(image_key="interview-topics/x.jpg")])
+        )
         storage = FakePrivateObjectStorage(fail_delete=True)
         service = InterviewTopicService(repo, storage)
 
@@ -500,28 +570,71 @@ class TestMove:
 
 
 class TestUploadImage:
-    async def test_uploads_and_stores_the_key(self) -> None:
+    async def test_uploads_and_stores_the_key_on_the_right_column(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         repo = FakeInterviewTopicRepository()
-        topic = await repo.create(_make_topic(tenant_id, user_id))
+        image_block = _image_block()
+        topic = await repo.create(_make_topic(tenant_id, user_id, blocks=[image_block]))
         storage = FakePrivateObjectStorage()
         service = InterviewTopicService(repo, storage)
+        column_id = image_block.columns[0].id
 
         updated = await service.upload_image(
             tenant_id=tenant_id,
             user_id=user_id,
             topic_id=topic.id,
+            column_id=column_id,
             content=b"fake-bytes",
             content_type="image/png",
         )
 
-        assert updated.image_key is not None
-        assert updated.image_key in storage.uploaded
+        key = updated.blocks[0].columns[0].image_key
+        assert key is not None
+        assert key in storage.uploaded
+
+    async def test_finds_the_column_even_when_its_row_has_multiple_columns(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        text_column = ArticleColumn(id=uuid.uuid4(), type="rich_text", label="Text", html="<p>Hi</p>")
+        image_column = ArticleColumn(id=uuid.uuid4(), type="image", label="Photo")
+        row = ArticleBlock(id=uuid.uuid4(), columns=[text_column, image_column])
+        topic = await repo.create(_make_topic(tenant_id, user_id, blocks=[row]))
+        service = InterviewTopicService(repo, FakePrivateObjectStorage())
+
+        updated = await service.upload_image(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            topic_id=topic.id,
+            column_id=image_column.id,
+            content=b"fake-bytes",
+            content_type="image/png",
+        )
+
+        assert len(updated.blocks) == 1
+        assert updated.blocks[0].columns[0].html == "<p>Hi</p>"  # untouched
+        assert updated.blocks[0].columns[1].image_key is not None
+
+    async def test_raises_not_found_for_an_unknown_column(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        topic = await repo.create(_make_topic(tenant_id, user_id))
+        service = InterviewTopicService(repo, FakePrivateObjectStorage())
+
+        with pytest.raises(NotFoundError):
+            await service.upload_image(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                topic_id=topic.id,
+                column_id=uuid.uuid4(),
+                content=b"data",
+                content_type="image/png",
+            )
 
     async def test_replacing_an_image_deletes_the_old_one(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         repo = FakeInterviewTopicRepository()
-        topic = await repo.create(_make_topic(tenant_id, user_id, image_key="interview-topics/old.jpg"))
+        image_block = _image_block(image_key="interview-topics/old.jpg")
+        topic = await repo.create(_make_topic(tenant_id, user_id, blocks=[image_block]))
         storage = FakePrivateObjectStorage()
         service = InterviewTopicService(repo, storage)
 
@@ -529,6 +642,7 @@ class TestUploadImage:
             tenant_id=tenant_id,
             user_id=user_id,
             topic_id=topic.id,
+            column_id=image_block.columns[0].id,
             content=b"new-bytes",
             content_type="image/png",
         )
@@ -538,7 +652,8 @@ class TestUploadImage:
     async def test_rejects_unsupported_content_type(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         repo = FakeInterviewTopicRepository()
-        topic = await repo.create(_make_topic(tenant_id, user_id))
+        image_block = _image_block()
+        topic = await repo.create(_make_topic(tenant_id, user_id, blocks=[image_block]))
         service = InterviewTopicService(repo, FakePrivateObjectStorage())
 
         with pytest.raises(ValidationError):
@@ -546,6 +661,7 @@ class TestUploadImage:
                 tenant_id=tenant_id,
                 user_id=user_id,
                 topic_id=topic.id,
+                column_id=image_block.columns[0].id,
                 content=b"data",
                 content_type="application/pdf",
             )
@@ -553,7 +669,8 @@ class TestUploadImage:
     async def test_rejects_oversized_image(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         repo = FakeInterviewTopicRepository()
-        topic = await repo.create(_make_topic(tenant_id, user_id))
+        image_block = _image_block()
+        topic = await repo.create(_make_topic(tenant_id, user_id, blocks=[image_block]))
         service = InterviewTopicService(repo, FakePrivateObjectStorage())
 
         with pytest.raises(ValidationError):
@@ -561,6 +678,7 @@ class TestUploadImage:
                 tenant_id=tenant_id,
                 user_id=user_id,
                 topic_id=topic.id,
+                column_id=image_block.columns[0].id,
                 content=b"x" * (MAX_IMAGE_SIZE_BYTES + 1),
                 content_type="image/png",
             )
@@ -603,20 +721,22 @@ class TestSetPublic:
             )
 
 
-class TestPresignedImageUrl:
-    async def test_returns_none_when_no_image(self) -> None:
+class TestPresignedImageUrls:
+    async def test_returns_empty_when_no_image_columns(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         service = InterviewTopicService(FakeInterviewTopicRepository(), FakePrivateObjectStorage())
-        topic = _make_topic(tenant_id, user_id)
+        topic = _make_topic(tenant_id, user_id, blocks=[_rich_text_block("<p>hi</p>")])
 
-        assert await service.get_presigned_image_url(topic) is None
+        assert await service.get_presigned_image_urls(topic) == {}
 
-    async def test_resolves_a_url_when_image_set(self) -> None:
+    async def test_resolves_a_url_per_image_column(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         service = InterviewTopicService(FakeInterviewTopicRepository(), FakePrivateObjectStorage())
-        topic = _make_topic(tenant_id, user_id, image_key="interview-topics/x.jpg")
+        block = _image_block(image_key="interview-topics/x.jpg")
+        topic = _make_topic(tenant_id, user_id, blocks=[block])
 
-        url = await service.get_presigned_image_url(topic)
+        urls = await service.get_presigned_image_urls(topic)
 
-        assert url is not None
-        assert "interview-topics/x.jpg" in url
+        column_id = block.columns[0].id
+        assert column_id in urls
+        assert "interview-topics/x.jpg" in urls[column_id]

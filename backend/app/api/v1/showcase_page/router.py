@@ -22,6 +22,7 @@ from app.api.dependencies import (
 )
 from app.api.v1.showcase_page.schemas import (
     ShowcaseBlockPayload,
+    ShowcaseColumnPayload,
     ShowcasePageResponse,
     ShowcasePageUpdateRequest,
     TogglePublicRequest,
@@ -30,9 +31,35 @@ from app.application.showcase_page.public_share_link_service import PublicShareL
 from app.application.showcase_page.public_sharing_service import PublicSharingService
 from app.application.showcase_page.showcase_page_service import ShowcasePageService
 from app.core.identity_provider_interface import IdentityClaims
-from app.domain.showcase_page.entities import ShowcaseBlock, ShowcasePage
+from app.domain.showcase_page.entities import ShowcaseBlock, ShowcaseColumn, ShowcasePage
 
 router = APIRouter(tags=["showcase-page"])
+
+
+def _column_payload(column: ShowcaseColumn) -> ShowcaseColumnPayload:
+    return ShowcaseColumnPayload(
+        id=column.id,
+        type=column.type,
+        label=column.label,
+        html=column.html,
+        image_url=column.image_url,
+        video_embed_url=column.video_embed_url,
+        article_topic_id=column.article_topic_id,
+        external_url=column.external_url,
+    )
+
+
+def _column_from_payload(column: ShowcaseColumnPayload) -> ShowcaseColumn:
+    return ShowcaseColumn(
+        id=column.id,
+        type=column.type,
+        label=column.label,
+        html=column.html,
+        image_url=column.image_url,
+        video_embed_url=column.video_embed_url,
+        article_topic_id=column.article_topic_id,
+        external_url=column.external_url,
+    )
 
 
 async def _page_response(
@@ -48,13 +75,7 @@ async def _page_response(
         blocks=[
             ShowcaseBlockPayload(
                 id=block.id,
-                type=block.type,
-                label=block.label,
-                html=block.html,
-                image_url=block.image_url,
-                video_embed_url=block.video_embed_url,
-                article_topic_id=block.article_topic_id,
-                external_url=block.external_url,
+                columns=[_column_payload(column) for column in block.columns],
             )
             for block in page.blocks
         ],
@@ -90,13 +111,7 @@ async def update_showcase_page(
     blocks = [
         ShowcaseBlock(
             id=block.id,
-            type=block.type,
-            label=block.label,
-            html=block.html,
-            image_url=block.image_url,
-            video_embed_url=block.video_embed_url,
-            article_topic_id=block.article_topic_id,
-            external_url=block.external_url,
+            columns=[_column_from_payload(column) for column in block.columns],
         )
         for block in request.blocks
     ]
@@ -127,12 +142,12 @@ async def toggle_showcase_page_public(
 
 
 @router.post(
-    "/showcase-pages/{target_role_id}/blocks/{block_id}/image",
+    "/showcase-pages/{target_role_id}/columns/{column_id}/image",
     response_model=ShowcasePageResponse,
 )
-async def upload_showcase_block_image(
+async def upload_showcase_column_image(
     target_role_id: UUID,
-    block_id: UUID,
+    column_id: UUID,
     file: UploadFile,
     identity: IdentityClaims = Depends(get_current_identity),
     service: ShowcasePageService = Depends(get_showcase_page_service),
@@ -143,7 +158,7 @@ async def upload_showcase_block_image(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         target_role_id=target_role_id,
-        block_id=block_id,
+        column_id=column_id,
         content=content,
         content_type=file.content_type or "application/octet-stream",
     )

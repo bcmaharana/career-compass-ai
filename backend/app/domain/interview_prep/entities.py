@@ -35,6 +35,20 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
+from app.domain.content_blocks.entities import ContentBlock as ArticleBlock
+from app.domain.content_blocks.entities import ContentColumn as ArticleColumn
+from app.domain.content_blocks.entities import ContentColumnType as ArticleColumnType
+
+__all__ = [
+    "ReferenceLink",
+    "is_safe_reference_url",
+    "InterviewTopic",
+    "InterviewQuestion",
+    "ArticleBlock",
+    "ArticleColumn",
+    "ArticleColumnType",
+]
+
 
 @dataclass(slots=True)
 class ReferenceLink:
@@ -78,13 +92,22 @@ def is_safe_reference_url(url: str) -> bool:
 
 @dataclass(slots=True)
 class InterviewTopic:
-    """A study-notes card: a name, optional free-text discussion, and an
-    optional image (stored in the private object storage bucket — see
+    """A study-notes card: a name plus a freeform `blocks` document (the
+    same row/column content-block model ShowcasePage uses — see
+    app/domain/content_blocks/entities.py) rather than a fixed
+    discussion/image/reference_links shape (direct 2026-08-24 request:
+    "Articles don't have same design of + Add block functionality").
+    `section` is a plain free-text grouping label with no separate entity
+    of its own — same "just a string on each item" pattern
+    CoreCompetency.category already uses for Core Competencies/My Skills.
+
+    Article image columns are private-bucket (see
     app/domain/resume_intelligence/storage.py's PrivateObjectStorageRepository,
-    reused here rather than introducing a third bucket). `section` is a
-    plain free-text grouping label with no separate entity of its own —
-    same "just a string on each item" pattern CoreCompetency.category
-    already uses for Core Competencies/My Skills.
+    reused here rather than introducing a third bucket) — unlike
+    ShowcasePage's public-bucket columns, an ArticleColumn's `image_url`
+    is never persisted, only `image_key`; `image_url` is populated fresh
+    on every read via a short-TTL presigned URL (InterviewTopicService.
+    get_presigned_image_urls).
     """
 
     id: UUID
@@ -98,9 +121,7 @@ class InterviewTopic:
     #: topic (enforced by InterviewTopicService, not here).
     scope_target_role_ids: list[UUID | None] = field(default_factory=list)
     section: str | None = None
-    discussion: str | None = None
-    image_key: str | None = None  # private-bucket storage key, not a URL
-    reference_links: list[ReferenceLink] = field(default_factory=list)
+    blocks: list[ArticleBlock] = field(default_factory=list)
     #: Public-sharing toggle (direct 2026-08-22 request) — framed as
     #: "Article" to an external viewer, same InterviewTopic underneath.
     #: The actual share URL lives in the RLS-exempt public_share_links

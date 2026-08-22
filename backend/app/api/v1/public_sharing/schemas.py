@@ -15,12 +15,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
-class PublicReferenceLink(BaseModel):
-    url: str
-    label: str
-
-
-class PublicShowcaseBlock(BaseModel):
+class PublicShowcaseColumn(BaseModel):
     id: UUID
     type: Literal["rich_text", "image", "video_embed", "article_link", "external_link"]
     label: str
@@ -36,6 +31,13 @@ class PublicShowcaseBlock(BaseModel):
     external_url: str | None = None
 
 
+class PublicShowcaseBlock(BaseModel):
+    id: UUID
+    #: Rendered side by side (equal width) on desktop, stacked vertically
+    #: on mobile — see ShowcaseBlock's own domain docstring.
+    columns: list[PublicShowcaseColumn]
+
+
 class PublicShowcasePageResponse(BaseModel):
     owner_display_name: str
     owner_handle: str
@@ -45,10 +47,30 @@ class PublicShowcasePageResponse(BaseModel):
     updated_at: datetime
 
 
+class PublicArticleColumn(BaseModel):
+    id: UUID
+    type: Literal["rich_text", "image", "video_embed", "article_link", "external_link"]
+    label: str
+    html: str | None = None
+    image_url: str | None = None
+    video_embed_url: str | None = None
+    #: Another Article's OWN share_key (an Article can link to another
+    #: one) — same "never the raw internal topic id, None whenever it
+    #: doesn't currently resolve to a public Article" rule as
+    #: PublicShowcaseColumn.article_share_key.
+    article_share_key: str | None = None
+    external_url: str | None = None
+
+
+class PublicArticleBlock(BaseModel):
+    id: UUID
+    #: Rendered side by side (equal width) on desktop, stacked vertically
+    #: on mobile — see ContentBlock's own domain docstring.
+    columns: list[PublicArticleColumn]
+
+
 class PublicArticleResponse(BaseModel):
     owner_display_name: str
     owner_handle: str
     name: str
-    discussion: str | None
-    image_url: str | None
-    reference_links: list[PublicReferenceLink]
+    blocks: list[PublicArticleBlock]
