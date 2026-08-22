@@ -82,10 +82,14 @@ class ChatService:
         tenant_id: UUID,
         user_id: UUID,
         conversation_id: UUID | None,
+        section_key: str,
         content: str,
     ) -> ChatTurn:
         conversation_id = await self._resolve_conversation_id(
-            tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id
+            tenant_id=tenant_id,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            section_key=section_key,
         )
 
         history = await self._messages.list_by_conversation(tenant_id, conversation_id)
@@ -122,17 +126,25 @@ class ChatService:
         )
 
     async def get_latest_conversation_id(
-        self, *, tenant_id: UUID, user_id: UUID
+        self, *, tenant_id: UUID, user_id: UUID, section_key: str
     ) -> UUID | None:
-        """Lets the frontend resume the same conversation after a full
-        page reload or a logout/login cycle — chat-store.ts holds
+        """Lets the frontend resume the same conversation, WITHIN THIS ONE
+        SECTION, after a full page reload, a fresh login, or simply
+        navigating to this section from elsewhere — chat-store.ts holds
         conversation_id only in memory (deliberately, so a stray tab
         doesn't leak one user's conversation into a different session on
-        the same browser), so without this, every reload started a
-        brand-new, historyless conversation even though the old one and
-        its messages were still sitting in the database the whole time.
+        the same browser), so without this, every reload/relogin/section
+        switch would start a brand-new, historyless conversation even
+        though the old one and its messages were still sitting in the
+        database the whole time. Scoped to `section_key` (2026-08-22 —
+        see ChatConversation.section_key's own docstring for the real
+        production issue that drove this): a conversation from one
+        section must never resolve as "the conversation to resume" on a
+        completely different section.
         """
-        conversation = await self._conversations.get_latest_for_user(tenant_id, user_id)
+        conversation = await self._conversations.get_latest_for_section(
+            tenant_id, user_id, section_key
+        )
         return conversation.id if conversation else None
 
     async def get_owned_or_raise(
@@ -241,7 +253,7 @@ class ChatService:
             return _FALLBACK_REPLY
 
     async def _resolve_conversation_id(
-        self, *, tenant_id: UUID, user_id: UUID, conversation_id: UUID | None
+        self, *, tenant_id: UUID, user_id: UUID, conversation_id: UUID | None, section_key: str
     ) -> UUID:
         if conversation_id is None:
             conversation = await self._conversations.create(
@@ -250,6 +262,7 @@ class ChatService:
                     tenant_id=tenant_id,
                     user_id=user_id,
                     created_at=datetime.now(UTC),
+                    section_key=section_key,
                 )
             )
             return conversation.id

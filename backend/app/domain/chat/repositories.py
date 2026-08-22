@@ -18,15 +18,19 @@ class ChatConversationRepository(Protocol):
     async def get_by_id(
         self, tenant_id: UUID, conversation_id: UUID
     ) -> ChatConversation | None: ...
-    async def get_latest_for_user(
-        self, tenant_id: UUID, user_id: UUID
+    async def get_latest_for_section(
+        self, tenant_id: UUID, user_id: UUID, section_key: str
     ) -> ChatConversation | None:
-        """Most recently *created* conversation for this user, not most
-        recently active — there's deliberately no "start a new
-        conversation" affordance anywhere in this app today, so a user
-        only ever has one conversation in practice, making the
-        distinction moot. Revisit (order by latest message instead) if a
-        genuine multi-conversation UI ever ships."""
+        """Most recently *created* conversation for this user WITHIN this
+        one section — not most recently active, and not across other
+        sections (2026-08-22: conversations are scoped one-per-section,
+        not one-per-account — see ChatConversation.section_key's own
+        docstring for the real production issue that drove this). There's
+        deliberately no "start a new conversation within a section"
+        affordance, so a user has at most one conversation per section in
+        practice, making "most recently created" vs. "most recently
+        active" moot. Revisit (order by latest message instead) if a
+        genuine multi-conversation-per-section UI ever ships."""
         ...
     async def delete(self, tenant_id: UUID, conversation_id: UUID) -> None:
         """Hard delete — no `deleted_at` column exists on this table, and

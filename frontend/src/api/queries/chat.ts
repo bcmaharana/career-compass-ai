@@ -19,16 +19,23 @@ export function useSendChatMessage() {
   });
 }
 
-/** Lets AppShell.tsx resume the same conversation after a fresh page load
- * or a logout/login cycle — see chat-store.ts's own docstring for why
- * conversation_id otherwise doesn't survive either. `staleTime: Infinity`
- * since this only needs to run once per app mount, not refetch on window
- * focus etc. — a conversation someone starts *after* this resolves is
- * tracked in chat-store.ts from then on, not from a refetch of this. */
-export function useLatestConversation() {
+/** Lets AppShell.tsx resume that SECTION's own conversation after a fresh
+ * page load, a logout/login cycle, or navigating into a section for the
+ * first time this session — see chat-store.ts's own docstring for why
+ * conversation_id otherwise doesn't survive any of those. Keyed by
+ * `sectionKey` (matchNavItem(pathname).to) so switching sections
+ * naturally triggers its own fetch rather than reusing another
+ * section's cached answer. `staleTime: Infinity` since this only needs
+ * to run once per section per app mount, not refetch on window focus
+ * etc. — a conversation someone starts *after* this resolves is tracked
+ * in chat-store.ts from then on, not from a refetch of this. */
+export function useLatestConversation(sectionKey: string) {
   return useQuery({
-    queryKey: ["chat", "latest-conversation"],
-    queryFn: () => apiClient.get<LatestConversationResponse>("/api/v1/chat/conversations/latest"),
+    queryKey: ["chat", "latest-conversation", sectionKey],
+    queryFn: () =>
+      apiClient.get<LatestConversationResponse>(
+        `/api/v1/chat/conversations/latest?section_key=${encodeURIComponent(sectionKey)}`,
+      ),
     staleTime: Infinity,
   });
 }
@@ -63,25 +70,28 @@ export function useClearChatMessages() {
 
 /** Removes the whole conversation — matching JD Tailoring's
  * useDeleteJdTailoringSession. The caller is responsible for resetting
- * chat-store.ts's conversationId afterward (see CoachPage.tsx), since
- * this hook only knows about the TanStack Query cache, not that store.
+ * chat-store.ts's conversationId afterward (see ConversationPanel.tsx),
+ * since this hook only knows about the TanStack Query cache, not that
+ * store. Takes the current section's key so it can correct that exact
+ * section's cached "latest conversation" entry.
  *
  * Also corrects the cached "latest conversation" query to `null` here —
  * a real bug caught live (2026-08-21): that query has `staleTime:
- * Infinity` and is fetched once at mount, so without this its cached
+ * Infinity` and is fetched once per section, so without this its cached
  * data kept pointing at the conversation this very mutation just
  * deleted, which AppShell.tsx's resume effect would otherwise read and
  * write straight back into the store the moment conversationId became
  * null again. */
-export function useDeleteChatConversation() {
+export function useDeleteChatConversation(sectionKey: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (conversationId: string) =>
       apiClient.delete<void>(`/api/v1/chat/conversations/${conversationId}`),
     onSuccess: () => {
-      queryClient.setQueryData<LatestConversationResponse>(["chat", "latest-conversation"], {
-        conversation_id: null,
-      });
+      queryClient.setQueryData<LatestConversationResponse>(
+        ["chat", "latest-conversation", sectionKey],
+        { conversation_id: null },
+      );
     },
   });
 }

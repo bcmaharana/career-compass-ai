@@ -1,24 +1,16 @@
 import { useCareerProfile, useTargetRoles } from "@/api/queries/career-profile";
-import {
-  useClearChatMessages,
-  useDeleteChatConversation,
-  useDeleteChatMessage,
-} from "@/api/queries/chat";
 import { useGapAnalysis } from "@/api/queries/skill-intelligence";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { RichTextDisplay } from "@/components/ui/rich-text-editor";
+import { ConversationPanel } from "@/components/layout/ConversationPanel";
 import { buildSuggestedPrompts } from "@/features/coach/suggested-prompts";
 import { getErrorMessage } from "@/lib/errors";
-import { renderMarkdownMessage } from "@/lib/markdown-message";
 import { cn } from "@/lib/utils";
 import { useChatComposer } from "@/hooks/useChatComposer";
 import { useChatStore } from "@/stores/chat-store";
-import type { ChatThreadMessage } from "@/stores/chat-store";
 import { resolveValidTargetRoleId, useTargetRoleScopeStore } from "@/stores/target-role-scope-store";
-import { Bot, ChevronDown, ChevronRight, Eraser, Trash2, UserCircle } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -120,54 +112,7 @@ export function CoachPage() {
 
   const messages = useChatStore((state) => state.messages);
   const isSending = useChatStore((state) => state.isSending);
-  const conversationId = useChatStore((state) => state.conversationId);
-  const clearChatMessages = useChatStore((state) => state.clear);
-  const resetChatConversation = useChatStore((state) => state.resetConversation);
-  const removeChatMessages = useChatStore((state) => state.removeMessages);
   const { sendTurn, isError, error } = useChatComposer();
-
-  // Conversation-management actions (2026-08-21, direct request: "the
-  // delete conversation feature should be consistent everywhere" and
-  // "keeping the conversation should be same as JD Tailoring") — mirror
-  // JD Tailoring's own Clear conversation / delete conversation /
-  // delete-single-message trio exactly, just against this page's single
-  // ongoing conversation instead of a picked session.
-  const clearMessages = useClearChatMessages();
-  const deleteConversation = useDeleteChatConversation();
-  const deleteMessage = useDeleteChatMessage(conversationId ?? "");
-  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
-  const [deleteConversationConfirmOpen, setDeleteConversationConfirmOpen] = useState(false);
-  const [deleteMessageTargetId, setDeleteMessageTargetId] = useState<string | null>(null);
-
-  function handleConfirmClear() {
-    if (!conversationId) return;
-    clearMessages.mutate(conversationId, {
-      onSuccess: () => {
-        clearChatMessages();
-        setClearConfirmOpen(false);
-      },
-    });
-  }
-
-  function handleConfirmDeleteConversation() {
-    if (!conversationId) return;
-    deleteConversation.mutate(conversationId, {
-      onSuccess: () => {
-        resetChatConversation();
-        setDeleteConversationConfirmOpen(false);
-      },
-    });
-  }
-
-  function handleConfirmDeleteMessage() {
-    if (!deleteMessageTargetId) return;
-    deleteMessage.mutate(deleteMessageTargetId, {
-      onSuccess: (data) => {
-        removeChatMessages(data.deleted_message_ids);
-        setDeleteMessageTargetId(null);
-      },
-    });
-  }
 
   // The active role's own prompt (if any) is guaranteed to appear first
   // among the role-based suggestions below — buildSuggestedPrompts walks
@@ -205,18 +150,6 @@ export function CoachPage() {
     hadConversationRef.current = hasConversation;
   }, [hasConversation]);
 
-  // AppShell.tsx's own auto-scroll-to-bottom effect targets the page's
-  // shared <main> scroll container, which no longer grows with each new
-  // message now that the conversation lives in its own bounded,
-  // internally-scrolling box (see the Conversation CardContent below) —
-  // this box needs the same "reveal the newest message" behavior scoped
-  // to itself instead.
-  const conversationScrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = conversationScrollRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messages.length, isSending]);
   const gapForActiveRole = (gapAnalysis?.target_role_gaps ?? []).find(
     (gap) => gap.target_role_id === scopeRoleId,
   );
@@ -325,156 +258,13 @@ export function CoachPage() {
         </CollapsibleCard>
       </div>
 
-      {hasConversation && (
-        <Card>
-          <CardHeader className="flex-row items-start justify-between space-y-0">
-            <CardTitle>Conversation</CardTitle>
-            <div className="flex items-center gap-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setClearConfirmOpen(true)}
-              >
-                <Eraser className="h-3.5 w-3.5" />
-                Clear conversation
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                onClick={() => setDeleteConversationConfirmOpen(true)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Delete conversation
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent
-            ref={conversationScrollRef}
-            className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto scrollbar-hide"
-          >
-            {messages.map((message) => (
-              <MessageBubble
-                key={message.id}
-                message={message}
-                onDelete={() => setDeleteMessageTargetId(message.id)}
-              />
-            ))}
-            {isSending && <TypingBubble />}
-          </CardContent>
-        </Card>
-      )}
+      {hasConversation && <ConversationPanel />}
 
       {isError && (
         <p role="alert" className="text-sm text-destructive">
           {getErrorMessage(error)}
         </p>
       )}
-
-      <ConfirmDialog
-        open={clearConfirmOpen}
-        onCancel={() => setClearConfirmOpen(false)}
-        onConfirm={handleConfirmClear}
-        title="Clear this conversation?"
-        description="Removes every message in this conversation. This can't be undone."
-        confirmLabel="Clear"
-        confirmPendingLabel="Clearing..."
-        isPending={clearMessages.isPending}
-      />
-
-      <ConfirmDialog
-        open={deleteConversationConfirmOpen}
-        onCancel={() => setDeleteConversationConfirmOpen(false)}
-        onConfirm={handleConfirmDeleteConversation}
-        title="Delete this conversation?"
-        description="Removes the whole conversation. Your next message starts a brand-new one. This can't be undone."
-        isPending={deleteConversation.isPending}
-      />
-
-      <ConfirmDialog
-        open={deleteMessageTargetId !== null}
-        onCancel={() => setDeleteMessageTargetId(null)}
-        onConfirm={handleConfirmDeleteMessage}
-        title="Delete this message?"
-        description="Removes this message and its paired question/answer, if there is one. This can't be undone."
-        isPending={deleteMessage.isPending}
-      />
-    </div>
-  );
-}
-
-function MessageBubble({
-  message,
-  onDelete,
-}: {
-  message: ChatThreadMessage;
-  onDelete: () => void;
-}) {
-  const isUser = message.role === "user";
-  return (
-    <div className={cn("group flex items-start gap-3", isUser && "flex-row-reverse")}>
-      <div
-        className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-          isUser ? "bg-muted text-muted-foreground" : cn(RAINBOW_GRADIENT, "text-primary"),
-        )}
-      >
-        {isUser ? <UserCircle className="h-5 w-5" /> : <Bot className="h-4 w-4" />}
-      </div>
-      <div className={cn("flex max-w-2xl flex-col gap-1", isUser && "items-end")}>
-        <div className={cn("flex items-center gap-1.5", isUser && "flex-row-reverse")}>
-          <span className="text-xs font-medium text-muted-foreground">
-            {isUser ? "You" : "AI Career Coach"}
-          </span>
-          <button
-            type="button"
-            onClick={onDelete}
-            aria-label="Delete this message"
-            title="Delete this message"
-            className="text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
-          >
-            <Trash2 className="h-3 w-3" />
-          </button>
-        </div>
-        <div
-          className={cn(
-            "rounded-lg px-4 py-2.5 text-sm",
-            isUser
-              ? "whitespace-pre-wrap bg-primary text-primary-foreground"
-              : "bg-muted text-foreground",
-          )}
-        >
-          {isUser ? message.content : renderMarkdownMessage(message.content)}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Same rationale as ChatThread.tsx's TypingIndicator — real LLM calls can
- * take several seconds, so this is the only signal of in-progress work. */
-function TypingBubble() {
-  return (
-    <div className="flex items-start gap-3" role="status" aria-label="AI Career Coach is thinking">
-      <div
-        className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-primary",
-          RAINBOW_GRADIENT,
-        )}
-      >
-        <Bot className="h-4 w-4" />
-      </div>
-      <div className="flex items-center gap-1 rounded-lg bg-muted px-4 py-3">
-        {[0, 150, 300].map((delayMs) => (
-          <span
-            key={delayMs}
-            className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60"
-            style={{ animationDelay: `${delayMs}ms` }}
-          />
-        ))}
-      </div>
     </div>
   );
 }

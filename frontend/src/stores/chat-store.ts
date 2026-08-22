@@ -15,6 +15,20 @@ import { create } from "zustand";
  * the point now is exactly the opposite: the conversation should look
  * the same regardless of which page you navigated from.
  *
+ * `sectionKey` (2026-08-22) tracks which top-level nav section
+ * (matchNavItem(pathname).to — see nav-items.ts) the currently-loaded
+ * conversation belongs to. A real production bug this fixes: every page
+ * used to show the exact same global conversation, and a user reported
+ * "In each page (bottom of the page), I see the same AI conversation
+ * history" as confusing/wrong — a conversation started on one page
+ * should stay scoped to that page's own section. AppShell.tsx's
+ * `resetForSection` call is what actually enforces this: the moment the
+ * active section changes, the whole store (messages, conversationId,
+ * sectionKey itself) is wiped and re-resolved against that new
+ * section's own latest conversation via a section-keyed
+ * `useLatestConversation(sectionKey)` fetch — never the previous
+ * section's data, not even for a single render.
+ *
  * `conversationId` deliberately does NOT reset on `clear()` (used by the
  * "Clear conversation" action, which wipes messages but keeps the same
  * conversation row/id both server-side and here) — a real bug once
@@ -43,6 +57,7 @@ export interface ChatThreadMessage {
 
 interface ChatState {
   conversationId: string | null;
+  sectionKey: string | null;
   messages: ChatThreadMessage[];
   isSending: boolean;
   addUserMessage: (message: ChatThreadMessage) => void;
@@ -85,10 +100,18 @@ interface ChatState {
    * guard), so this can never clobber a conversation already in
    * progress in this tab. */
   setConversationId: (conversationId: string) => void;
+  /** AppShell.tsx calls this the instant the active top-level section
+   * changes (before that new section's own latest-conversation fetch
+   * even resolves) — wipes messages/conversationId/isSending and
+   * records the new sectionKey, so a section switch never shows stale
+   * data from whichever section was active a moment ago, not even for
+   * one render. */
+  resetForSection: (sectionKey: string) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
   conversationId: null,
+  sectionKey: null,
   messages: [],
   isSending: false,
   addUserMessage: (message) =>
@@ -110,4 +133,6 @@ export const useChatStore = create<ChatState>((set) => ({
   clear: () => set({ messages: [], isSending: false }),
   resetConversation: () => set({ messages: [], isSending: false, conversationId: null }),
   setConversationId: (conversationId) => set({ conversationId }),
+  resetForSection: (sectionKey) =>
+    set({ sectionKey, conversationId: null, messages: [], isSending: false }),
 }));

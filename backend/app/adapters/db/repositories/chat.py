@@ -21,6 +21,7 @@ def _conversation_to_domain(model: ChatConversationModel) -> ChatConversation:
         tenant_id=model.tenant_id,
         user_id=model.user_id,
         created_at=model.created_at,
+        section_key=model.section_key,
     )
 
 
@@ -44,6 +45,7 @@ class SqlAlchemyChatConversationRepository:
             id=conversation.id,
             tenant_id=conversation.tenant_id,
             user_id=conversation.user_id,
+            section_key=conversation.section_key,
         )
         self._session.add(model)
         await self._session.flush()
@@ -60,14 +62,15 @@ class SqlAlchemyChatConversationRepository:
         model = result.scalar_one_or_none()
         return _conversation_to_domain(model) if model else None
 
-    async def get_latest_for_user(
-        self, tenant_id: UUID, user_id: UUID
+    async def get_latest_for_section(
+        self, tenant_id: UUID, user_id: UUID, section_key: str
     ) -> ChatConversation | None:
         result = await self._session.execute(
             select(ChatConversationModel)
             .where(
                 ChatConversationModel.tenant_id == tenant_id,
                 ChatConversationModel.user_id == user_id,
+                ChatConversationModel.section_key == section_key,
             )
             .order_by(desc(ChatConversationModel.created_at))
             .limit(1)

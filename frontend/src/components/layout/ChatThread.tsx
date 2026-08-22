@@ -1,76 +1,15 @@
-import { renderMarkdownMessage } from "@/lib/markdown-message";
-import { cn } from "@/lib/utils";
-import { useChatStore } from "@/stores/chat-store";
-
-interface ChatThreadProps {
-  /** "page" (default): below whatever page content is already in the
-   * center panel, with its own top margin/divider/heading (brief Part
-   * 1.2). "embedded": just the message list, no heading/margin/divider —
-   * for MobileChatSheet.tsx, whose Sheet already has its own "AI Chat"
-   * header bar; rendering "page"'s heading there would stack two
-   * identical "AI Chat" labels with a stray divider between them. */
-  variant?: "page" | "embedded";
-}
+import { ConversationPanel } from "@/components/layout/ConversationPanel";
 
 /**
- * Renders the current AI Chat thread below whatever page content is
+ * Renders the current AI Chat conversation below whatever page content is
  * already in the center panel (brief Part 1.2) — never in place of it.
- * Renders nothing until the first message is sent, and disappears again
- * when AppShell clears the store on Left Nav navigation.
+ * A thin wrapper around ConversationPanel (2026-08-22: extracted so the
+ * exact same conversation UI — including Clear/Delete conversation and
+ * per-message delete — is shared with CoachPage.tsx rather than two
+ * diverging implementations existing side by side) — kept as its own
+ * named component/file since "ChatThread" is the name referenced
+ * throughout this app's own documentation and comments.
  */
-export function ChatThread({ variant = "page" }: ChatThreadProps) {
-  const messages = useChatStore((state) => state.messages);
-  const isSending = useChatStore((state) => state.isSending);
-
-  if (messages.length === 0 && !isSending) {
-    return null;
-  }
-
-  return (
-    <div className={variant === "page" ? "mt-10 border-t border-border pt-6" : undefined}>
-      {variant === "page" && (
-        <h2 className="mb-4 font-display text-sm font-semibold text-muted-foreground">AI Chat</h2>
-      )}
-      <div className="flex flex-col gap-3">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={cn(
-              "max-w-xl rounded-lg px-4 py-2.5 text-sm",
-              message.role === "user"
-                ? "ml-auto whitespace-pre-wrap bg-primary text-primary-foreground"
-                : "mr-auto bg-muted text-foreground",
-            )}
-          >
-            {message.role === "user" ? message.content : renderMarkdownMessage(message.content)}
-          </div>
-        ))}
-        {isSending && <TypingIndicator />}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Real LLM calls (Phase 4) can take several seconds — especially
- * against a local Ollama model on modest hardware — so this bubble is
- * the only signal the user gets that the AI Career Coach is actually
- * working rather than having silently dropped the message.
- */
-function TypingIndicator() {
-  return (
-    <div
-      className="mr-auto flex items-center gap-1 rounded-lg bg-muted px-4 py-3"
-      role="status"
-      aria-label="AI Career Coach is thinking"
-    >
-      {[0, 150, 300].map((delayMs) => (
-        <span
-          key={delayMs}
-          className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60"
-          style={{ animationDelay: `${delayMs}ms` }}
-        />
-      ))}
-    </div>
-  );
+export function ChatThread() {
+  return <ConversationPanel />;
 }

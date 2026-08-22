@@ -3962,6 +3962,8 @@ export interface components {
         SendChatMessageRequest: {
             /** Conversation Id */
             conversation_id?: string | null;
+            /** Section Key */
+            section_key: string;
             /** Content */
             content: string;
         };
@@ -6492,7 +6494,9 @@ export interface operations {
     };
     get_latest_conversation_api_v1_chat_conversations_latest_get: {
         parameters: {
-            query?: never;
+            query: {
+                section_key: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -6506,6 +6510,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LatestConversationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

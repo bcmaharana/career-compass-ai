@@ -26,13 +26,13 @@ class FakeChatConversationRepository:
         conversation = self.conversations.get(conversation_id)
         return conversation if conversation and conversation.tenant_id == tenant_id else None
 
-    async def get_latest_for_user(
-        self, tenant_id: uuid.UUID, user_id: uuid.UUID
+    async def get_latest_for_section(
+        self, tenant_id: uuid.UUID, user_id: uuid.UUID, section_key: str
     ) -> ChatConversation | None:
         matches = [
             c
             for c in self.conversations.values()
-            if c.tenant_id == tenant_id and c.user_id == user_id
+            if c.tenant_id == tenant_id and c.user_id == user_id and c.section_key == section_key
         ]
         return max(matches, key=lambda c: c.created_at) if matches else None
 
@@ -131,7 +131,11 @@ class TestSendMessage:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
 
         turn = await svc.send_message(
-            tenant_id=tenant_id, user_id=user_id, conversation_id=None, content="Hello"
+            tenant_id=tenant_id,
+            user_id=user_id,
+            conversation_id=None,
+            section_key="/coach",
+            content="Hello",
         )
 
         assert turn.conversation_id in conversations.conversations
@@ -145,17 +149,56 @@ class TestSendMessage:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
 
         first = await svc.send_message(
-            tenant_id=tenant_id, user_id=user_id, conversation_id=None, content="Hello"
+            tenant_id=tenant_id, user_id=user_id, conversation_id=None, section_key="/coach", content="Hello"
         )
         second = await svc.send_message(
             tenant_id=tenant_id,
             user_id=user_id,
             conversation_id=first.conversation_id,
+            section_key="/coach",
             content="Follow-up",
         )
 
         assert second.conversation_id == first.conversation_id
         assert len(messages.messages) == 4
+
+    async def test_different_sections_get_independent_conversations(self, service) -> None:
+        # The real production issue this section_key field exists to fix
+        # (2026-08-22): the same conversation used to follow the user
+        # across every page. A message sent with no conversation_id from
+        # one section must never resume/extend a conversation that
+        # actually belongs to a different section.
+        svc, _, _, _ = service
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+
+        on_dashboard = await svc.send_message(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            conversation_id=None,
+            section_key="/dashboard",
+            content="Dashboard question",
+        )
+        on_coach = await svc.send_message(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            conversation_id=None,
+            section_key="/coach",
+            content="Coach question",
+        )
+
+        assert on_dashboard.conversation_id != on_coach.conversation_id
+        assert (
+            await svc.get_latest_conversation_id(
+                tenant_id=tenant_id, user_id=user_id, section_key="/dashboard"
+            )
+            == on_dashboard.conversation_id
+        )
+        assert (
+            await svc.get_latest_conversation_id(
+                tenant_id=tenant_id, user_id=user_id, section_key="/coach"
+            )
+            == on_coach.conversation_id
+        )
 
     async def test_a_user_cannot_post_into_another_users_conversation(self, service) -> None:
         svc, _, _, _ = service
@@ -163,7 +206,7 @@ class TestSendMessage:
         owner, intruder = uuid.uuid4(), uuid.uuid4()
 
         turn = await svc.send_message(
-            tenant_id=tenant_id, user_id=owner, conversation_id=None, content="Hello"
+            tenant_id=tenant_id, user_id=owner, conversation_id=None, section_key="/coach", content="Hello"
         )
 
         with pytest.raises(NotFoundError) as exc_info:
@@ -171,6 +214,7 @@ class TestSendMessage:
                 tenant_id=tenant_id,
                 user_id=intruder,
                 conversation_id=turn.conversation_id,
+                section_key="/coach",
                 content="Hijack",
             )
 
@@ -182,7 +226,7 @@ class TestSendMessage:
         user_id = uuid.uuid4()
 
         turn = await svc.send_message(
-            tenant_id=tenant_a, user_id=user_id, conversation_id=None, content="Hello"
+            tenant_id=tenant_a, user_id=user_id, conversation_id=None, section_key="/coach", content="Hello"
         )
 
         with pytest.raises(NotFoundError):
@@ -190,6 +234,7 @@ class TestSendMessage:
                 tenant_id=tenant_b,
                 user_id=user_id,
                 conversation_id=turn.conversation_id,
+                section_key="/coach",
                 content="Cross-tenant",
             )
 
@@ -201,6 +246,7 @@ class TestSendMessage:
             tenant_id=tenant_id,
             user_id=user_id,
             conversation_id=None,
+            section_key="/coach",
             content="How do I negotiate?",
         )
 
@@ -217,12 +263,13 @@ class TestSendMessage:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
 
         first = await svc.send_message(
-            tenant_id=tenant_id, user_id=user_id, conversation_id=None, content="Hello"
+            tenant_id=tenant_id, user_id=user_id, conversation_id=None, section_key="/coach", content="Hello"
         )
         await svc.send_message(
             tenant_id=tenant_id,
             user_id=user_id,
             conversation_id=first.conversation_id,
+            section_key="/coach",
             content="Follow-up",
         )
 
@@ -266,6 +313,7 @@ class TestSendMessage:
             tenant_id=tenant_id,
             user_id=user_id,
             conversation_id=conversation.id,
+            section_key="/coach",
             content="Latest question",
         )
 
@@ -284,7 +332,7 @@ class TestSendMessage:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
 
         turn = await svc.send_message(
-            tenant_id=tenant_id, user_id=user_id, conversation_id=None, content="Hello"
+            tenant_id=tenant_id, user_id=user_id, conversation_id=None, section_key="/coach", content="Hello"
         )
 
         assert turn.assistant_message.content == _FALLBACK_REPLY
@@ -296,12 +344,13 @@ class TestListMessages:
         svc, _, _, llm = service
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         first = await svc.send_message(
-            tenant_id=tenant_id, user_id=user_id, conversation_id=None, content="Hello"
+            tenant_id=tenant_id, user_id=user_id, conversation_id=None, section_key="/coach", content="Hello"
         )
         await svc.send_message(
             tenant_id=tenant_id,
             user_id=user_id,
             conversation_id=first.conversation_id,
+            section_key="/coach",
             content="Follow-up",
         )
 
@@ -316,7 +365,7 @@ class TestListMessages:
         tenant_id = uuid.uuid4()
         owner, other = uuid.uuid4(), uuid.uuid4()
         turn = await svc.send_message(
-            tenant_id=tenant_id, user_id=owner, conversation_id=None, content="Hello"
+            tenant_id=tenant_id, user_id=owner, conversation_id=None, section_key="/coach", content="Hello"
         )
 
         with pytest.raises(NotFoundError):
@@ -331,7 +380,7 @@ class TestClearMessages:
         svc, conversations, _, _ = service
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         turn = await svc.send_message(
-            tenant_id=tenant_id, user_id=user_id, conversation_id=None, content="Hello"
+            tenant_id=tenant_id, user_id=user_id, conversation_id=None, section_key="/coach", content="Hello"
         )
 
         await svc.clear_messages(
@@ -351,7 +400,7 @@ class TestDeleteConversation:
         svc, conversations, _, _ = service
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         turn = await svc.send_message(
-            tenant_id=tenant_id, user_id=user_id, conversation_id=None, content="Hello"
+            tenant_id=tenant_id, user_id=user_id, conversation_id=None, section_key="/coach", content="Hello"
         )
 
         await svc.delete_conversation(
@@ -359,14 +408,19 @@ class TestDeleteConversation:
         )
 
         assert turn.conversation_id not in conversations.conversations
-        assert await svc.get_latest_conversation_id(tenant_id=tenant_id, user_id=user_id) is None
+        assert (
+            await svc.get_latest_conversation_id(
+                tenant_id=tenant_id, user_id=user_id, section_key="/coach"
+            )
+            is None
+        )
 
     async def test_cannot_delete_another_users_conversation(self, service) -> None:
         svc, _, _, _ = service
         tenant_id = uuid.uuid4()
         owner, other = uuid.uuid4(), uuid.uuid4()
         turn = await svc.send_message(
-            tenant_id=tenant_id, user_id=owner, conversation_id=None, content="Hello"
+            tenant_id=tenant_id, user_id=owner, conversation_id=None, section_key="/coach", content="Hello"
         )
 
         with pytest.raises(NotFoundError):
@@ -381,7 +435,7 @@ class TestDeleteMessage:
         svc, _, _, _ = service
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         turn = await svc.send_message(
-            tenant_id=tenant_id, user_id=user_id, conversation_id=None, content="Hello"
+            tenant_id=tenant_id, user_id=user_id, conversation_id=None, section_key="/coach", content="Hello"
         )
 
         await svc.delete_message(
@@ -400,7 +454,7 @@ class TestDeleteMessage:
         svc, _, _, _ = service
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
         turn = await svc.send_message(
-            tenant_id=tenant_id, user_id=user_id, conversation_id=None, content="Hello"
+            tenant_id=tenant_id, user_id=user_id, conversation_id=None, section_key="/coach", content="Hello"
         )
 
         await svc.delete_message(

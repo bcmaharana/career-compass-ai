@@ -10,6 +10,14 @@ from pydantic import BaseModel, Field
 
 class SendChatMessageRequest(BaseModel):
     conversation_id: UUID | None = None
+    #: Which top-level section this message is being sent from (the
+    #: frontend's matchNavItem(pathname).to value, e.g. "/dashboard",
+    #: "/profile", "/coach") — 2026-08-22, see
+    #: ChatConversation.section_key's own docstring. Only actually used
+    #: when conversation_id is None (deciding which section's conversation
+    #: to resume or create); once a conversation_id is known, it already
+    #: carries its own fixed section, so this is ignored.
+    section_key: str = Field(min_length=1, max_length=100)
     content: str = Field(min_length=1, max_length=4_000)
 
 

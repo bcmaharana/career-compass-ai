@@ -1,6 +1,7 @@
 import { useChatMessages, useLatestConversation } from "@/api/queries/chat";
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { MobileShell } from "@/components/layout/MobileShell";
+import { matchNavItem } from "@/lib/nav-items";
 import { useAuthStore } from "@/stores/auth-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useQueryClient } from "@tanstack/react-query";
@@ -60,33 +61,74 @@ export function AppShell() {
   const chatMessages = useChatStore((state) => state.messages);
   const setChatMessages = useChatStore((state) => state.setMessages);
   const chatConversationId = useChatStore((state) => state.conversationId);
+  const chatSectionKey = useChatStore((state) => state.sectionKey);
   const setChatConversationId = useChatStore((state) => state.setConversationId);
+  const resetChatForSection = useChatStore((state) => state.resetForSection);
   const mainRef = useRef<HTMLElement>(null);
 
-  // Resumes the same AI chat conversation after a full page reload or a
-  // fresh login — chat-store.ts's conversationId lives in memory only
-  // (deliberately: it must not survive a *different* user logging in on
-  // the same browser tab), which otherwise meant every reload/relogin
-  // started a brand-new, historyless conversation even though the old
-  // one and its messages were still sitting in the database.
-  //
-  // `hasAttemptedResumeRef` makes this a one-shot: a real bug caught live
-  // (2026-08-21) had this effect keyed only on "is chatConversationId
-  // currently null," which re-fired the moment "Delete conversation"
-  // (CoachPage.tsx) reset it to null — `useLatestConversation()` has
-  // `staleTime: Infinity` and was fetched once at mount, so its cached
-  // data still held the just-deleted conversation's id, and this effect
-  // immediately wrote that dead id straight back into the store. The
-  // very next message then went out carrying a conversation_id the
-  // backend had already removed, and silently 404'd
-  // (CHAT_CONVERSATION_NOT_FOUND) instead of starting the fresh
-  // conversation the user actually just asked for. A plain "only if
-  // nothing's set yet" check can't distinguish "never resolved yet" from
-  // "deliberately cleared" — a ref that never resets once the resume
-  // attempt has happened (successful or not) can.
-  const { data: latestConversation } = useLatestConversation();
+  // Which top-level section the current route belongs to (matchNavItem's
+  // `.to` — the same concept nav-items.ts already exposes for the Left
+  // Nav/Header) — the chat conversation is scoped to this, not to the
+  // whole app (2026-08-22: a real production bug report, "In each page
+  // I see the same AI conversation history," meant every section was
+  // silently sharing one global conversation).
+  const currentSectionKey = matchNavItem(location.pathname).to;
+
+  // One-shot-per-section-visit guard for the resume effect below —
+  // declared here (rather than next to that effect) so the reset effect
+  // immediately following can clear it too. See that resume effect's own
+  // comment for why this can't just be "resume once ever."
   const hasAttemptedResumeRef = useRef(false);
+
+  // The instant the active section changes, wipe the store and start a
+  // fresh per-section resume — before that new section's own
+  // latest-conversation fetch even resolves, so section B never shows
+  // section A's messages, not even for one render. This also covers the
+  // very first render (chatSectionKey starts out `null`), so no separate
+  // mount-only reset is needed. Also clears `hasAttemptedResumeRef`
+  // (below) — a real bug caught live (2026-08-22): that ref used to be
+  // keyed by section NAME and never cleared once a section had been
+  // visited once, so navigating away and back to the SAME section (e.g.
+  // Dashboard -> Skills -> Dashboard) hit the "already attempted, don't
+  // resume again" early-return from the section's very first visit and
+  // silently left conversationId at the `null` this same effect had just
+  // reset it to — the conversation looked wiped on every revisit even
+  // though it was still sitting in the database. Resetting the ref here,
+  // on every genuine section change (including a revisit), fixes that:
+  // each fresh arrival into a section gets its own resume attempt.
   useEffect(() => {
+    if (chatSectionKey !== currentSectionKey) {
+      resetChatForSection(currentSectionKey);
+      hasAttemptedResumeRef.current = false;
+    }
+  }, [currentSectionKey, chatSectionKey, resetChatForSection]);
+
+  // Resumes THAT SECTION's own conversation after a fresh page load, a
+  // logout/login cycle, or switching into the section (including
+  // re-entering one already visited this session) — chat-store.ts's
+  // conversationId lives in memory only (deliberately: it must not
+  // survive a *different* user logging in on the same browser tab, or
+  // leak from one section into another), which otherwise meant every
+  // reload/relogin/section-switch started a brand-new, historyless
+  // conversation even though the old one and its messages were still
+  // sitting in the database.
+  //
+  // `hasAttemptedResumeRef` makes this a one-shot PER SECTION VISIT —
+  // cleared by the reset effect above every time the section actually
+  // changes (see its comment for the real bug this exact shape fixes),
+  // but otherwise sticky for the duration of one stay in a section: a
+  // real bug caught live (2026-08-21) had an earlier version of this
+  // effect with no such guard at all, which re-fired the moment "Delete
+  // conversation" reset conversationId to null — useLatestConversation()
+  // has `staleTime: Infinity` and is fetched once per section, so its
+  // cached data still held the just-deleted conversation's id, and the
+  // effect immediately wrote that dead id straight back into the store.
+  // A plain "only if nothing's set yet" check can't distinguish "never
+  // resolved yet" from "deliberately cleared" — a ref that only resets on
+  // an actual section change can.
+  const { data: latestConversation } = useLatestConversation(currentSectionKey);
+  useEffect(() => {
+    if (chatSectionKey !== currentSectionKey) return; // reset effect above hasn't landed yet
     if (hasAttemptedResumeRef.current) return;
     if (chatConversationId) {
       hasAttemptedResumeRef.current = true;
@@ -97,7 +139,13 @@ export function AppShell() {
     if (latestConversation.conversation_id) {
       setChatConversationId(latestConversation.conversation_id);
     }
-  }, [latestConversation, chatConversationId, setChatConversationId]);
+  }, [
+    currentSectionKey,
+    chatSectionKey,
+    latestConversation,
+    chatConversationId,
+    setChatConversationId,
+  ]);
 
   // Hydrates the visible thread with the real saved history the moment
   // a conversation id is known (2026-08-21, direct request for parity
