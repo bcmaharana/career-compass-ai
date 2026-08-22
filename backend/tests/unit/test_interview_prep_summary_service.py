@@ -182,9 +182,11 @@ class TestGetSummary:
         summary_service, _, _, _ = service
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
 
-        summaries = await summary_service.get_summary(tenant_id=tenant_id, user_id=user_id)
+        summary = await summary_service.get_summary(tenant_id=tenant_id, user_id=user_id)
 
-        assert summaries == []
+        assert summary.scopes == []
+        assert summary.total_topic_count == 0
+        assert summary.total_question_count == 0
 
     async def test_master_scope_included_once_it_has_an_artifact(
         self,
@@ -204,13 +206,15 @@ class TestGetSummary:
             make_question(tenant_id=tenant_id, user_id=user_id, target_role_id=None)
         )
 
-        summaries = await summary_service.get_summary(tenant_id=tenant_id, user_id=user_id)
+        summary = await summary_service.get_summary(tenant_id=tenant_id, user_id=user_id)
 
-        assert len(summaries) == 1
-        assert summaries[0].target_role_id is None
-        assert summaries[0].role_name == "Master"
-        assert summaries[0].topic_count == 2
-        assert summaries[0].question_count == 1
+        assert len(summary.scopes) == 1
+        assert summary.scopes[0].target_role_id is None
+        assert summary.scopes[0].role_name == "Master"
+        assert summary.scopes[0].topic_count == 2
+        assert summary.scopes[0].question_count == 1
+        assert summary.total_topic_count == 2
+        assert summary.total_question_count == 1
 
     async def test_target_role_scope_included_only_with_an_artifact(
         self,
@@ -236,9 +240,9 @@ class TestGetSummary:
             )
         )
 
-        summaries = await summary_service.get_summary(tenant_id=tenant_id, user_id=user_id)
+        summary = await summary_service.get_summary(tenant_id=tenant_id, user_id=user_id)
 
-        role_names = {s.role_name for s in summaries}
+        role_names = {s.role_name for s in summary.scopes}
         assert "Staff Engineer" in role_names
         assert role_without_content.role_name not in role_names
 
@@ -257,6 +261,42 @@ class TestGetSummary:
 
         await topics.create(make_topic(tenant_id=tenant_id, user_id=user_a, target_role_id=None))
 
-        summaries_for_b = await summary_service.get_summary(tenant_id=tenant_id, user_id=user_b)
+        summary_for_b = await summary_service.get_summary(tenant_id=tenant_id, user_id=user_b)
 
-        assert summaries_for_b == []
+        assert summary_for_b.scopes == []
+        assert summary_for_b.total_topic_count == 0
+
+    async def test_total_counts_dedupe_a_topic_tagged_into_multiple_scopes(
+        self,
+        service: tuple[
+            InterviewPrepSummaryService,
+            FakeInterviewTopicRepository,
+            FakeInterviewQuestionRepository,
+            TargetRoleService,
+        ],
+    ) -> None:
+        summary_service, topics, _, target_roles = service
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        role = await target_roles.add(
+            tenant_id=tenant_id, user_id=user_id, role_name="Staff Engineer", tag="SE"
+        )
+        # One topic tagged into BOTH Master and the role — appears in
+        # both scopes' own lists (topic_count=1 each), but must only
+        # count once toward the true total.
+        now = datetime.now(UTC)
+        multi_scope_topic = InterviewTopic(
+            id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            user_id=user_id,
+            name="Multi-scope topic",
+            scope_target_role_ids=[None, role.id],
+            created_at=now,
+            updated_at=now,
+        )
+        await topics.create(multi_scope_topic)
+
+        summary = await summary_service.get_summary(tenant_id=tenant_id, user_id=user_id)
+
+        assert len(summary.scopes) == 2
+        assert all(s.topic_count == 1 for s in summary.scopes)
+        assert summary.total_topic_count == 1

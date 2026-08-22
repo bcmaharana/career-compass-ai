@@ -222,3 +222,18 @@ class InterviewTopicService:
         if topic.image_key is None:
             return None
         return await self._storage.get_presigned_url(key=topic.image_key, expires_in_seconds=300)
+
+    async def set_public(
+        self, *, tenant_id: UUID, user_id: UUID, topic_id: UUID, is_public: bool
+    ) -> InterviewTopic:
+        """A dedicated action, not folded into update() — same
+        "content-heavy fields get their own sub-action" convention this
+        domain already established for reference_links/images. Does NOT
+        itself mint a public_share_links row — that's
+        PublicSharingService's job (app/application/showcase_page/), the
+        same split ShowcasePageService.set_public follows."""
+        topic = await self.get_owned_or_raise(
+            tenant_id=tenant_id, user_id=user_id, topic_id=topic_id
+        )
+        topic.is_public = is_public
+        return await self._topics.update(topic)

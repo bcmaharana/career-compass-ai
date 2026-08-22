@@ -29,7 +29,7 @@ import {
  * Master-scope-omitted-from-the-URL convention above), so an existing
  * bookmark/shared link with no `tab` param still lands correctly. */
 const PREP_TABS = [
-  { id: "topics", label: "Topics" },
+  { id: "topics", label: "Articles" },
   { id: "questions", label: "Interview Questions" },
 ] as const;
 type PrepTabId = (typeof PREP_TABS)[number]["id"];
@@ -62,6 +62,34 @@ export function InterviewPrepPage() {
   const { data: topics } = useInterviewTopics(targetRoleId);
   const { data: questions } = useInterviewQuestions(targetRoleId);
   const { data: summary } = useInterviewPrepSummary();
+
+  // Counts appended to the main tab labels as "current scope/total"
+  // (direct 2026-08-24 request — e.g. "Articles (2/8)": 2 in this
+  // scope, 8 total across Master + every Target Role). The numerator
+  // is this scope's already-fetched topics/questions; the denominator
+  // is useInterviewPrepSummary's deduplicated cross-scope total (NOT a
+  // sum of its per-scope counts — see InterviewPrepSummary's own
+  // backend docstring for why an item tagged into more than one scope
+  // would otherwise be double-counted). Omitted while either count is
+  // still unknown (query not yet resolved) rather than showing a
+  // misleading "(0/0)".
+  const prepTabs = PREP_TABS.map((tab) =>
+    tab.id === "topics"
+      ? {
+          ...tab,
+          label:
+            topics && summary
+              ? `${tab.label} (${topics.length}/${summary.total_topic_count})`
+              : tab.label,
+        }
+      : {
+          ...tab,
+          label:
+            questions && summary
+              ? `${tab.label} (${questions.length}/${summary.total_question_count})`
+              : tab.label,
+        },
+  );
 
   // Sub-tabs, one level down from Topics/Interview Questions — filters
   // each tab's own Table of Contents + card list down to a single
@@ -226,13 +254,13 @@ export function InterviewPrepPage() {
               ))}
             </Select>
           </div>
-          {summary && summary.length > 0 && (
+          {summary && summary.scopes.length > 0 && (
             <p className="text-xs text-muted-foreground">
-              {summary.map((s, i) => (
+              {summary.scopes.map((s, i) => (
                 <span key={s.target_role_id ?? "master"}>
                   {i > 0 && " | "}
                   <span className="font-medium text-foreground">{s.role_name}:</span>{" "}
-                  {s.topic_count} {s.topic_count === 1 ? "topic" : "topics"}, {s.question_count}{" "}
+                  {s.topic_count} {s.topic_count === 1 ? "article" : "articles"}, {s.question_count}{" "}
                   {s.question_count === 1 ? "question" : "questions"}
                 </span>
               ))}
@@ -252,7 +280,7 @@ export function InterviewPrepPage() {
           topicSubTabs/questionSubTabs above). */}
       <div className="flex flex-col gap-2">
         <TabStrip
-          tabs={PREP_TABS}
+          tabs={prepTabs}
           activeId={activeTab}
           onChange={handleTabChange}
           ariaLabel="Interview Preparation section"
@@ -262,7 +290,7 @@ export function InterviewPrepPage() {
             tabs={topicSubTabs}
             activeId={topicSectionFilter}
             onChange={setTopicSectionFilter}
-            ariaLabel="Filter topics by section"
+            ariaLabel="Filter articles by section"
             size="sm"
           />
         )}
@@ -305,6 +333,7 @@ export function InterviewPrepPage() {
             expandedId={expandedTopicId}
             setExpandedId={setExpandedTopicId}
             sectionFilter={topicSectionFilter}
+            totalCount={summary?.total_topic_count}
           />
         </>
       ) : (
@@ -325,6 +354,7 @@ export function InterviewPrepPage() {
             expandedFollowUpId={expandedFollowUpId}
             setExpandedFollowUpId={setExpandedFollowUpId}
             categoryFilter={questionCategoryFilter}
+            totalCount={summary?.total_question_count}
           />
         </>
       )}

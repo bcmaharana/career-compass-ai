@@ -8,9 +8,10 @@ type InterviewTopicUpdateRequest = components["schemas"]["InterviewTopicUpdateRe
 type InterviewQuestionResponse = components["schemas"]["InterviewQuestionResponse"];
 type InterviewQuestionRequest = components["schemas"]["InterviewQuestionRequest"];
 type InterviewQuestionUpdateRequest = components["schemas"]["InterviewQuestionUpdateRequest"];
-type InterviewPrepScopeSummaryResponse = components["schemas"]["InterviewPrepScopeSummaryResponse"];
+type InterviewPrepSummaryResponse = components["schemas"]["InterviewPrepSummaryResponse"];
 type AddFollowUpQuestionRequest = components["schemas"]["AddFollowUpQuestionRequest"];
 type UpdateFollowUpQuestionRequest = components["schemas"]["UpdateFollowUpQuestionRequest"];
+type ToggleTopicPublicRequest = components["schemas"]["ToggleTopicPublicRequest"];
 
 type MoveDirection = "up" | "down";
 
@@ -58,8 +59,7 @@ const KEYS = {
 export function useInterviewPrepSummary() {
   return useQuery({
     queryKey: KEYS.summary(),
-    queryFn: () =>
-      apiClient.get<InterviewPrepScopeSummaryResponse[]>("/api/v1/interview-prep/summary"),
+    queryFn: () => apiClient.get<InterviewPrepSummaryResponse>("/api/v1/interview-prep/summary"),
   });
 }
 
@@ -168,6 +168,34 @@ export function useUploadTopicImage(scope: Scope = null) {
         (old: InterviewTopicResponse[] | undefined) =>
           old?.map((t) => (t.id === data.id ? data : t)) ?? [data],
       );
+    },
+  });
+}
+
+/** Toggles a Topic's public/private ("Article") visibility — a
+ * dedicated action, not folded into useUpdateInterviewTopic, mirroring
+ * InterviewTopicService.set_public's own separation on the backend.
+ * Turning ON invalidates the current-user query too — the first time
+ * ANY resource is ever made public, the backend lazily assigns the
+ * viewer a default handle (see HandleService.ensure_handle), which the
+ * copy-link UI needs fresh, not whatever was cached at login. */
+export function useToggleTopicPublic(scope: Scope = null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: ToggleTopicPublicRequest }) =>
+      apiClient.post<InterviewTopicResponse>(
+        `/api/v1/interview-prep/topics/${id}/toggle-public`,
+        body,
+      ),
+    onSuccess: (data, { body }) => {
+      queryClient.setQueryData(
+        KEYS.topics(scope),
+        (old: InterviewTopicResponse[] | undefined) =>
+          old?.map((t) => (t.id === data.id ? data : t)) ?? [data],
+      );
+      if (body.is_public) {
+        queryClient.invalidateQueries({ queryKey: ["current-user"] });
+      }
     },
   });
 }

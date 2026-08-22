@@ -22,9 +22,11 @@ from app.api.v1.job_application_tracking.router import router as job_application
 from app.api.v1.learning_intelligence.router import router as learning_intelligence_router
 from app.api.v1.opportunity_intelligence.router import router as opportunity_intelligence_router
 from app.api.v1.platform_admin.router import router as platform_admin_router
+from app.api.v1.public_sharing.router import router as public_sharing_router
 from app.api.v1.quotes.router import router as quotes_router
 from app.api.v1.recruiter_contacts.router import router as recruiter_contacts_router
 from app.api.v1.resume_intelligence.router import router as resume_intelligence_router
+from app.api.v1.showcase_page.router import router as showcase_page_router
 from app.api.v1.skill_intelligence.router import router as skill_intelligence_router
 from app.api.v1.system_status.router import router as system_status_router
 from app.core.config import get_settings
@@ -64,6 +66,8 @@ def create_app() -> FastAPI:
     app.include_router(jd_tailoring_router, prefix="/api/v1")
     app.include_router(job_application_tracking_router, prefix="/api/v1")
     app.include_router(recruiter_contacts_router, prefix="/api/v1")
+    app.include_router(showcase_page_router, prefix="/api/v1")
+    app.include_router(public_sharing_router, prefix="/api/v1")
 
     logger.info("app_startup", app_env=settings.app_env)
     return app

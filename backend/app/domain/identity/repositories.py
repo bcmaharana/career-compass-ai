@@ -42,6 +42,22 @@ class UserRepository(Protocol):
     async def get_by_email(self, tenant_id: UUID, email: str) -> User | None: ...
     async def get_by_phone_e164(self, tenant_id: UUID, phone_e164: str) -> User | None: ...
     async def update(self, user: User) -> User: ...
+    async def set_handle(self, *, tenant_id: UUID, user_id: UUID, handle: str) -> bool:
+        """Attempts to set `handle` on this user; returns False (does not
+        raise) if it's already taken by ANY user in ANY tenant, True on
+        success. This is deliberately a try-then-check-the-constraint
+        operation, not a proactive "does this handle already exist"
+        SELECT: `handle` is globally unique (see the owning migration's
+        functional index on lower(handle)), but `users` is RLS-protected
+        per-tenant — a SELECT under a normal tenant-scoped session can
+        never see another tenant's row, so a proactive cross-tenant
+        existence check would silently give false negatives. The unique
+        INDEX itself, unlike a SELECT policy, is still enforced against
+        every row in the table regardless of which tenant is currently
+        bound — so attempting the write and catching the resulting
+        constraint violation is the only correct way to detect a
+        cross-tenant collision here."""
+        ...
 
 
 class RoleRepository(Protocol):

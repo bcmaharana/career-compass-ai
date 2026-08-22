@@ -57,4 +57,6 @@ class CurrentUserResult:
     visa_status: str | None
     linkedin_url: str | None
     other_professional_url: str | None
+    middle_name: str | None
+    handle: str | None
     roles: tuple[str, ...]

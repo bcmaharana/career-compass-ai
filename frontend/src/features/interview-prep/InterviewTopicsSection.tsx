@@ -1,9 +1,11 @@
+import { useCurrentUser } from "@/api/queries/auth";
 import {
   useCreateInterviewTopic,
   useDeleteInterviewTopic,
   useDeleteTopicImage,
   useInterviewTopics,
   useMoveInterviewTopic,
+  useToggleTopicPublic,
   useUpdateInterviewTopic,
   useUploadTopicImage,
 } from "@/api/queries/interview-prep";
@@ -12,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { CopyButton } from "@/components/ui/copy-button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,8 +22,10 @@ import { MoveButtons } from "@/components/ui/move-buttons";
 import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
 import { DeleteScopeChoiceDialog } from "@/features/interview-prep/DeleteScopeChoiceDialog";
 import { ScopeTagSelector, type ScopeOption } from "@/features/interview-prep/ScopeTagSelector";
+import { TopicVisibilityToggle } from "@/features/interview-prep/TopicVisibilityToggle";
 import { groupInterviewTopicsBySection } from "@/lib/group-interview-topics-by-section";
 import { getErrorMessage } from "@/lib/errors";
+import { publicArticleUrl } from "@/lib/public-sharing-url";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, ImageOff, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { type Dispatch, type FormEvent, type SetStateAction, useRef, useState } from "react";
@@ -56,6 +61,7 @@ export function InterviewTopicsSection({
   expandedId,
   setExpandedId,
   sectionFilter,
+  totalCount,
 }: {
   scope: string | null;
   targetRoles: TargetRole[];
@@ -73,6 +79,11 @@ export function InterviewTopicsSection({
   // groupInterviewTopicsBySection already uses), any other string shows
   // only that one section's topics.
   sectionFilter: string | null;
+  // Deduplicated count across EVERY scope (Master + every Target
+  // Role), from InterviewPrepPage's own useInterviewPrepSummary() —
+  // shown alongside this scope's own count in the card title, e.g.
+  // "Articles (2/8)". undefined while that query hasn't resolved yet.
+  totalCount: number | undefined;
 }) {
   const { data: topics, isLoading } = useInterviewTopics(scope);
   const addTopic = useCreateInterviewTopic(scope);
@@ -81,6 +92,8 @@ export function InterviewTopicsSection({
   const moveTopic = useMoveInterviewTopic(scope);
   const uploadImage = useUploadTopicImage(scope);
   const deleteImage = useDeleteTopicImage(scope);
+  const togglePublic = useToggleTopicPublic(scope);
+  const { data: currentUser } = useCurrentUser();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -162,7 +175,9 @@ export function InterviewTopicsSection({
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>Topics</CardTitle>
+        <CardTitle>
+          Articles{topics && totalCount !== undefined ? ` (${topics.length}/${totalCount})` : ""}
+        </CardTitle>
         <div className={cn("flex items-center", ACTION_BUTTON_ROW_GAP)}>
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-3.5 w-3.5" />
@@ -177,7 +192,7 @@ export function InterviewTopicsSection({
         {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
         {topics?.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            No topics yet — add one to start building your study notes.
+            No articles yet — add one to start building your study notes.
           </p>
         )}
         {/* Only reachable if the sub-tab's own section was emptied out
@@ -185,7 +200,7 @@ export function InterviewTopicsSection({
             while it stayed selected — the sub-tab strip itself doesn't
             auto-switch away, so this avoids a silently blank card body. */}
         {topics && topics.length > 0 && visibleGroups.length === 0 && (
-          <p className="text-sm text-muted-foreground">No topics in this section.</p>
+          <p className="text-sm text-muted-foreground">No articles in this section.</p>
         )}
         {imageError && (
           <p role="alert" className="text-sm text-destructive">
@@ -221,6 +236,8 @@ export function InterviewTopicsSection({
                   deleteImage={deleteImage}
                   onFileChange={handleFileChange}
                   fileInputRefs={fileInputRefs}
+                  togglePublic={togglePublic}
+                  handle={currentUser?.handle}
                 />
               );
             })}
@@ -231,7 +248,7 @@ export function InterviewTopicsSection({
       <Dialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        title={editingId ? "Edit topic" : "Add topic"}
+        title={editingId ? "Edit article" : "Add article"}
       >
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           <div className="flex flex-col gap-1.5">
@@ -279,7 +296,7 @@ export function InterviewTopicsSection({
               ? "Saving..."
               : editingId
                 ? "Save changes"
-                : "Add topic"}
+                : "Add article"}
           </Button>
           {(addTopic.error ?? updateTopic.error) && (
             <p role="alert" className="text-sm text-destructive">
@@ -313,7 +330,7 @@ export function InterviewTopicsSection({
             if (deleteTarget) deleteTopic.mutate({ id: deleteTarget.id, deleteEverywhere: true });
             setDeleteTarget(null);
           }}
-          title="Delete topic?"
+          title="Delete article?"
           description={
             deleteTarget
               ? `Remove "${deleteTarget.name}"? Any questions linked to it will be un-linked, not deleted. This can't be undone.`
@@ -342,6 +359,8 @@ function TopicCard({
   deleteImage,
   onFileChange,
   fileInputRefs,
+  togglePublic,
+  handle,
 }: {
   topic: InterviewTopic;
   scopeIndex: number;
@@ -358,6 +377,8 @@ function TopicCard({
   deleteImage: ReturnType<typeof useDeleteTopicImage>;
   onFileChange: (topicId: string, event: React.ChangeEvent<HTMLInputElement>) => void;
   fileInputRefs: React.MutableRefObject<Map<string, HTMLInputElement>>;
+  togglePublic: ReturnType<typeof useToggleTopicPublic>;
+  handle: string | null | undefined;
 }) {
   const updateTopic = useUpdateInterviewTopic(scope);
 
@@ -466,6 +487,26 @@ function TopicCard({
             className={cn("flex items-center", ACTION_BUTTON_ROW_GAP)}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Public/private + copy-link are always visible, unlike
+                Edit/Delete below — visibility is a viewer-facing state
+                a reader should be able to check/toggle at a glance, not
+                an editing action gated behind entering edit mode
+                (direct 2026-08-24 request). */}
+            <TopicVisibilityToggle
+              checked={topic.is_public}
+              onCheckedChange={(checked) =>
+                togglePublic.mutate({ id: topic.id, body: { is_public: checked } })
+              }
+              disabled={togglePublic.isPending}
+              label={topic.name}
+            />
+            {topic.is_public && topic.share_key && (
+              <CopyButton
+                text={publicArticleUrl(handle, topic.share_key)}
+                label="Copy link"
+                variant="ghost"
+              />
+            )}
             {isEditMode && (
               <>
                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onEdit}>
@@ -504,7 +545,7 @@ function TopicCard({
                 <RichTextEditor
                   defaultValue={discussionDraft}
                   onChange={setDiscussionDraft}
-                  placeholder="Notes to help you understand this topic..."
+                  placeholder="Notes to help you understand this article..."
                   autoFocus
                 />
                 <div className={cn("flex", ACTION_BUTTON_ROW_GAP)}>

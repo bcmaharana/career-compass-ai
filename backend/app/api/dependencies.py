@@ -106,6 +106,10 @@ from app.adapters.db.repositories.search import (
     SqlAlchemyEmbeddingModelRepository,
     SqlAlchemySearchRepository,
 )
+from app.adapters.db.repositories.showcase_page import (
+    SqlAlchemyPublicShareLinkRepository,
+    SqlAlchemyShowcasePageRepository,
+)
 from app.adapters.email.resend_provider import ResendEmailProvider
 from app.adapters.identity_providers.firebase_phone import FirebasePhoneVerifier
 from app.adapters.identity_providers.internal_jwt import InternalJWTProvider, verify_access_token
@@ -143,6 +147,7 @@ from app.application.identity.audit_service import AuditService
 from app.application.identity.authenticate_user import AuthenticateUserService
 from app.application.identity.delete_account import DeleteAccountService
 from app.application.identity.get_current_user import GetCurrentUserService
+from app.application.identity.handle_service import HandleService
 from app.application.identity.list_audit_events import ListAuditEventsService
 from app.application.identity.list_feature_flags import ListFeatureFlagsService
 from app.application.identity.register_tenant import RegisterTenantService
@@ -190,6 +195,10 @@ from app.application.platform_admin.settings_service import PlatformSettingsServ
 from app.application.quotes.quote_of_the_day_service import QuoteOfTheDayService
 from app.application.resume_intelligence.resume_extraction_service import ResumeExtractionService
 from app.application.resume_intelligence.resume_merge_service import ResumeMergeService
+from app.application.showcase_page.public_share_link_service import PublicShareLinkService
+from app.application.showcase_page.public_sharing_service import PublicSharingService
+from app.application.showcase_page.public_showcase_service import PublicShowcaseService
+from app.application.showcase_page.showcase_page_service import ShowcasePageService
 from app.application.skill_intelligence.gap_analysis_service import GapAnalysisService
 from app.application.system_status.system_status_service import SystemStatusService
 from app.core.config import get_settings
@@ -1286,6 +1295,123 @@ def get_interview_prep_summary_service(
     target_roles: TargetRoleService = Depends(get_target_role_service),
 ) -> InterviewPrepSummaryService:
     return InterviewPrepSummaryService(topics, questions, target_roles)
+
+
+# --- Showcase Page / Public Sharing wiring ---
+# Authenticated side: same get_tenant_scoped_session shape as every
+# other domain above. See "Public (anonymous) read wiring" further down
+# for the separate, un-tenant-scoped chain the public router uses.
+
+
+def get_showcase_page_repository(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyShowcasePageRepository:
+    return SqlAlchemyShowcasePageRepository(session)
+
+
+def get_public_share_link_repository_scoped(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyPublicShareLinkRepository:
+    return SqlAlchemyPublicShareLinkRepository(session)
+
+
+def get_handle_service(
+    users: SqlAlchemyUserRepository = Depends(get_user_repository_scoped),
+) -> HandleService:
+    return HandleService(users)
+
+
+def get_public_share_link_service(
+    links: SqlAlchemyPublicShareLinkRepository = Depends(get_public_share_link_repository_scoped),
+    handles: HandleService = Depends(get_handle_service),
+) -> PublicShareLinkService:
+    return PublicShareLinkService(links, handles)
+
+
+# get_showcase_page_service depends on get_target_role_service and
+# get_resume_export_service, both defined above — must come after both,
+# same Depends()-resolves-at-definition-time constraint noted elsewhere
+# in this file. S3ObjectStorageRepository satisfies ObjectStorageRepository
+# structurally (same instance get_object_storage already returns for
+# CareerProfileService's own public-bucket photo uploads).
+def get_showcase_page_service(
+    pages: SqlAlchemyShowcasePageRepository = Depends(get_showcase_page_repository),
+    target_roles: TargetRoleService = Depends(get_target_role_service),
+    career_profiles: CareerProfileService = Depends(get_career_profile_service),
+    resume_export: ResumeExportService = Depends(get_resume_export_service),
+    storage: S3ObjectStorageRepository = Depends(get_object_storage),
+) -> ShowcasePageService:
+    return ShowcasePageService(pages, target_roles, career_profiles, resume_export, storage)
+
+
+# get_public_sharing_service depends on get_showcase_page_service and
+# get_interview_topic_service, both defined above — must come after both.
+def get_public_sharing_service(
+    showcase_pages: ShowcasePageService = Depends(get_showcase_page_service),
+    interview_topics: InterviewTopicService = Depends(get_interview_topic_service),
+    share_links: PublicShareLinkService = Depends(get_public_share_link_service),
+) -> PublicSharingService:
+    return PublicSharingService(showcase_pages, interview_topics, share_links)
+
+
+# --- Public (anonymous) read wiring ---
+# No get_current_identity anywhere in this chain — there is no JWT to
+# resolve one from. Every repository below shares get_db_session's
+# session (FastAPI caches a Depends() result per callable per request,
+# the same mechanism get_tenant_scoped_session's many sibling repos
+# above already rely on) so PublicShowcaseService's tenant_context.bind()
+# call actually takes effect for the repository queries that follow it
+# in the same request/transaction. See that service's own docstring.
+
+
+def get_public_share_link_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyPublicShareLinkRepository:
+    return SqlAlchemyPublicShareLinkRepository(session)
+
+
+def get_public_tenant_context_binder(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyTenantContextBinder:
+    return SqlAlchemyTenantContextBinder(session)
+
+
+def get_public_showcase_page_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyShowcasePageRepository:
+    return SqlAlchemyShowcasePageRepository(session)
+
+
+def get_public_interview_topic_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyInterviewTopicRepository:
+    return SqlAlchemyInterviewTopicRepository(session)
+
+
+def get_public_target_role_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyTargetRoleRepository:
+    return SqlAlchemyTargetRoleRepository(session)
+
+
+def get_public_user_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyUserRepository:
+    return SqlAlchemyUserRepository(session)
+
+
+def get_public_showcase_service(
+    share_links: SqlAlchemyPublicShareLinkRepository = Depends(get_public_share_link_repository),
+    tenant_context: SqlAlchemyTenantContextBinder = Depends(get_public_tenant_context_binder),
+    pages: SqlAlchemyShowcasePageRepository = Depends(get_public_showcase_page_repository),
+    topics: SqlAlchemyInterviewTopicRepository = Depends(get_public_interview_topic_repository),
+    target_roles: SqlAlchemyTargetRoleRepository = Depends(get_public_target_role_repository),
+    users: SqlAlchemyUserRepository = Depends(get_public_user_repository),
+    storage: S3ObjectStorageRepository = Depends(get_object_storage),
+) -> PublicShowcaseService:
+    return PublicShowcaseService(
+        share_links, tenant_context, pages, topics, target_roles, users, storage
+    )
 
 
 # --- JD Tailoring wiring ---

@@ -48,11 +48,16 @@ class TestDeleteAccount:
     async def test_deletes_the_tenant_and_cleans_up_storage(self) -> None:
         tenant_id = uuid.uuid4()
         profile_id = uuid.uuid4()
+        page_id = uuid.uuid4()
+        block_id = uuid.uuid4()
         artifacts = TenantDeletionArtifacts(
             resume_file_keys=["resumes/t/u/r1.pdf"],
             profile_photos=[(profile_id, f"https://cdn.example.com/profile-photos/{tenant_id}/{profile_id}.jpg?v=1")],
             interview_topic_image_keys=["interview-topics/t/topic1.jpg"],
             tailored_resume_file_keys=["tailored-resumes/t/s1/resume.docx"],
+            showcase_block_image_urls=[
+                f"https://cdn.example.com/showcase-pages/{tenant_id}/{page_id}/{block_id}.jpg?v=1"
+            ],
         )
         repo = FakeAccountDeletionRepository(artifacts)
         storage = FakeObjectStorage()
@@ -68,7 +73,10 @@ class TestDeleteAccount:
             "interview-topics/t/topic1.jpg",
             "tailored-resumes/t/s1/resume.docx",
         ]
-        assert storage.deleted_photo_keys == [f"profile-photos/{tenant_id}/{profile_id}.jpg"]
+        assert storage.deleted_photo_keys == [
+            f"profile-photos/{tenant_id}/{profile_id}.jpg",
+            f"showcase-pages/{tenant_id}/{page_id}/{block_id}.jpg",
+        ]
 
     async def test_storage_failure_does_not_raise(self) -> None:
         tenant_id = uuid.uuid4()
@@ -78,6 +86,7 @@ class TestDeleteAccount:
             profile_photos=[(profile_id, f"https://cdn.example.com/profile-photos/{tenant_id}/{profile_id}.jpg")],
             interview_topic_image_keys=["interview-topics/t/topic1.jpg"],
             tailored_resume_file_keys=["tailored-resumes/t/s1/resume.pdf"],
+            showcase_block_image_urls=[],
         )
         repo = FakeAccountDeletionRepository(artifacts)
         storage = FakeObjectStorage(fail_photo_delete=True, fail_resume_delete=True)
@@ -99,6 +108,7 @@ class TestDeleteAccount:
             profile_photos=[],
             interview_topic_image_keys=[],
             tailored_resume_file_keys=[],
+            showcase_block_image_urls=[],
         )
         repo = FakeAccountDeletionRepository(artifacts)
         storage = FakeObjectStorage()

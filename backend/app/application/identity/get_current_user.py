@@ -48,5 +48,7 @@ class GetCurrentUserService:
             visa_status=user.visa_status,
             linkedin_url=user.linkedin_url,
             other_professional_url=user.other_professional_url,
+            middle_name=user.middle_name,
+            handle=user.handle,
             roles=tuple(role.name for role in roles),
         )

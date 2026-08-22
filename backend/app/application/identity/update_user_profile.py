@@ -9,6 +9,7 @@ boundary GetCurrentUserService relies on.
 
 from __future__ import annotations
 
+import re
 from uuid import UUID
 
 import phonenumbers
@@ -23,6 +24,13 @@ from app.domain.identity.repositories import (
     UserRepository,
 )
 from app.domain.platform_admin.repositories import PlatformAdminRepository
+
+
+#: Alphanumeric + hyphen/underscore only, 2-32 chars — it's a URL path
+#: segment (scaledbrain.com/{handle}/{role_tag}/{key}), so anything that
+#: needs percent-encoding is rejected outright rather than silently
+#: encoded somewhere downstream.
+_HANDLE_RE = re.compile(r"^[A-Za-z0-9_-]{2,32}$")
 
 
 def _to_e164(phone_number: str | None, country: str | None) -> str | None:
@@ -78,6 +86,12 @@ class UpdateUserProfileService:
         visa_status: str | None,
         linkedin_url: str | None,
         other_professional_url: str | None,
+        # Defaulted (unlike every other param above) so the large
+        # existing test suite for this method — written before these two
+        # fields existed — doesn't need every one of its ~30 call sites
+        # touched just to pass through a value it isn't exercising.
+        middle_name: str | None = None,
+        handle: str | None = None,
     ) -> CurrentUserResult:
         user = await self._users.get_by_id(tenant_id, user_id)
         if user is None or not user.is_active:
@@ -133,6 +147,33 @@ class UpdateUserProfileService:
             if other_professional_url and other_professional_url.strip()
             else None
         )
+        user.middle_name = middle_name.strip() if middle_name and middle_name.strip() else None
+
+        # handle is validated/saved separately from the rest of this
+        # method's fields — it needs its own collision-safe write path
+        # (UserRepository.set_handle) rather than the plain field-copy
+        # `update()` below, since a duplicate can only ever be detected by
+        # attempting the write and catching the resulting constraint
+        # violation (see set_handle's own docstring for why a proactive
+        # cross-tenant SELECT can't do this under RLS). Only actually
+        # attempted when the value is genuinely changing, so re-saving
+        # the rest of the profile form doesn't re-run this on every save.
+        trimmed_handle = handle.strip() if handle and handle.strip() else None
+        if trimmed_handle is not None:
+            if not _HANDLE_RE.match(trimmed_handle):
+                raise ValidationError(
+                    "Handle must be 2-32 letters, numbers, hyphens, or underscores.",
+                    code="INVALID_HANDLE",
+                )
+            if trimmed_handle.lower() != (user.handle or "").lower():
+                if not await self._users.set_handle(
+                    tenant_id=tenant_id, user_id=user_id, handle=trimmed_handle
+                ):
+                    raise ValidationError(
+                        "That handle is already taken.", code="HANDLE_TAKEN"
+                    )
+                user.handle = trimmed_handle
+
         updated = await self._users.update(user)
 
         # platform_admins.full_name is a snapshot (see its own module
@@ -196,5 +237,7 @@ class UpdateUserProfileService:
             visa_status=updated.visa_status,
             linkedin_url=updated.linkedin_url,
             other_professional_url=updated.other_professional_url,
+            middle_name=updated.middle_name,
+            handle=updated.handle,
             roles=tuple(role.name for role in roles),
         )

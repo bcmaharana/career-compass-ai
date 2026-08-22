@@ -34,6 +34,14 @@ class TenantDeletionArtifacts:
     #: JD Tailoring session that had a tailored resume generated — same
     #: bucket/adapter as resume_file_keys, different key prefix.
     tailored_resume_file_keys: list[str]
+    #: Raw image_url values for every Showcase Page image block that had
+    #: an image set — same "raw URL, key reconstructed by the caller"
+    #: shape as profile_photos, since the storage key isn't itself
+    #: persisted separately (see
+    #: showcase_page_service.showcase_block_image_key_from_url). Same
+    #: public bucket/adapter as profile_photos, not the private one
+    #: resume/topic-image keys use.
+    showcase_block_image_urls: list[str]
 
 
 class AccountDeletionRepository(Protocol):

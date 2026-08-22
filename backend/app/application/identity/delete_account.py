@@ -16,6 +16,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from app.application.career_profile.career_profile_service import photo_key_from_url
+from app.application.showcase_page.showcase_page_service import showcase_block_image_key_from_url
 from app.core.exceptions import CareerCompassError
 from app.core.logging import get_logger
 from app.domain.career_profile.storage import ObjectStorageRepository
@@ -72,3 +73,13 @@ class DeleteAccountService:
                 await self._resume_storage.delete_private(key=tailored_key)
             except CareerCompassError:
                 logger.warning("account_deletion_tailored_resume_cleanup_failed", key=tailored_key)
+
+        # Same public bucket/adapter as profile photos.
+        for image_url in artifacts.showcase_block_image_urls:
+            key = showcase_block_image_key_from_url(image_url)
+            if key is None:
+                continue
+            try:
+                await self._photo_storage.delete(key=key)
+            except CareerCompassError:
+                logger.warning("account_deletion_showcase_image_cleanup_failed", key=key)

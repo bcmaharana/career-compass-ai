@@ -10,6 +10,8 @@ import { LandingPage } from "@/features/landing/LandingPage";
 import { SignupPage } from "@/features/landing/SignupPage";
 import { PrivacyPolicyPage } from "@/features/legal/PrivacyPolicyPage";
 import { TermsOfServicePage } from "@/features/legal/TermsOfServicePage";
+import { PublicArticlePage } from "@/features/public-sharing/PublicArticlePage";
+import { PublicShowcasePage } from "@/features/public-sharing/PublicShowcasePage";
 import { SettingsAIModelPage } from "@/features/settings/SettingsAIModelPage";
 import { SettingsAccountPage } from "@/features/settings/SettingsAccountPage";
 import { SettingsJobSearchPreferencePage } from "@/features/settings/SettingsJobSearchPreferencePage";
@@ -74,6 +76,23 @@ export const router = createBrowserRouter([
   {
     path: "/privacy",
     element: <PrivacyPolicyPage />,
+  },
+  // Anonymous public-sharing pages — a Showcase Page or an Article
+  // ("Article" is just how a public Interview Prep Topic is framed
+  // externally, see PublicArticlePage.tsx). Deliberately siblings of
+  // "/"/"/login"/"/signup" above, NOT nested under ProtectedRoute —
+  // there is no session on these pages at all. This app's first
+  // path-param routes; react-router ranks the literal "article" segment
+  // above the dynamic :roleTag one automatically, so declaration order
+  // between the two doesn't matter for correctness, but the more
+  // specific route is still listed first for readability.
+  {
+    path: "/:handle/article/:key",
+    element: <PublicArticlePage />,
+  },
+  {
+    path: "/:handle/:roleTag/:key",
+    element: <PublicShowcasePage />,
   },
   {
     element: <ProtectedRoute />,

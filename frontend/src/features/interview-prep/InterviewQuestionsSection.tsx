@@ -60,6 +60,7 @@ export function InterviewQuestionsSection({
   expandedFollowUpId,
   setExpandedFollowUpId,
   categoryFilter,
+  totalCount,
 }: {
   scope: string | null;
   topics: InterviewTopic[];
@@ -77,6 +78,9 @@ export function InterviewQuestionsSection({
   // Which category's sub-tab is active — see InterviewTopicsSection.tsx's
   // matching `sectionFilter` prop for the exact "all"/null/string meaning.
   categoryFilter: string | null;
+  // Deduplicated count across every scope — see InterviewTopicsSection.tsx's
+  // matching prop for the full "why".
+  totalCount: number | undefined;
 }) {
   const { data: questions, isLoading } = useInterviewQuestions(scope);
   const addQuestion = useCreateInterviewQuestion(scope);
@@ -169,7 +173,10 @@ export function InterviewQuestionsSection({
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>Interview Questions</CardTitle>
+        <CardTitle>
+          Interview Questions
+          {questions && totalCount !== undefined ? ` (${questions.length}/${totalCount})` : ""}
+        </CardTitle>
         <div className={cn("flex items-center", ACTION_BUTTON_ROW_GAP)}>
           <Button variant="ghost" size="sm" onClick={openAddDialog}>
             <Plus className="h-3.5 w-3.5" />
@@ -259,7 +266,7 @@ export function InterviewQuestionsSection({
           </div>
           {topics.length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="question-topic">Related topic (optional)</Label>
+              <Label htmlFor="question-topic">Related article (optional)</Label>
               <Select
                 id="question-topic"
                 value={form.topic_id}
@@ -503,7 +510,7 @@ function QuestionCard({
               {question.question}
             </p>
             {isOpen && linkedTopic && (
-              <p className="text-xs text-muted-foreground">Related topic: {linkedTopic.name}</p>
+              <p className="text-xs text-muted-foreground">Related article: {linkedTopic.name}</p>
             )}
           </div>
         </div>

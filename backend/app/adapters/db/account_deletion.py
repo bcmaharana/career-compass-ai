@@ -61,6 +61,7 @@ from app.adapters.db.models.learning_intelligence import (
 )
 from app.adapters.db.models.platform_admin import PlatformAdminModel, PlatformSettingModel
 from app.adapters.db.models.resume_intelligence import ResumeModel
+from app.adapters.db.models.showcase_page import PublicShareLinkModel, ShowcasePageModel
 from app.domain.identity.account_deletion import TenantDeletionArtifacts
 
 
@@ -116,6 +117,23 @@ class SqlAlchemyAccountDeletionRepository:
             for row in tailored_resume_result
             for key in (row.tailored_resume_docx_key, row.tailored_resume_pdf_key)
             if key is not None
+        ]
+
+        # Collect Showcase Page image-block URLs before deleting the
+        # rows — same best-effort convention as the others above. Raw
+        # URLs, not keys: blocks is a JSON list with no dedicated
+        # image-key column to select, and the key itself isn't
+        # separately persisted (see
+        # showcase_page_service.showcase_block_image_key_from_url,
+        # which the caller uses to reconstruct it from the URL).
+        showcase_pages_result = await self._session.execute(
+            select(ShowcasePageModel.blocks).where(ShowcasePageModel.tenant_id == tenant_id)
+        )
+        showcase_block_image_urls = [
+            str(block["image_url"])
+            for blocks in showcase_pages_result.scalars().all()
+            for block in blocks
+            if block.get("type") == "image" and block.get("image_url")
         ]
 
         # 1. Career-profile sub-entities (-> career_profiles.id)
@@ -209,6 +227,21 @@ class SqlAlchemyAccountDeletionRepository:
             RecruiterContactModel,
             UserRoleModel,
             PlatformAdminModel,
+            # Both reference target_role_id — must be deleted before
+            # step 4's target_roles delete below, same reasoning as
+            # CareerGoal/LearningItem above (ShowcasePageModel's FK is
+            # ON DELETE CASCADE so this is technically redundant with
+            # that, but explicit here for the same reason
+            # CareerProfileModel — which also has a target_role_id FK —
+            # is never left to an implicit cascade either).
+            # PublicShareLinkModel has NO FK to either showcase_pages or
+            # interview_topics (resource_id is a plain polymorphic
+            # pointer, not a real FK — see that model's own docstring),
+            # so nothing cascades it automatically; it's the direct
+            # cause of the FK violation this loop entry fixes (its
+            # user_id FK blocks step 5's users delete otherwise).
+            ShowcasePageModel,
+            PublicShareLinkModel,
         ):
             await self._session.execute(
                 delete(direct_model).where(direct_model.tenant_id == tenant_id)
@@ -263,4 +296,5 @@ class SqlAlchemyAccountDeletionRepository:
             profile_photos=profile_photos,
             interview_topic_image_keys=interview_topic_image_keys,
             tailored_resume_file_keys=tailored_resume_file_keys,
+            showcase_block_image_urls=showcase_block_image_urls,
         )

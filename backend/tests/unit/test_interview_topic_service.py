@@ -566,6 +566,43 @@ class TestUploadImage:
             )
 
 
+class TestSetPublic:
+    async def test_flips_the_flag_on(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        topic = await repo.create(_make_topic(tenant_id, user_id))
+        service = InterviewTopicService(repo, FakePrivateObjectStorage())
+
+        updated = await service.set_public(
+            tenant_id=tenant_id, user_id=user_id, topic_id=topic.id, is_public=True
+        )
+
+        assert updated.is_public is True
+
+    async def test_flips_the_flag_off(self) -> None:
+        tenant_id, user_id = uuid.uuid4(), uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        topic = await repo.create(_make_topic(tenant_id, user_id, is_public=True))
+        service = InterviewTopicService(repo, FakePrivateObjectStorage())
+
+        updated = await service.set_public(
+            tenant_id=tenant_id, user_id=user_id, topic_id=topic.id, is_public=False
+        )
+
+        assert updated.is_public is False
+
+    async def test_requires_ownership(self) -> None:
+        tenant_id, user_id, other_user = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        repo = FakeInterviewTopicRepository()
+        topic = await repo.create(_make_topic(tenant_id, user_id))
+        service = InterviewTopicService(repo, FakePrivateObjectStorage())
+
+        with pytest.raises(NotFoundError):
+            await service.set_public(
+                tenant_id=tenant_id, user_id=other_user, topic_id=topic.id, is_public=True
+            )
+
+
 class TestPresignedImageUrl:
     async def test_returns_none_when_no_image(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()

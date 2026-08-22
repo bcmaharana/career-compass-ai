@@ -515,7 +515,7 @@ function LearningIntelligenceCard({ isOpen, onToggle }: DashboardCardProps) {
 
 function InterviewPrepCard({ isOpen, onToggle }: DashboardCardProps) {
   const { data: summary, isLoading } = useInterviewPrepSummary();
-  const scopeCount = summary?.length ?? 0;
+  const scopeCount = summary?.scopes.length ?? 0;
 
   return (
     <DashboardCardShell
@@ -533,11 +533,11 @@ function InterviewPrepCard({ isOpen, onToggle }: DashboardCardProps) {
       {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
       {!isLoading && scopeCount === 0 && (
         <p className="text-sm text-muted-foreground">
-          No topics or questions yet — start building your interview prep.
+          No articles or questions yet — start building your interview prep.
         </p>
       )}
       {!isLoading &&
-        summary?.map((s) => (
+        summary?.scopes.map((s) => (
           <div
             key={s.target_role_id ?? "master"}
             className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0 last:pb-0"
@@ -545,7 +545,7 @@ function InterviewPrepCard({ isOpen, onToggle }: DashboardCardProps) {
             <span className="truncate text-sm font-medium">{s.role_name}</span>
             <div className="flex items-center gap-2">
               <Badge variant="default">
-                {s.topic_count} {s.topic_count === 1 ? "topic" : "topics"}
+                {s.topic_count} {s.topic_count === 1 ? "article" : "articles"}
               </Badge>
               <Badge variant="default">
                 {s.question_count} {s.question_count === 1 ? "question" : "questions"}

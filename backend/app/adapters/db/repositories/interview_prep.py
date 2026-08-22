@@ -59,6 +59,7 @@ def _topic_to_domain(model: InterviewTopicModel, scope_target_role_ids: list[UUI
         discussion=model.discussion,
         image_key=model.image_key,
         reference_links=_links_to_domain(model.reference_links),
+        is_public=model.is_public,
         scope_target_role_ids=scope_target_role_ids,
         created_at=model.created_at,
         updated_at=model.updated_at,
@@ -165,6 +166,7 @@ class SqlAlchemyInterviewTopicRepository:
         model.discussion = topic.discussion
         model.image_key = topic.image_key
         model.reference_links = _links_to_json(topic.reference_links)
+        model.is_public = topic.is_public
 
         current = await self._session.execute(
             select(InterviewTopicScopeTagModel).where(InterviewTopicScopeTagModel.topic_id == topic.id)

@@ -213,6 +213,8 @@ async def get_me(
         visa_status=result.visa_status,
         linkedin_url=result.linkedin_url,
         other_professional_url=result.other_professional_url,
+        middle_name=result.middle_name,
+        handle=result.handle,
         roles=list(result.roles),
     )
 
@@ -240,6 +242,8 @@ async def update_me(
         visa_status=request.visa_status,
         linkedin_url=request.linkedin_url,
         other_professional_url=request.other_professional_url,
+        middle_name=request.middle_name,
+        handle=request.handle,
     )
     return CurrentUserResponse(
         user_id=result.user_id,
@@ -261,6 +265,8 @@ async def update_me(
         visa_status=result.visa_status,
         linkedin_url=result.linkedin_url,
         other_professional_url=result.other_professional_url,
+        middle_name=result.middle_name,
+        handle=result.handle,
         roles=list(result.roles),
     )
 

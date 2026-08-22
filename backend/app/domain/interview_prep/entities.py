@@ -101,6 +101,17 @@ class InterviewTopic:
     discussion: str | None = None
     image_key: str | None = None  # private-bucket storage key, not a URL
     reference_links: list[ReferenceLink] = field(default_factory=list)
+    #: Public-sharing toggle (direct 2026-08-22 request) — framed as
+    #: "Article" to an external viewer, same InterviewTopic underneath.
+    #: The actual share URL lives in the RLS-exempt public_share_links
+    #: table (app/domain/showcase_page/entities.py's PublicShareLink),
+    #: keyed by (resource_type="interview_topic", resource_id=this
+    #: topic's id) — not a column on this entity — so both this and
+    #: ShowcasePage share one lookup mechanism. This flag is the *live*
+    #: gate an anonymous request checks after resolving that key: the
+    #: link row is never deleted on toggle-off, this flag is what
+    #: actually stops serving.
+    is_public: bool = False
     deleted_at: datetime | None = None
 
 

@@ -116,6 +116,17 @@ class UserModel(Base):
     job_search_distance_miles: Mapped[int | None] = mapped_column(Integer, nullable=True)
     job_search_employment_time: Mapped[str | None] = mapped_column(String(20), nullable=True)
     job_search_employment_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    #: Added for the public-sharing handle's default-derivation rule
+    #: (First/Middle/Last initials) — this app never collected a middle
+    #: name before this.
+    middle_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    #: Reserved, globally-unique (case-insensitive — see the owning
+    #: migration's functional index on lower(handle)) short public
+    #: identifier, the first path segment of a public-sharing URL
+    #: (scaledbrain.com/{handle}/{role_tag}/{key}). Nullable — not every
+    #: user sets one immediately; computed lazily by
+    #: UpdateUserProfileService, never backfilled in bulk.
+    handle: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class PermissionModel(Base):

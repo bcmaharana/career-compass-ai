@@ -12,6 +12,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.db.base import set_tenant_context
@@ -100,6 +101,8 @@ def _user_to_domain(model: UserModel) -> User:
         job_search_distance_miles=model.job_search_distance_miles,
         job_search_employment_time=model.job_search_employment_time,
         job_search_employment_type=model.job_search_employment_type,
+        middle_name=model.middle_name,
+        handle=model.handle,
     )
 
 
@@ -295,9 +298,36 @@ class SqlAlchemyUserRepository:
         model.job_search_distance_miles = user.job_search_distance_miles
         model.job_search_employment_time = user.job_search_employment_time
         model.job_search_employment_type = user.job_search_employment_type
+        model.middle_name = user.middle_name
+        # handle is deliberately NOT written here — see set_handle below,
+        # the only path allowed to change it, since it needs savepoint
+        # protection against a cross-tenant collision this RLS-scoped
+        # session can't proactively see coming.
         await self._session.flush()
         await self._session.refresh(model)
         return _user_to_domain(model)
+
+    async def set_handle(self, *, tenant_id: UUID, user_id: UUID, handle: str) -> bool:
+        model = await self._session.get(UserModel, user_id)
+        assert model is not None, "set_handle() called with a user id that no longer exists"
+        try:
+            # SAVEPOINT, not a plain flush — same reasoning as
+            # SqlAlchemyCareerProfileRepository.create()'s own
+            # begin_nested() usage: a plain session.rollback() on
+            # IntegrityError would also discard the RLS tenant-context GUC
+            # set once at session start, silently breaking RLS for every
+            # later query this request makes. Rolling back only to the
+            # savepoint undoes just this failed UPDATE.
+            async with self._session.begin_nested():
+                model.handle = handle
+                await self._session.flush()
+        except IntegrityError as e:
+            if "uq_users_handle_lower" not in str(e.orig):
+                raise
+            await self._session.refresh(model)
+            return False
+        await self._session.refresh(model)
+        return True
 
 
 class SqlAlchemyRoleRepository:

@@ -20,6 +20,7 @@ import { PeerEndorsementsSection } from "@/features/career-profile/PeerEndorseme
 import { ProfileHeader } from "@/features/career-profile/ProfileHeader";
 import { ProfileScopeProvider } from "@/features/career-profile/ProfileScopeContext";
 import { ResumeDownloadBar } from "@/features/career-profile/ResumeDownloadBar";
+import { ShowcasePageSection } from "@/features/career-profile/ShowcasePageSection";
 import { useRoleScopeParam } from "@/stores/target-role-scope-store";
 import { Eraser } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -174,16 +175,24 @@ export function CareerProfilePage() {
   return (
     <ProfileScopeProvider targetRoleId={targetRoleId}>
       <div className="-mt-6 grid gap-3">
-        <div className="-mb-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-base font-semibold text-foreground md:text-lg">
+        <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* text-[16px] rather than text-base: below the `md` breakpoint,
+                globals.css scales the root font-size to 87.5% (text-base
+                would render at 14px), but the Select right next to this
+                label is force-set to a literal 16px there (the iOS
+                Safari auto-zoom-on-focus fix — see that rule's own
+                comment in globals.css) and can't follow the same scale.
+                A fixed 16px here keeps the label visually matched to the
+                control beside it instead of reading smaller/mismatched. */}
+            <span className="shrink-0 text-[16px] font-semibold text-foreground md:text-lg">
               Career Profile:
             </span>
             <Select
               aria-label="Switch Career Profile scope"
               value={targetRoleId ?? ""}
               onChange={(e) => handleRoleChange(e.target.value)}
-              className="h-9 w-auto max-w-[16rem] bg-card px-2 text-sm font-medium text-foreground"
+              className="h-auto w-auto max-w-[16rem] shrink bg-card px-2 py-1 text-sm font-medium text-foreground"
             >
               <option value="">Master</option>
               {targetRoles?.map((role) => (
@@ -206,6 +215,15 @@ export function CareerProfilePage() {
         </div>
         {profile && (
           <ResumeDownloadBar key={`${scopeKey}-resume-download`} profile={profile} scope={targetRoleId} />
+        )}
+        {activeRole && (
+          <ShowcasePageSection
+            key={`${scopeKey}-showcase-page`}
+            targetRoleId={activeRole.id}
+            roleTag={activeRole.tag}
+            isOpen={expandedSection === "showcase_page"}
+            onToggleOpen={() => toggleSection("showcase_page")}
+          />
         )}
         <ProfileHeader key={`${scopeKey}-header`} />
         <ExecutiveSummarySection

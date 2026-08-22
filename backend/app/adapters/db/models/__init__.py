@@ -78,6 +78,7 @@ from app.adapters.db.models.opportunity_intelligence import JobListingCacheModel
 from app.adapters.db.models.platform_admin import PlatformAdminModel, PlatformSettingModel
 from app.adapters.db.models.resume_intelligence import ResumeModel
 from app.adapters.db.models.search import ContentEmbeddingModel, EmbeddingModelModel
+from app.adapters.db.models.showcase_page import PublicShareLinkModel, ShowcasePageModel
 
 __all__ = [
     "AIInvocationModel",
@@ -122,6 +123,7 @@ __all__ = [
     "PlatformSettingModel",
     "PrerequisiteOfEdgeModel",
     "PromptVersionModel",
+    "PublicShareLinkModel",
     "RecruiterContactModel",
     "RelatedSkillModel",
     "ResumeModel",
@@ -129,6 +131,7 @@ __all__ = [
     "RolePermissionModel",
     "RoleProgressesToEdgeModel",
     "RoleRequiredSkillModel",
+    "ShowcasePageModel",
     "SkillAliasModel",
     "SkillCategoryMembershipModel",
     "SkillCategoryModel",

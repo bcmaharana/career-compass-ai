@@ -1617,6 +1617,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/interview-prep/topics/{topic_id}/toggle-public": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Toggle Interview Topic Public */
+        post: operations["toggle_interview_topic_public_api_v1_interview_prep_topics__topic_id__toggle_public_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/interview-prep/questions": {
         parameters: {
             query?: never;
@@ -2099,6 +2116,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/showcase-pages/{target_role_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Showcase Page */
+        get: operations["get_showcase_page_api_v1_showcase_pages__target_role_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Showcase Page */
+        patch: operations["update_showcase_page_api_v1_showcase_pages__target_role_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/showcase-pages/{target_role_id}/toggle-public": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Toggle Showcase Page Public */
+        post: operations["toggle_showcase_page_public_api_v1_showcase_pages__target_role_id__toggle_public_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/showcase-pages/{target_role_id}/blocks/{block_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Showcase Block Image */
+        post: operations["upload_showcase_block_image_api_v1_showcase_pages__target_role_id__blocks__block_id__image_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/showcase-pages/{share_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Public Showcase Page */
+        get: operations["get_public_showcase_page_api_v1_public_showcase_pages__share_key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/articles/{share_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Public Article */
+        get: operations["get_public_article_api_v1_public_articles__share_key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2176,6 +2279,11 @@ export interface components {
             target_role_id?: string | null;
             /** Upload Token */
             upload_token?: string | null;
+        };
+        /** Body_upload_showcase_block_image_api_v1_showcase_pages__target_role_id__blocks__block_id__image_post */
+        Body_upload_showcase_block_image_api_v1_showcase_pages__target_role_id__blocks__block_id__image_post: {
+            /** File */
+            file: string;
         };
         /** CareerGoalRequest */
         CareerGoalRequest: {
@@ -2579,6 +2687,10 @@ export interface components {
             linkedin_url: string | null;
             /** Other Professional Url */
             other_professional_url: string | null;
+            /** Middle Name */
+            middle_name: string | null;
+            /** Handle */
+            handle: string | null;
             /** Roles */
             roles: string[];
         };
@@ -2861,6 +2973,15 @@ export interface components {
             /** Question Count */
             question_count: number;
         };
+        /** InterviewPrepSummaryResponse */
+        InterviewPrepSummaryResponse: {
+            /** Scopes */
+            scopes: components["schemas"]["InterviewPrepScopeSummaryResponse"][];
+            /** Total Topic Count */
+            total_topic_count: number;
+            /** Total Question Count */
+            total_question_count: number;
+        };
         /** InterviewQuestionRequest */
         InterviewQuestionRequest: {
             /** Topic Id */
@@ -2998,6 +3119,10 @@ export interface components {
             reference_links: components["schemas"]["ReferenceLinkPayload"][];
             /** Scope Target Role Ids */
             scope_target_role_ids: (string | null)[];
+            /** Is Public */
+            is_public: boolean;
+            /** Share Key */
+            share_key?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -3654,6 +3779,71 @@ export interface components {
             /** Import Batch Id */
             import_batch_id?: string | null;
         };
+        /** PublicArticleResponse */
+        PublicArticleResponse: {
+            /** Owner Display Name */
+            owner_display_name: string;
+            /** Owner Handle */
+            owner_handle: string;
+            /** Name */
+            name: string;
+            /** Discussion */
+            discussion: string | null;
+            /** Image Url */
+            image_url: string | null;
+            /** Reference Links */
+            reference_links: components["schemas"]["PublicReferenceLink"][];
+        };
+        /** PublicReferenceLink */
+        PublicReferenceLink: {
+            /** Url */
+            url: string;
+            /** Label */
+            label: string;
+        };
+        /** PublicShowcaseBlock */
+        PublicShowcaseBlock: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link";
+            /** Label */
+            label: string;
+            /** Html */
+            html?: string | null;
+            /** Image Url */
+            image_url?: string | null;
+            /** Video Embed Url */
+            video_embed_url?: string | null;
+            /** Article Share Key */
+            article_share_key?: string | null;
+            /** External Url */
+            external_url?: string | null;
+        };
+        /** PublicShowcasePageResponse */
+        PublicShowcasePageResponse: {
+            /** Owner Display Name */
+            owner_display_name: string;
+            /** Owner Handle */
+            owner_handle: string;
+            /** Role Name */
+            role_name: string;
+            /** Role Tag */
+            role_tag: string;
+            /** Blocks */
+            blocks: components["schemas"]["PublicShowcaseBlock"][];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** QuoteOfTheDayResponse */
         QuoteOfTheDayResponse: {
             /** Content */
@@ -4011,6 +4201,65 @@ export interface components {
             /** Model Version Id */
             model_version_id?: string | null;
         };
+        /** ShowcaseBlockPayload */
+        ShowcaseBlockPayload: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link";
+            /** Label */
+            label: string;
+            /** Html */
+            html?: string | null;
+            /** Image Url */
+            image_url?: string | null;
+            /** Video Embed Url */
+            video_embed_url?: string | null;
+            /** Article Topic Id */
+            article_topic_id?: string | null;
+            /** External Url */
+            external_url?: string | null;
+        };
+        /** ShowcasePageResponse */
+        ShowcasePageResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Target Role Id
+             * Format: uuid
+             */
+            target_role_id: string;
+            /** Is Public */
+            is_public: boolean;
+            /** Blocks */
+            blocks: components["schemas"]["ShowcaseBlockPayload"][];
+            /** Share Key */
+            share_key: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ShowcasePageUpdateRequest */
+        ShowcasePageUpdateRequest: {
+            /** Blocks */
+            blocks: components["schemas"]["ShowcaseBlockPayload"][];
+        };
         /** SignupRequestResponse */
         SignupRequestResponse: {
             /**
@@ -4212,6 +4461,16 @@ export interface components {
             /** Required Skills */
             required_skills: string[];
         };
+        /** TogglePublicRequest */
+        TogglePublicRequest: {
+            /** Is Public */
+            is_public: boolean;
+        };
+        /** ToggleTopicPublicRequest */
+        ToggleTopicPublicRequest: {
+            /** Is Public */
+            is_public: boolean;
+        };
         /** UpdateCareerProfileRequest */
         UpdateCareerProfileRequest: {
             /** Headline */
@@ -4257,6 +4516,10 @@ export interface components {
             linkedin_url?: string | null;
             /** Other Professional Url */
             other_professional_url?: string | null;
+            /** Middle Name */
+            middle_name?: string | null;
+            /** Handle */
+            handle?: string | null;
         };
         /** UpdateFollowUpQuestionRequest */
         UpdateFollowUpQuestionRequest: {
@@ -8207,6 +8470,41 @@ export interface operations {
             };
         };
     };
+    toggle_interview_topic_public_api_v1_interview_prep_topics__topic_id__toggle_public_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToggleTopicPublicRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewTopicResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_interview_questions_api_v1_interview_prep_questions_get: {
         parameters: {
             query?: {
@@ -8553,7 +8851,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InterviewPrepScopeSummaryResponse"][];
+                    "application/json": components["schemas"]["InterviewPrepSummaryResponse"];
                 };
             };
         };
@@ -9325,6 +9623,205 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecruiterContactResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_showcase_page_api_v1_showcase_pages__target_role_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShowcasePageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_showcase_page_api_v1_showcase_pages__target_role_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShowcasePageUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShowcasePageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    toggle_showcase_page_public_api_v1_showcase_pages__target_role_id__toggle_public_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TogglePublicRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShowcasePageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_showcase_block_image_api_v1_showcase_pages__target_role_id__blocks__block_id__image_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_role_id: string;
+                block_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_showcase_block_image_api_v1_showcase_pages__target_role_id__blocks__block_id__image_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShowcasePageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_public_showcase_page_api_v1_public_showcase_pages__share_key__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                share_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicShowcasePageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_public_article_api_v1_public_articles__share_key__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                share_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicArticleResponse"];
                 };
             };
             /** @description Validation Error */

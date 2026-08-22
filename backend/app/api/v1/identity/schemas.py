@@ -142,6 +142,13 @@ class UpdateCurrentUserRequest(BaseModel):
     visa_status: str | None = Field(default=None, max_length=100)
     linkedin_url: str | None = Field(default=None, max_length=2048)
     other_professional_url: str | None = Field(default=None, max_length=2048)
+    middle_name: str | None = Field(default=None, max_length=150)
+    #: Format-validated in UpdateUserProfileService (2-32 chars,
+    #: alphanumeric/hyphen/underscore) — kept permissive (bare
+    #: max_length) here since the friendlier custom error message lives
+    #: in the service layer, matching how country's 2-letter format is
+    #: also validated there rather than via a Pydantic pattern.
+    handle: str | None = Field(default=None, max_length=32)
 
 
 class CurrentUserResponse(BaseModel):
@@ -164,6 +171,8 @@ class CurrentUserResponse(BaseModel):
     visa_status: str | None
     linkedin_url: str | None
     other_professional_url: str | None
+    middle_name: str | None
+    handle: str | None
     roles: list[str]
 
 

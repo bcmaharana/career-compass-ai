@@ -18,12 +18,15 @@ from app.api.dependencies import (
     get_interview_prep_summary_service,
     get_interview_question_service,
     get_interview_topic_service,
+    get_public_share_link_service,
+    get_public_sharing_service,
 )
 from app.api.v1.career_profile.schemas import MoveRequest
 from app.api.v1.interview_prep.schemas import (
     AddFollowUpQuestionRequest,
     InterviewPrepMoveRequest,
     InterviewPrepScopeSummaryResponse,
+    InterviewPrepSummaryResponse,
     InterviewQuestionRequest,
     InterviewQuestionResponse,
     InterviewQuestionUpdateRequest,
@@ -31,6 +34,7 @@ from app.api.v1.interview_prep.schemas import (
     InterviewTopicResponse,
     InterviewTopicUpdateRequest,
     ReferenceLinkPayload,
+    ToggleTopicPublicRequest,
     UpdateFollowUpQuestionRequest,
 )
 from app.application.interview_prep.interview_answer_service import InterviewAnswerService
@@ -39,6 +43,8 @@ from app.application.interview_prep.interview_prep_summary_service import (
 )
 from app.application.interview_prep.interview_question_service import InterviewQuestionService
 from app.application.interview_prep.interview_topic_service import InterviewTopicService
+from app.application.showcase_page.public_share_link_service import PublicShareLinkService
+from app.application.showcase_page.public_sharing_service import PublicSharingService
 from app.core.identity_provider_interface import IdentityClaims
 from app.domain.interview_prep.entities import InterviewQuestion, InterviewTopic, ReferenceLink
 
@@ -46,9 +52,12 @@ router = APIRouter(tags=["interview-prep"])
 
 
 async def _topic_response(
-    service: InterviewTopicService, topic: InterviewTopic
+    service: InterviewTopicService, share_links: PublicShareLinkService, topic: InterviewTopic
 ) -> InterviewTopicResponse:
     image_url = await service.get_presigned_image_url(topic)
+    share_key = await share_links.get_existing_key(
+        resource_type="interview_topic", resource_id=topic.id
+    )
     return InterviewTopicResponse(
         id=topic.id,
         name=topic.name,
@@ -59,6 +68,8 @@ async def _topic_response(
             ReferenceLinkPayload(url=link.url, label=link.label) for link in topic.reference_links
         ],
         scope_target_role_ids=topic.scope_target_role_ids,
+        is_public=topic.is_public,
+        share_key=share_key,
         created_at=topic.created_at,
     )
 
@@ -89,13 +100,14 @@ async def list_interview_topics(
     target_role_id: UUID | None = None,
     identity: IdentityClaims = Depends(get_current_identity),
     service: InterviewTopicService = Depends(get_interview_topic_service),
+    share_links: PublicShareLinkService = Depends(get_public_share_link_service),
 ) -> list[InterviewTopicResponse]:
     topics = await service.list_for_scope(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         target_role_id=target_role_id,
     )
-    return [await _topic_response(service, t) for t in topics]
+    return [await _topic_response(service, share_links, t) for t in topics]
 
 
 @router.post(
@@ -105,6 +117,7 @@ async def add_interview_topic(
     request: InterviewTopicRequest,
     identity: IdentityClaims = Depends(get_current_identity),
     service: InterviewTopicService = Depends(get_interview_topic_service),
+    share_links: PublicShareLinkService = Depends(get_public_share_link_service),
 ) -> InterviewTopicResponse:
     topic = await service.add(
         tenant_id=UUID(identity.tenant_id),
@@ -114,7 +127,7 @@ async def add_interview_topic(
         discussion=request.discussion,
         scope_target_role_ids=request.scope_target_role_ids,
     )
-    return await _topic_response(service, topic)
+    return await _topic_response(service, share_links, topic)
 
 
 @router.patch("/interview-prep/topics/{topic_id}", response_model=InterviewTopicResponse)
@@ -123,6 +136,7 @@ async def update_interview_topic(
     request: InterviewTopicUpdateRequest,
     identity: IdentityClaims = Depends(get_current_identity),
     service: InterviewTopicService = Depends(get_interview_topic_service),
+    share_links: PublicShareLinkService = Depends(get_public_share_link_service),
 ) -> InterviewTopicResponse:
     topic = await service.update(
         tenant_id=UUID(identity.tenant_id),
@@ -134,7 +148,7 @@ async def update_interview_topic(
         reference_links=[ReferenceLink(url=link.url, label=link.label) for link in request.reference_links],
         scope_target_role_ids=request.scope_target_role_ids,
     )
-    return await _topic_response(service, topic)
+    return await _topic_response(service, share_links, topic)
 
 
 @router.delete("/interview-prep/topics/{topic_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -160,6 +174,7 @@ async def move_interview_topic(
     request: InterviewPrepMoveRequest,
     identity: IdentityClaims = Depends(get_current_identity),
     service: InterviewTopicService = Depends(get_interview_topic_service),
+    share_links: PublicShareLinkService = Depends(get_public_share_link_service),
 ) -> list[InterviewTopicResponse]:
     tenant_id = UUID(identity.tenant_id)
     user_id = UUID(identity.user_id)
@@ -173,7 +188,7 @@ async def move_interview_topic(
     topics = await service.list_for_scope(
         tenant_id=tenant_id, user_id=user_id, target_role_id=request.target_role_id
     )
-    return [await _topic_response(service, t) for t in topics]
+    return [await _topic_response(service, share_links, t) for t in topics]
 
 
 @router.post("/interview-prep/topics/{topic_id}/image", response_model=InterviewTopicResponse)
@@ -182,6 +197,7 @@ async def upload_interview_topic_image(
     file: UploadFile,
     identity: IdentityClaims = Depends(get_current_identity),
     service: InterviewTopicService = Depends(get_interview_topic_service),
+    share_links: PublicShareLinkService = Depends(get_public_share_link_service),
 ) -> InterviewTopicResponse:
     content = await file.read()
     topic = await service.upload_image(
@@ -191,7 +207,7 @@ async def upload_interview_topic_image(
         content=content,
         content_type=file.content_type or "application/octet-stream",
     )
-    return await _topic_response(service, topic)
+    return await _topic_response(service, share_links, topic)
 
 
 @router.delete("/interview-prep/topics/{topic_id}/image", response_model=InterviewTopicResponse)
@@ -199,11 +215,30 @@ async def delete_interview_topic_image(
     topic_id: UUID,
     identity: IdentityClaims = Depends(get_current_identity),
     service: InterviewTopicService = Depends(get_interview_topic_service),
+    share_links: PublicShareLinkService = Depends(get_public_share_link_service),
 ) -> InterviewTopicResponse:
     topic = await service.delete_image(
         tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id), topic_id=topic_id
     )
-    return await _topic_response(service, topic)
+    return await _topic_response(service, share_links, topic)
+
+
+@router.post("/interview-prep/topics/{topic_id}/toggle-public", response_model=InterviewTopicResponse)
+async def toggle_interview_topic_public(
+    topic_id: UUID,
+    request: ToggleTopicPublicRequest,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: PublicSharingService = Depends(get_public_sharing_service),
+    topics: InterviewTopicService = Depends(get_interview_topic_service),
+    share_links: PublicShareLinkService = Depends(get_public_share_link_service),
+) -> InterviewTopicResponse:
+    topic, _share_key = await service.set_interview_topic_public(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        topic_id=topic_id,
+        is_public=request.is_public,
+    )
+    return await _topic_response(topics, share_links, topic)
 
 
 @router.get("/interview-prep/questions", response_model=list[InterviewQuestionResponse])
@@ -390,20 +425,24 @@ async def move_follow_up_question(
     return [_question_response(f) for f in siblings]
 
 
-@router.get("/interview-prep/summary", response_model=list[InterviewPrepScopeSummaryResponse])
+@router.get("/interview-prep/summary", response_model=InterviewPrepSummaryResponse)
 async def get_interview_prep_summary(
     identity: IdentityClaims = Depends(get_current_identity),
     service: InterviewPrepSummaryService = Depends(get_interview_prep_summary_service),
-) -> list[InterviewPrepScopeSummaryResponse]:
-    summaries = await service.get_summary(
+) -> InterviewPrepSummaryResponse:
+    summary = await service.get_summary(
         tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
     )
-    return [
-        InterviewPrepScopeSummaryResponse(
-            target_role_id=s.target_role_id,
-            role_name=s.role_name,
-            topic_count=s.topic_count,
-            question_count=s.question_count,
-        )
-        for s in summaries
-    ]
+    return InterviewPrepSummaryResponse(
+        scopes=[
+            InterviewPrepScopeSummaryResponse(
+                target_role_id=s.target_role_id,
+                role_name=s.role_name,
+                topic_count=s.topic_count,
+                question_count=s.question_count,
+            )
+            for s in summary.scopes
+        ],
+        total_topic_count=summary.total_topic_count,
+        total_question_count=summary.total_question_count,
+    )

@@ -43,7 +43,20 @@ class InterviewTopicResponse(BaseModel):
     image_url: str | None
     reference_links: list[ReferenceLinkPayload]
     scope_target_role_ids: list[UUID | None]
+    is_public: bool
+    #: The public URL's last path segment ("Article" when framed
+    #: externally), present whenever this topic has ever been made
+    #: public — see app/api/v1/showcase_page/schemas.py's
+    #: ShowcasePageResponse.share_key for the full "why persists across
+    #: toggle cycles, why the API doesn't return a full URL" rationale;
+    #: identical here, just shared through the same public_share_links
+    #: table with resource_type="interview_topic".
+    share_key: str | None = None
     created_at: datetime
+
+
+class ToggleTopicPublicRequest(BaseModel):
+    is_public: bool
 
 
 class InterviewQuestionRequest(BaseModel):
@@ -119,3 +132,12 @@ class InterviewPrepScopeSummaryResponse(BaseModel):
     role_name: str
     topic_count: int
     question_count: int
+
+
+class InterviewPrepSummaryResponse(BaseModel):
+    scopes: list[InterviewPrepScopeSummaryResponse]
+    #: Distinct articles/questions across every scope — see
+    #: InterviewPrepSummary's own docstring for why this isn't just a
+    #: sum of each scope's own topic_count/question_count.
+    total_topic_count: int
+    total_question_count: int

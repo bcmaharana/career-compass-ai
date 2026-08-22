@@ -113,6 +113,11 @@ class User:
     visa_status: str | None = None
     linkedin_url: str | None = None
     other_professional_url: str | None = None
+    #: Public-sharing fields (2026-08-22) — see UserModel's own comments
+    #: for the full rationale. middle_name only ever feeds the default
+    #: handle-derivation rule; it has no other use in this app.
+    middle_name: str | None = None
+    handle: str | None = None
 
     @property
     def is_active(self) -> bool:

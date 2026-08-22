@@ -978,6 +978,78 @@ class TestDeleteAccount:
             )
             assert recs_count.scalar_one() == 0
 
+    async def test_delete_removes_showcase_pages_and_public_share_links(
+        self, client: AsyncClient, email_provider: FakeEmailProvider
+    ) -> None:
+        """public_share_links.user_id is a NOT NULL FK with no ON DELETE
+        CASCADE (resource_id is a plain polymorphic pointer, not a real
+        FK to showcase_pages/interview_topics — see that model's own
+        docstring) — the exact bug caught live building Showcase Pages:
+        deleting an account that had ever made a Showcase Page public
+        raised a raw ForeignKeyViolation 500 on the users DELETE, before
+        ShowcasePageModel/PublicShareLinkModel were added to
+        SqlAlchemyAccountDeletionRepository's step-3 delete loop, same
+        class of bug as this class's learning-intelligence sibling test.
+        """
+        email = _unique_email()
+        registration = await _signup_personal(
+            client, email=email, password="a-real-password-1", email_provider=email_provider
+        )
+        headers = {"Authorization": f"Bearer {registration['access_token']}"}
+        tenant_id = uuid.UUID(registration["tenant_id"])
+
+        target_role_response = await client.post(
+            "/api/v1/career-profile/target-roles",
+            headers=headers,
+            json={"role_name": "Staff Engineer", "tag": "SE"},
+        )
+        assert target_role_response.status_code == 201, target_role_response.text
+        target_role_id = uuid.UUID(target_role_response.json()["id"])
+
+        # GET triggers get_or_create (seeds the page from resume data).
+        page_response = await client.get(
+            f"/api/v1/showcase-pages/{target_role_id}", headers=headers
+        )
+        assert page_response.status_code == 200, page_response.text
+
+        # Toggling public mints a real public_share_links row.
+        toggle_response = await client.post(
+            f"/api/v1/showcase-pages/{target_role_id}/toggle-public",
+            headers=headers,
+            json={"is_public": True},
+        )
+        assert toggle_response.status_code == 200, toggle_response.text
+        share_key = toggle_response.json()["share_key"]
+        assert share_key is not None
+
+        delete_response = await client.delete("/api/v1/identity/me", headers=headers)
+        assert delete_response.status_code == 204, delete_response.text
+
+        async with async_session_factory() as session:
+            await set_tenant_context(session, tenant_id)
+            pages_count = await session.execute(
+                text("SELECT count(*) FROM showcase_pages WHERE tenant_id = :tenant_id"),
+                {"tenant_id": tenant_id},
+            )
+            assert pages_count.scalar_one() == 0
+
+        # public_share_links has no RLS (see this table's own migration
+        # docstring) — a plain, unscoped query is correct here, not a
+        # gap in the check.
+        async with async_session_factory() as session:
+            link_count = await session.execute(
+                text("SELECT count(*) FROM public_share_links WHERE share_key = :key"),
+                {"key": share_key},
+            )
+            assert link_count.scalar_one() == 0
+
+        # The now-orphaned share key must genuinely 404, not just be
+        # absent from the DB — confirms the anonymous read path (which
+        # never binds tenant context if get_by_key finds nothing) also
+        # sees this correctly.
+        public_response = await client.get(f"/api/v1/public/showcase-pages/{share_key}")
+        assert public_response.status_code == 404
+
     async def test_delete_removes_the_tenant_and_login_then_fails(
         self, client: AsyncClient, email_provider: FakeEmailProvider
     ) -> None:

@@ -57,7 +57,9 @@ function SettingsProfileForm({ user }: { user: CurrentUserResponse }) {
 
   const [salutation, setSalutation] = useState(user.salutation ?? "");
   const [firstName, setFirstName] = useState(user.first_name);
+  const [middleName, setMiddleName] = useState(user.middle_name ?? "");
   const [lastName, setLastName] = useState(user.last_name);
+  const [handle, setHandle] = useState(user.handle ?? "");
   const [country, setCountry] = useState(user.country ?? "");
   const [phoneNumber, setPhoneNumber] = useState(
     formatPhoneForCountry(user.phone_number ?? "", user.country ?? ""),
@@ -89,7 +91,9 @@ function SettingsProfileForm({ user }: { user: CurrentUserResponse }) {
       {
         salutation: salutation.trim() || null,
         first_name: firstName,
+        middle_name: middleName.trim() || null,
         last_name: lastName,
+        handle: handle.trim() || null,
         phone_number: phoneNumber.trim() || null,
         country: country.trim() || null,
         language: language.trim() || null,
@@ -136,6 +140,17 @@ function SettingsProfileForm({ user }: { user: CurrentUserResponse }) {
       </div>
 
       <div className="flex flex-col gap-1.5">
+        <Label htmlFor="settings-middle-name">Middle name</Label>
+        <Input
+          id="settings-middle-name"
+          placeholder="Optional"
+          value={middleName}
+          onChange={(e) => setMiddleName(e.target.value)}
+          maxLength={150}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="settings-last-name">Last name</Label>
         <Input
           id="settings-last-name"
@@ -144,6 +159,22 @@ function SettingsProfileForm({ user }: { user: CurrentUserResponse }) {
           onChange={(e) => setLastName(e.target.value)}
           maxLength={150}
         />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="settings-handle">Profile handle</Label>
+        <Input
+          id="settings-handle"
+          placeholder="e.g. BCM"
+          value={handle}
+          onChange={(e) => setHandle(e.target.value)}
+          maxLength={32}
+        />
+        <p className="text-xs text-muted-foreground">
+          {handle.trim()
+            ? `Your public sharing links start with ${window.location.origin}/${handle.trim()}/...`
+            : "Used in the URL for anything you make public (a Showcase Page, an Article). Leave blank and one is assigned automatically the first time you share something."}
+        </p>
       </div>
 
       <div className="flex flex-col gap-1.5">
