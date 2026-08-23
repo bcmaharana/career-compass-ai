@@ -34,6 +34,13 @@ class ShowcaseBlockPayload(BaseModel):
 
 class ShowcasePageUpdateRequest(BaseModel):
     blocks: list[ShowcaseBlockPayload]
+    #: Top-bar fields (2026-08-24) — seeded once, then independently
+    #: editable, same as `blocks`. See ShowcasePage's own domain
+    #: docstring for the full "why", including why there's no photo
+    #: field here at all (deliberately not editable from this page).
+    name: str | None = None
+    headline: str | None = None
+    summary: str | None = None
 
 
 class TogglePublicRequest(BaseModel):
@@ -45,6 +52,13 @@ class ShowcasePageResponse(BaseModel):
     target_role_id: UUID
     is_public: bool
     blocks: list[ShowcaseBlockPayload]
+    name: str | None
+    headline: str | None
+    summary: str | None
+    #: Resolved fresh from the real, current CareerProfile on every
+    #: response — never persisted on this page ("the profile picture
+    #: will be fixed" — direct request, see ShowcasePage's own docstring).
+    photo_url: str | None
     #: The public URL's last path segment, present whenever this page
     #: has ever been made public (even if currently toggled back off —
     #: see PublicShareLink's own docstring for why the key persists

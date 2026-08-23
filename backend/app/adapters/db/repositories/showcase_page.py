@@ -83,6 +83,9 @@ def _page_to_domain(model: ShowcasePageModel) -> ShowcasePage:
         updated_at=model.updated_at,
         is_public=model.is_public,
         blocks=_blocks_from_json(model.blocks),
+        name=model.name,
+        headline=model.headline,
+        summary=model.summary,
     )
 
 
@@ -98,6 +101,9 @@ class SqlAlchemyShowcasePageRepository:
             target_role_id=page.target_role_id,
             is_public=page.is_public,
             blocks=_blocks_to_json(page.blocks),
+            name=page.name,
+            headline=page.headline,
+            summary=page.summary,
         )
         try:
             # SAVEPOINT, not a plain flush — same create-on-first-access
@@ -145,6 +151,9 @@ class SqlAlchemyShowcasePageRepository:
         assert model is not None, "update() called with a page id that no longer exists"
         model.is_public = page.is_public
         model.blocks = _blocks_to_json(page.blocks)
+        model.name = page.name
+        model.headline = page.headline
+        model.summary = page.summary
         await self._session.flush()
         await self._session.refresh(model)
         return _page_to_domain(model)

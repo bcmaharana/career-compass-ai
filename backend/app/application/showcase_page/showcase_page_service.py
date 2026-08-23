@@ -39,6 +39,7 @@ from app.application.career_profile.target_role_service import TargetRoleService
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.rich_text import sanitize_rich_text
 from app.domain.career_profile.storage import ObjectStorageRepository
+from app.domain.identity.repositories import UserRepository
 from app.domain.showcase_page.entities import ShowcaseBlock, ShowcaseColumn, ShowcasePage
 from app.domain.showcase_page.repositories import ShowcasePageRepository
 
@@ -162,12 +163,14 @@ class ShowcasePageService:
         career_profiles: CareerProfileService,
         resume_export: ResumeExportService,
         storage: ObjectStorageRepository,
+        users: UserRepository,
     ) -> None:
         self._pages = pages
         self._target_roles = target_roles
         self._career_profiles = career_profiles
         self._resume_export = resume_export
         self._storage = storage
+        self._users = users
 
     async def get_or_create(
         self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID
@@ -200,9 +203,14 @@ class ShowcasePageService:
         await self._career_profiles.get_or_create(
             tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
         )
-        _profile, data = await self._resume_export.gather_resume_data_with_master_fallback(
+        profile, data = await self._resume_export.gather_resume_data_with_master_fallback(
             tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
         )
+        # Top-bar fields (2026-08-24), seeded once alongside `blocks` from
+        # the same already-resolved (Master-fallback-aware) profile — see
+        # ShowcasePage's own docstring for why there's no photo field
+        # here at all.
+        user = await self._users.get_by_id(tenant_id, user_id)
         now = datetime.now(UTC)
         page = ShowcasePage(
             id=uuid.uuid4(),
@@ -213,6 +221,9 @@ class ShowcasePageService:
             updated_at=now,
             is_public=False,
             blocks=_seed_blocks_from_resume_data(data),
+            name=user.display_name if user else None,
+            headline=profile.headline,
+            summary=profile.summary,
         )
         try:
             return await self._pages.create(page)
@@ -224,7 +235,15 @@ class ShowcasePageService:
             return winner
 
     async def update(
-        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID, blocks: list[ShowcaseBlock]
+        self,
+        *,
+        tenant_id: UUID,
+        user_id: UUID,
+        target_role_id: UUID,
+        blocks: list[ShowcaseBlock],
+        name: str | None,
+        headline: str | None,
+        summary: str | None,
     ) -> ShowcasePage:
         page = await self.get_or_create(
             tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
@@ -241,8 +260,34 @@ class ShowcasePageService:
             )
             for block in blocks
         ]
+        # name is plain text (a person's name, rendered as plain text on
+        # both the editor and the public page — never dangerouslySetInnerHTML),
+        # so it doesn't go through sanitize_rich_text; headline/summary
+        # are rich text like every other such field in this app.
+        stripped_name = name.strip() if name else ""
+        page.name = stripped_name or None
+        page.headline = sanitize_rich_text(headline)
+        page.summary = sanitize_rich_text(summary)
         page.updated_at = datetime.now(UTC)
         return await self._pages.update(page)
+
+    async def get_photo_url(
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID
+    ) -> str | None:
+        """The profile picture is deliberately "fixed" (direct request)
+        — never copied onto the Showcase Page itself, always resolved
+        fresh from the real, current CareerProfile, with the same
+        Master-fallback a Target Role Profile with no photo of its own
+        already gets for its seeded block content."""
+        profile = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
+        if profile.photo_url:
+            return profile.photo_url
+        master = await self._career_profiles.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=None
+        )
+        return master.photo_url
 
     async def set_public(
         self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID, is_public: bool

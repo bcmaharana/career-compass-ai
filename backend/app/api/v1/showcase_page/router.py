@@ -63,10 +63,13 @@ def _column_from_payload(column: ShowcaseColumnPayload) -> ShowcaseColumn:
 
 
 async def _page_response(
-    page: ShowcasePage, share_links: PublicShareLinkService
+    page: ShowcasePage, service: ShowcasePageService, share_links: PublicShareLinkService
 ) -> ShowcasePageResponse:
     share_key = await share_links.get_existing_key(
         resource_type="showcase_page", resource_id=page.id
+    )
+    photo_url = await service.get_photo_url(
+        tenant_id=page.tenant_id, user_id=page.user_id, target_role_id=page.target_role_id
     )
     return ShowcasePageResponse(
         id=page.id,
@@ -79,6 +82,10 @@ async def _page_response(
             )
             for block in page.blocks
         ],
+        name=page.name,
+        headline=page.headline,
+        summary=page.summary,
+        photo_url=photo_url,
         share_key=share_key,
         created_at=page.created_at,
         updated_at=page.updated_at,
@@ -97,7 +104,7 @@ async def get_showcase_page(
         user_id=UUID(identity.user_id),
         target_role_id=target_role_id,
     )
-    return await _page_response(page, share_links)
+    return await _page_response(page, service, share_links)
 
 
 @router.patch("/showcase-pages/{target_role_id}", response_model=ShowcasePageResponse)
@@ -120,8 +127,11 @@ async def update_showcase_page(
         user_id=UUID(identity.user_id),
         target_role_id=target_role_id,
         blocks=blocks,
+        name=request.name,
+        headline=request.headline,
+        summary=request.summary,
     )
-    return await _page_response(page, share_links)
+    return await _page_response(page, service, share_links)
 
 
 @router.post("/showcase-pages/{target_role_id}/toggle-public", response_model=ShowcasePageResponse)
@@ -130,6 +140,7 @@ async def toggle_showcase_page_public(
     request: TogglePublicRequest,
     identity: IdentityClaims = Depends(get_current_identity),
     service: PublicSharingService = Depends(get_public_sharing_service),
+    showcase_pages: ShowcasePageService = Depends(get_showcase_page_service),
     share_links: PublicShareLinkService = Depends(get_public_share_link_service),
 ) -> ShowcasePageResponse:
     page, _share_key = await service.set_showcase_page_public(
@@ -138,7 +149,7 @@ async def toggle_showcase_page_public(
         target_role_id=target_role_id,
         is_public=request.is_public,
     )
-    return await _page_response(page, share_links)
+    return await _page_response(page, showcase_pages, share_links)
 
 
 @router.post(
@@ -162,4 +173,4 @@ async def upload_showcase_column_image(
         content=content,
         content_type=file.content_type or "application/octet-stream",
     )
-    return await _page_response(page, share_links)
+    return await _page_response(page, service, share_links)

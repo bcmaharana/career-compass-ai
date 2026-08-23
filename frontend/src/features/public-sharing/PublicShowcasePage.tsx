@@ -5,7 +5,7 @@ import { RichTextDisplay } from "@/components/ui/rich-text-editor";
 import { PublicPageHeader } from "@/features/public-sharing/PublicPageHeader";
 import { useNoIndex } from "@/hooks/useNoIndex";
 import { ApiError } from "@/api/client";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, UserRound } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 type PublicShowcaseRow = components["schemas"]["PublicShowcaseBlock"];
@@ -47,18 +47,51 @@ export function PublicShowcasePage() {
         )}
         {page && (
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <h1 className="font-display text-2xl font-semibold text-foreground">
-                {page.owner_display_name}
-              </h1>
-              <p className="text-sm text-muted-foreground">{page.role_name}</p>
-            </div>
+            <ShowcaseTopBar page={page} />
             {page.blocks.map((row) => (
               <ShowcaseRowView key={row.id} row={row} ownerHandle={page.owner_handle} />
             ))}
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+type PublicShowcasePageData = components["schemas"]["PublicShowcasePageResponse"];
+
+/** Top bar (direct 2026-08-24 request): profile picture on the left,
+ * name + headline and the Executive Summary on the right — the
+ * read-only counterpart to ShowcasePageSection.tsx's own
+ * ShowcaseHeaderBar. `name` falls back to the real, live
+ * owner_display_name for the rare case a page predates this feature and
+ * hasn't been backfilled/edited yet; `photo_url` is always resolved
+ * fresh from the real Career Profile by the backend, never independent
+ * of it ("the profile picture will be fixed" — direct request). */
+function ShowcaseTopBar({ page }: { page: PublicShowcasePageData }) {
+  const name = page.name || page.owner_display_name;
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-border bg-card p-4 md:flex-row">
+      <div className="flex shrink-0 justify-center md:justify-start">
+        {page.photo_url ? (
+          <img
+            src={page.photo_url}
+            alt=""
+            className="h-24 w-24 rounded-full border border-border object-cover"
+          />
+        ) : (
+          <div className="flex h-24 w-24 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground">
+            <UserRound className="h-8 w-8" />
+          </div>
+        )}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <h1 className="font-display text-2xl font-semibold text-foreground">{name}</h1>
+        {page.headline && (
+          <RichTextDisplay html={page.headline} className="mt-1 text-sm text-muted-foreground" />
+        )}
+        {page.summary && <RichTextDisplay html={page.summary} className="mt-1 text-sm" />}
+      </div>
     </div>
   );
 }

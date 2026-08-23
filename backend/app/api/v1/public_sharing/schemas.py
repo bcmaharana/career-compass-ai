@@ -43,6 +43,16 @@ class PublicShowcasePageResponse(BaseModel):
     owner_handle: str
     role_name: str
     role_tag: str
+    #: Top-bar fields (2026-08-24: profile picture on the left, name +
+    #: headline and the executive summary on the right) — the page's own
+    #: independent, editable copy (see ShowcasePage's own docstring),
+    #: except photo_url which is never stored here at all, always
+    #: resolved fresh from the real CareerProfile ("the profile picture
+    #: will be fixed" — direct request).
+    name: str | None
+    headline: str | None
+    summary: str | None
+    photo_url: str | None
     blocks: list[PublicShowcaseBlock]
     updated_at: datetime
 

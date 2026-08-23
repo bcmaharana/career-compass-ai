@@ -484,7 +484,7 @@ const RICH_TEXT_COLOR_SWATCHES = ["#0f172a", "#dc2626", "#2563eb", "#16a34a", "#
 //: padding — restored explicitly here so a bullet list actually shows
 //: bullets, in both the live editor and the readonly display below.
 const RICH_TEXT_CONTENT_CLASSES =
-  "[&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5 [&_blockquote]:border-l-2 [&_blockquote]:border-border " +
+  "[&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5 " +
   "[&_a]:text-accent [&_a]:underline [&_a]:underline-offset-2 [&_a]:hover:text-accent/80";
 
 /** Readonly rendering of sanitized rich-text HTML — the display half of

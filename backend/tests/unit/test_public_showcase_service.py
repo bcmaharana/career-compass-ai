@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app.application.showcase_page.public_showcase_service import PublicShowcaseService
-from app.domain.career_profile.entities import TargetRole
+from app.domain.career_profile.entities import CareerProfile, TargetRole
 from app.domain.identity.entities import User
 from app.domain.interview_prep.entities import ArticleBlock, ArticleColumn, InterviewTopic
 from app.domain.showcase_page.entities import (
@@ -107,6 +107,32 @@ class FakeStorage:
         return f"https://example.test/{key}"
 
 
+class FakeCareerProfileRepository:
+    def __init__(self) -> None:
+        self.profiles: dict[uuid.UUID, CareerProfile] = {}
+
+    async def create(self, profile: CareerProfile) -> CareerProfile:
+        raise NotImplementedError
+
+    async def get_by_user_id(
+        self, tenant_id: uuid.UUID, user_id: uuid.UUID, target_role_id: uuid.UUID | None = None
+    ) -> CareerProfile | None:
+        for profile in self.profiles.values():
+            if (
+                profile.tenant_id == tenant_id
+                and profile.user_id == user_id
+                and profile.target_role_id == target_role_id
+            ):
+                return profile
+        return None
+
+    async def get_by_id(self, tenant_id: uuid.UUID, profile_id: uuid.UUID) -> CareerProfile | None:
+        raise NotImplementedError
+
+    async def update(self, profile: CareerProfile) -> CareerProfile:
+        raise NotImplementedError
+
+
 def _make_user(*, tenant_id: uuid.UUID) -> User:
     now = datetime.now(UTC)
     return User(
@@ -134,6 +160,7 @@ class _Fixture:
         self.topics = FakeInterviewTopicRepository()
         self.target_roles = FakeTargetRoleRepository()
         self.users = FakeUserRepository()
+        self.career_profiles = FakeCareerProfileRepository()
         self.storage = FakeStorage()
         self.service = PublicShowcaseService(
             self.share_links,
@@ -142,6 +169,7 @@ class _Fixture:
             self.topics,  # type: ignore[arg-type]
             self.target_roles,  # type: ignore[arg-type]
             self.users,  # type: ignore[arg-type]
+            self.career_profiles,
             self.storage,  # type: ignore[arg-type]
         )
 
@@ -231,6 +259,89 @@ class TestGetShowcasePage:
         assert view.role_name == "Senior Engineer"
         assert view.role_tag == "SE"
         assert view.owner_handle == "JR"
+        assert view.photo_url is None  # neither profile below exists at all here
+
+    async def _make_public_page_fixture(
+        self,
+    ) -> tuple["_Fixture", uuid.UUID, uuid.UUID, uuid.UUID]:
+        fx = _Fixture()
+        tenant_id, user_id, role_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        page = ShowcasePage(
+            id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            user_id=user_id,
+            target_role_id=role_id,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            is_public=True,
+        )
+        fx.pages.pages[page.id] = page
+        fx.target_roles.roles[role_id] = TargetRole(
+            id=role_id,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            role_name="Senior Engineer",
+            tag="SE",
+            created_at=datetime.now(UTC),
+        )
+        fx.users.users[user_id] = _make_user(tenant_id=tenant_id)
+        fx.share_links.by_key["k"] = PublicShareLink(
+            share_key="k",
+            tenant_id=tenant_id,
+            resource_type="showcase_page",
+            resource_id=page.id,
+            user_id=user_id,
+            created_at=datetime.now(UTC),
+        )
+        return fx, tenant_id, user_id, role_id
+
+    async def test_resolves_the_target_roles_own_photo(self) -> None:
+        fx, tenant_id, user_id, role_id = await self._make_public_page_fixture()
+        now = datetime.now(UTC)
+        profile = CareerProfile(
+            id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            user_id=user_id,
+            current_version=1,
+            headline=None,
+            summary=None,
+            career_readiness_score=None,
+            photo_url="https://example.test/role-photo.jpg",
+            core_competencies=[],
+            created_at=now,
+            updated_at=now,
+            target_role_id=role_id,
+        )
+        fx.career_profiles.profiles[profile.id] = profile
+
+        view = await fx.service.get_showcase_page("k")
+
+        assert view is not None
+        assert view.photo_url == "https://example.test/role-photo.jpg"
+
+    async def test_falls_back_to_masters_photo_when_target_role_has_none(self) -> None:
+        fx, tenant_id, user_id, role_id = await self._make_public_page_fixture()
+        now = datetime.now(UTC)
+        master_profile = CareerProfile(
+            id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            user_id=user_id,
+            current_version=1,
+            headline=None,
+            summary=None,
+            career_readiness_score=None,
+            photo_url="https://example.test/master-photo.jpg",
+            core_competencies=[],
+            created_at=now,
+            updated_at=now,
+            target_role_id=None,
+        )
+        fx.career_profiles.profiles[master_profile.id] = master_profile
+
+        view = await fx.service.get_showcase_page("k")
+
+        assert view is not None
+        assert view.photo_url == "https://example.test/master-photo.jpg"
 
     async def test_resolves_a_share_key_for_a_public_linked_article(self) -> None:
         fx = _Fixture()

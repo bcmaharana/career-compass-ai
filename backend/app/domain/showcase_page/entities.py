@@ -64,6 +64,19 @@ class ShowcasePage:
     entity needs no cap of its own. Auto-provisioned lazily via
     ShowcasePageService.get_or_create, the same pattern
     CareerProfileService.get_or_create already established.
+
+    `name`/`headline`/`summary` (2026-08-24 top-bar request) are seeded
+    once at creation from the owning User's display_name and the
+    resolved CareerProfile's headline/summary (same Master-fallback
+    source `blocks` itself is seeded from), then fully independent and
+    user-editable afterward — the same "seed once, not a sync"
+    precedent every other piece of this page's content already follows.
+    Unlike `blocks`, there is deliberately no photo field here at all:
+    the profile picture is NOT copied/editable on this page ("the
+    profile picture will be fixed" — direct request), it always reflects
+    whatever the real CareerProfile's current photo is, resolved fresh
+    on every read via ShowcasePageService.get_photo_url/
+    PublicShowcaseService's own equivalent, never persisted here.
     """
 
     id: UUID
@@ -74,6 +87,9 @@ class ShowcasePage:
     updated_at: datetime
     is_public: bool = False
     blocks: list[ShowcaseBlock] = field(default_factory=list)
+    name: str | None = None
+    headline: str | None = None
+    summary: str | None = None
 
 
 #: Resource types a public_share_links row can point at — kept as a

@@ -30,6 +30,7 @@ import {
   Plus,
   Trash2,
   Upload,
+  UserRound,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -146,7 +147,23 @@ export function ShowcasePageSection({
     // mount-only focus effect below always saw shouldFocus=false with
     // the onSuccess-based version).
     if (focusOnColumnId) setFocusColumnId(focusOnColumnId);
-    updatePage.mutate({ blocks });
+    // Resend the current header fields unchanged — the backend applies
+    // whatever this PATCH sends unconditionally (no `is not None`
+    // guard, matching the "whole state" PATCH convention every other
+    // structural field on this page already follows), so a blocks-only
+    // commit that omitted these would silently wipe the header on every
+    // single block edit. Same "resend unchanged fields too" rule this
+    // app applies everywhere a form only edits part of a larger record.
+    updatePage.mutate({
+      blocks,
+      name: page!.name,
+      headline: page!.headline,
+      summary: page!.summary,
+    });
+  }
+
+  function saveHeader(next: { name: string | null; headline: string | null; summary: string | null }) {
+    updatePage.mutate({ blocks: page!.blocks, ...next });
   }
 
   function addRow(type: ShowcaseColumnType) {
@@ -280,6 +297,8 @@ export function ShowcasePageSection({
       </CardHeader>
       {isOpen && (
         <CardContent className="flex flex-col gap-3">
+          <ShowcaseHeaderBar page={page} onSave={saveHeader} isSaving={updatePage.isPending} />
+
           <p className="text-sm text-muted-foreground">
             A freeform, shareable page for this role — seeded once from your generated resume
             content, then fully yours to edit. Each block is a row that can hold one or more
@@ -345,6 +364,145 @@ export function ShowcasePageSection({
         isPending={updatePage.isPending}
       />
     </Card>
+  );
+}
+
+type ShowcasePageData = components["schemas"]["ShowcasePageResponse"];
+
+/**
+ * The page's top bar (direct 2026-08-24 request): profile picture on
+ * the left, name + headline and the Executive Summary on the right.
+ * `name`/`headline`/`summary` are this page's own independent copy —
+ * seeded once from the real profile, then edited only here, same
+ * "seed once, not a sync" precedent every other piece of this page's
+ * content already follows (see ShowcasePage's own domain docstring).
+ *
+ * The photo is deliberately NOT part of that copy and has no edit
+ * affordance here at all ("the profile picture will be fixed" — direct
+ * request): `photo_url` is resolved fresh by the backend from the real,
+ * current Career Profile on every response, with the same
+ * Master-fallback a Target Role Profile with no photo of its own
+ * already gets for its seeded block content.
+ */
+function ShowcaseHeaderBar({
+  page,
+  onSave,
+  isSaving,
+}: {
+  page: ShowcasePageData;
+  onSave: (next: { name: string | null; headline: string | null; summary: string | null }) => void;
+  isSaving: boolean;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [nameDraft, setNameDraft] = useState(page.name ?? "");
+  const [headlineDraft, setHeadlineDraft] = useState(page.headline);
+  const [summaryDraft, setSummaryDraft] = useState(page.summary);
+
+  function startEditing() {
+    setNameDraft(page.name ?? "");
+    setHeadlineDraft(page.headline);
+    setSummaryDraft(page.summary);
+    setIsEditing(true);
+  }
+
+  function save() {
+    onSave({
+      name: nameDraft.trim() || null,
+      headline: headlineDraft,
+      summary: summaryDraft,
+    });
+    setIsEditing(false);
+  }
+
+  const hasAnyContent = page.name || page.headline || page.summary || page.photo_url;
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-border bg-card p-4 md:flex-row">
+      <div className="flex shrink-0 justify-center md:justify-start">
+        {page.photo_url ? (
+          <img
+            src={page.photo_url}
+            alt=""
+            className="h-24 w-24 rounded-full border border-border object-cover"
+          />
+        ) : (
+          <div className="flex h-24 w-24 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground">
+            <UserRound className="h-8 w-8" />
+          </div>
+        )}
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Header
+          </p>
+          {!isEditing && (
+            <Button variant="ghost" size="sm" onClick={startEditing}>
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </Button>
+          )}
+        </div>
+
+        {isEditing ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="showcase-header-name">Name</Label>
+              <Input
+                id="showcase-header-name"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                maxLength={255}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="showcase-header-headline">Headline</Label>
+              <RichTextEditor
+                id="showcase-header-headline"
+                defaultValue={headlineDraft}
+                onChange={setHeadlineDraft}
+                placeholder="e.g. Senior Engineer, Cloud Infra"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="showcase-header-summary">Executive Summary</Label>
+              <RichTextEditor
+                id="showcase-header-summary"
+                defaultValue={summaryDraft}
+                onChange={setSummaryDraft}
+                placeholder="A short summary of your background..."
+              />
+            </div>
+            <div className={cn("flex", ACTION_BUTTON_ROW_GAP)}>
+              <Button variant="outline" size="sm" onClick={save} disabled={isSaving}>
+                {isSaving ? "Saving..." : "Save"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : hasAnyContent ? (
+          <div className="flex flex-col gap-1">
+            {page.name && <p className="text-lg font-semibold text-foreground">{page.name}</p>}
+            {page.headline && (
+              <RichTextDisplay html={page.headline} className="text-sm text-muted-foreground" />
+            )}
+            {page.summary && (
+              <RichTextDisplay
+                html={page.summary}
+                className="mt-1 max-h-40 overflow-y-auto scrollbar-hide text-sm"
+              />
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No header yet — click Edit to add a name, headline, and summary.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 

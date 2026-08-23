@@ -1340,8 +1340,9 @@ def get_showcase_page_service(
     career_profiles: CareerProfileService = Depends(get_career_profile_service),
     resume_export: ResumeExportService = Depends(get_resume_export_service),
     storage: S3ObjectStorageRepository = Depends(get_object_storage),
+    users: SqlAlchemyUserRepository = Depends(get_user_repository_scoped),
 ) -> ShowcasePageService:
-    return ShowcasePageService(pages, target_roles, career_profiles, resume_export, storage)
+    return ShowcasePageService(pages, target_roles, career_profiles, resume_export, storage, users)
 
 
 # get_public_sharing_service depends on get_showcase_page_service and
@@ -1400,6 +1401,12 @@ def get_public_user_repository(
     return SqlAlchemyUserRepository(session)
 
 
+def get_public_career_profile_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyCareerProfileRepository:
+    return SqlAlchemyCareerProfileRepository(session)
+
+
 def get_public_showcase_service(
     share_links: SqlAlchemyPublicShareLinkRepository = Depends(get_public_share_link_repository),
     tenant_context: SqlAlchemyTenantContextBinder = Depends(get_public_tenant_context_binder),
@@ -1407,10 +1414,11 @@ def get_public_showcase_service(
     topics: SqlAlchemyInterviewTopicRepository = Depends(get_public_interview_topic_repository),
     target_roles: SqlAlchemyTargetRoleRepository = Depends(get_public_target_role_repository),
     users: SqlAlchemyUserRepository = Depends(get_public_user_repository),
+    career_profiles: SqlAlchemyCareerProfileRepository = Depends(get_public_career_profile_repository),
     storage: S3ObjectStorageRepository = Depends(get_object_storage),
 ) -> PublicShowcaseService:
     return PublicShowcaseService(
-        share_links, tenant_context, pages, topics, target_roles, users, storage
+        share_links, tenant_context, pages, topics, target_roles, users, career_profiles, storage
     )
 
 

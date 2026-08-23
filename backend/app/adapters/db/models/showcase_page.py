@@ -14,7 +14,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, String, func
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -45,6 +45,14 @@ class ShowcasePageModel(Base):
     # every save (see app/domain/showcase_page/entities.py's module
     # docstring for why this isn't a separate child table).
     blocks: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
+    # Top-bar fields (2026-08-24) — seeded once from the owning User's
+    # display_name and the resolved CareerProfile's headline/summary,
+    # then independently editable (see ShowcasePage's own docstring).
+    # No photo column here at all — the profile picture is deliberately
+    # never copied/stored on this page, only ever resolved live.
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    headline: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

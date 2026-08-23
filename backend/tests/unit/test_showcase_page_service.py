@@ -158,7 +158,13 @@ def _make_target_role(*, tenant_id: uuid.UUID, user_id: uuid.UUID) -> TargetRole
 
 
 def _make_profile(
-    *, tenant_id: uuid.UUID, user_id: uuid.UUID, target_role_id: uuid.UUID | None
+    *,
+    tenant_id: uuid.UUID,
+    user_id: uuid.UUID,
+    target_role_id: uuid.UUID | None,
+    headline: str | None = "Senior Engineer",
+    summary: str | None = "Builds reliable systems.",
+    photo_url: str | None = None,
 ) -> CareerProfile:
     now = datetime.now(UTC)
     return CareerProfile(
@@ -166,10 +172,10 @@ def _make_profile(
         tenant_id=tenant_id,
         user_id=user_id,
         current_version=1,
-        headline="Senior Engineer",
-        summary="Builds reliable systems.",
+        headline=headline,
+        summary=summary,
         career_readiness_score=None,
-        photo_url=None,
+        photo_url=photo_url,
         core_competencies=[],
         created_at=now,
         updated_at=now,
@@ -230,6 +236,7 @@ class _Fixture:
             self.career_profiles,
             self.resume_export,
             self.storage,
+            self.user_repo,  # type: ignore[arg-type]
         )
 
     def register_role_with_profile(self) -> TargetRole:
@@ -243,6 +250,25 @@ class _Fixture:
         )
         self.career_profile_repo.profiles[profile.id] = profile
         return role
+
+    async def update(
+        self,
+        *,
+        target_role_id: uuid.UUID,
+        blocks: list[ShowcaseBlock],
+        name: str | None = None,
+        headline: str | None = None,
+        summary: str | None = None,
+    ) -> ShowcasePage:
+        return await self.service.update(
+            tenant_id=self.tenant_id,
+            user_id=self.user_id,
+            target_role_id=target_role_id,
+            blocks=blocks,
+            name=name,
+            headline=headline,
+            summary=summary,
+        )
 
 
 class TestGetOrCreate:
@@ -268,6 +294,18 @@ class TestGetOrCreate:
         about = about_block.columns[0]
         assert "Senior Engineer" in (about.html or "")
         assert "Builds reliable systems." in (about.html or "")
+
+    async def test_seeds_name_headline_and_summary_top_bar_fields(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+
+        page = await fx.service.get_or_create(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id
+        )
+
+        assert page.name == "Jordan Rivera"
+        assert page.headline == "Senior Engineer"
+        assert page.summary == "Builds reliable systems."
 
     async def test_seeds_an_experience_block_when_experiences_exist(self) -> None:
         fx = _Fixture()
@@ -332,9 +370,7 @@ class TestUpdate:
         )
         block = ShowcaseBlock(id=uuid.uuid4(), columns=[column])
 
-        updated = await fx.service.update(
-            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id, blocks=[block]
-        )
+        updated = await fx.update(target_role_id=role.id, blocks=[block])
 
         assert updated.blocks[0].columns[0].html == "<p>Hello</p>alert(1)"
 
@@ -352,9 +388,7 @@ class TestUpdate:
         )
         block = ShowcaseBlock(id=uuid.uuid4(), columns=[column])
 
-        updated = await fx.service.update(
-            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id, blocks=[block]
-        )
+        updated = await fx.update(target_role_id=role.id, blocks=[block])
 
         assert updated.blocks[0].columns[0].external_url == "https://example.com"
 
@@ -366,11 +400,65 @@ class TestUpdate:
         )
         assert len(seeded.blocks) > 0
 
-        updated = await fx.service.update(
-            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id, blocks=[]
-        )
+        updated = await fx.update(target_role_id=role.id, blocks=[])
 
         assert updated.blocks == []
+
+    async def test_updates_name_headline_and_summary_independently_of_the_real_profile(
+        self,
+    ) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+        await fx.service.get_or_create(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id
+        )
+
+        updated = await fx.update(
+            target_role_id=role.id,
+            blocks=[],
+            name="Custom Name",
+            headline="<p>Custom headline</p>",
+            summary="<p>Custom summary</p>",
+        )
+
+        assert updated.name == "Custom Name"
+        assert updated.headline == "<p>Custom headline</p>"
+        assert updated.summary == "<p>Custom summary</p>"
+        # The real CareerProfile is untouched — this is the page's own
+        # independent copy (direct 2026-08-24 decision), not a sync.
+        real_profile = next(iter(fx.career_profile_repo.profiles.values()))
+        assert real_profile.headline == "Senior Engineer"
+        assert real_profile.summary == "Builds reliable systems."
+
+    async def test_sanitizes_headline_and_summary_on_update(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+        await fx.service.get_or_create(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id
+        )
+
+        updated = await fx.update(
+            target_role_id=role.id,
+            blocks=[],
+            headline="<p>Hi</p><script>alert(1)</script>",
+            summary="<p>Bye</p><script>alert(2)</script>",
+        )
+
+        assert updated.headline == "<p>Hi</p>alert(1)"
+        assert updated.summary == "<p>Bye</p>alert(2)"
+
+    async def test_name_is_trimmed_and_blank_becomes_none(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+        await fx.service.get_or_create(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id
+        )
+
+        updated = await fx.update(target_role_id=role.id, blocks=[], name="  Padded Name  ")
+        assert updated.name == "Padded Name"
+
+        cleared = await fx.update(target_role_id=role.id, blocks=[], name="   ")
+        assert cleared.name is None
 
 
 class TestSetPublic:
@@ -394,6 +482,55 @@ class TestSetPublic:
         assert page.is_public is False
 
 
+class TestGetPhotoUrl:
+    async def test_returns_the_target_role_profiles_own_photo(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+        target_profile = next(iter(fx.career_profile_repo.profiles.values()))
+        target_profile.photo_url = "https://example.test/target-role-photo.jpg"
+        # Master's own profile has a DIFFERENT photo — the target role's
+        # own must win, no fallback needed here.
+        master_profile = _make_profile(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=None
+        )
+        master_profile.photo_url = "https://example.test/master-photo.jpg"
+        fx.career_profile_repo.profiles[master_profile.id] = master_profile
+
+        url = await fx.service.get_photo_url(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id
+        )
+
+        assert url == "https://example.test/target-role-photo.jpg"
+
+    async def test_falls_back_to_masters_photo_when_target_role_has_none(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+        # register_role_with_profile's own target-role CareerProfile has
+        # photo_url=None (see _make_profile's default) — no separate
+        # override needed to exercise the fallback here.
+        master_profile = _make_profile(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=None
+        )
+        master_profile.photo_url = "https://example.test/master-photo.jpg"
+        fx.career_profile_repo.profiles[master_profile.id] = master_profile
+
+        url = await fx.service.get_photo_url(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id
+        )
+
+        assert url == "https://example.test/master-photo.jpg"
+
+    async def test_returns_none_when_neither_profile_has_a_photo(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+
+        url = await fx.service.get_photo_url(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id
+        )
+
+        assert url is None
+
+
 def _image_block() -> ShowcaseBlock:
     return ShowcaseBlock(
         id=uuid.uuid4(),
@@ -405,12 +542,7 @@ class TestUploadImage:
     async def test_sets_the_column_image_url(self) -> None:
         fx = _Fixture()
         role = fx.register_role_with_profile()
-        page = await fx.service.update(
-            tenant_id=fx.tenant_id,
-            user_id=fx.user_id,
-            target_role_id=role.id,
-            blocks=[_image_block()],
-        )
+        page = await fx.update(target_role_id=role.id, blocks=[_image_block()])
         column_id = page.blocks[0].columns[0].id
 
         updated = await fx.service.upload_image(
@@ -432,9 +564,7 @@ class TestUploadImage:
         text_column = ShowcaseColumn(id=uuid.uuid4(), type="rich_text", label="Text", html="<p>Hi</p>")
         image_column = ShowcaseColumn(id=uuid.uuid4(), type="image", label="Photo")
         row = ShowcaseBlock(id=uuid.uuid4(), columns=[text_column, image_column])
-        await fx.service.update(
-            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id, blocks=[row]
-        )
+        await fx.update(target_role_id=role.id, blocks=[row])
 
         updated = await fx.service.upload_image(
             tenant_id=fx.tenant_id,
@@ -470,12 +600,7 @@ class TestUploadImage:
     async def test_rejects_unsupported_content_type(self) -> None:
         fx = _Fixture()
         role = fx.register_role_with_profile()
-        page = await fx.service.update(
-            tenant_id=fx.tenant_id,
-            user_id=fx.user_id,
-            target_role_id=role.id,
-            blocks=[_image_block()],
-        )
+        page = await fx.update(target_role_id=role.id, blocks=[_image_block()])
 
         with pytest.raises(ValidationError):
             await fx.service.upload_image(
@@ -490,12 +615,7 @@ class TestUploadImage:
     async def test_rejects_oversized_image(self) -> None:
         fx = _Fixture()
         role = fx.register_role_with_profile()
-        page = await fx.service.update(
-            tenant_id=fx.tenant_id,
-            user_id=fx.user_id,
-            target_role_id=role.id,
-            blocks=[_image_block()],
-        )
+        page = await fx.update(target_role_id=role.id, blocks=[_image_block()])
 
         with pytest.raises(ValidationError):
             await fx.service.upload_image(
@@ -526,9 +646,7 @@ class TestMultiColumnRows:
             ],
         )
 
-        updated = await fx.service.update(
-            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id, blocks=[row]
-        )
+        updated = await fx.update(target_role_id=role.id, blocks=[row])
 
         assert len(updated.blocks) == 1
         assert [c.type for c in updated.blocks[0].columns] == ["image", "rich_text", "video_embed"]
@@ -540,9 +658,7 @@ class TestMultiColumnRows:
             id=uuid.uuid4(), type="rich_text", label="Text", html="<p>Original</p>"
         )
         row = ShowcaseBlock(id=uuid.uuid4(), columns=[original_column])
-        page = await fx.service.update(
-            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id, blocks=[row]
-        )
+        page = await fx.update(target_role_id=role.id, blocks=[row])
         assert len(page.blocks[0].columns) == 1
 
         # Same row id, now with a second column appended — mirrors what
@@ -552,12 +668,7 @@ class TestMultiColumnRows:
         new_column = ShowcaseColumn(id=uuid.uuid4(), type="image", label="Photo")
         extended_row = ShowcaseBlock(id=row.id, columns=[original_column, new_column])
 
-        updated = await fx.service.update(
-            tenant_id=fx.tenant_id,
-            user_id=fx.user_id,
-            target_role_id=role.id,
-            blocks=[extended_row],
-        )
+        updated = await fx.update(target_role_id=role.id, blocks=[extended_row])
 
         assert len(updated.blocks) == 1
         assert updated.blocks[0].id == row.id

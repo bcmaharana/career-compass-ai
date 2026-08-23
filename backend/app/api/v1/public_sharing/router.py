@@ -45,6 +45,10 @@ async def get_public_showcase_page(
         owner_handle=view.owner_handle,
         role_name=view.role_name,
         role_tag=view.role_tag,
+        name=view.page.name,
+        headline=view.page.headline,
+        summary=view.page.summary,
+        photo_url=view.photo_url,
         blocks=[
             PublicShowcaseBlock(
                 id=block.id,

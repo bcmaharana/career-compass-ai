@@ -3909,6 +3909,14 @@ export interface components {
             role_name: string;
             /** Role Tag */
             role_tag: string;
+            /** Name */
+            name: string | null;
+            /** Headline */
+            headline: string | null;
+            /** Summary */
+            summary: string | null;
+            /** Photo Url */
+            photo_url: string | null;
             /** Blocks */
             blocks: components["schemas"]["PublicShowcaseBlock"][];
             /**
@@ -4325,6 +4333,14 @@ export interface components {
             is_public: boolean;
             /** Blocks */
             blocks: components["schemas"]["ShowcaseBlockPayload"][];
+            /** Name */
+            name: string | null;
+            /** Headline */
+            headline: string | null;
+            /** Summary */
+            summary: string | null;
+            /** Photo Url */
+            photo_url: string | null;
             /** Share Key */
             share_key: string | null;
             /**
@@ -4342,6 +4358,12 @@ export interface components {
         ShowcasePageUpdateRequest: {
             /** Blocks */
             blocks: components["schemas"]["ShowcaseBlockPayload"][];
+            /** Name */
+            name?: string | null;
+            /** Headline */
+            headline?: string | null;
+            /** Summary */
+            summary?: string | null;
         };
         /** SignupRequestResponse */
         SignupRequestResponse: {

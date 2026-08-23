@@ -24,13 +24,30 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from app.domain.career_profile.repositories import TargetRoleRepository
+from app.domain.career_profile.repositories import CareerProfileRepository, TargetRoleRepository
 from app.domain.identity.repositories import TenantContextBinder, UserRepository
 from app.domain.interview_prep.entities import InterviewTopic
 from app.domain.interview_prep.repositories import InterviewTopicRepository
 from app.domain.resume_intelligence.storage import PrivateObjectStorageRepository
 from app.domain.showcase_page.entities import ShowcasePage
 from app.domain.showcase_page.repositories import PublicShareLinkRepository, ShowcasePageRepository
+
+
+async def _resolve_photo_url(
+    career_profiles: CareerProfileRepository, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID
+) -> str | None:
+    """Read-only counterpart to ShowcasePageService.get_photo_url — no
+    get_or_create side effects here (an anonymous viewer should never be
+    the one to lazily create a CareerProfile row; by the time a page is
+    public, both the target role's own and Master's rows already exist
+    from whatever earlier authenticated flow created them). Same
+    Master-fallback rule: a Target Role Profile with no photo of its own
+    falls back to Master's."""
+    profile = await career_profiles.get_by_user_id(tenant_id, user_id, target_role_id)
+    if profile is not None and profile.photo_url:
+        return profile.photo_url
+    master = await career_profiles.get_by_user_id(tenant_id, user_id, None)
+    return master.photo_url if master is not None else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +69,10 @@ class PublicShowcasePageView:
     #: exposing it as one would let a viewer probe for a topic's
     #: existence independent of its public/private state).
     article_share_keys: dict[UUID, str] = field(default_factory=dict)
+    #: Resolved fresh from the real, current CareerProfile — never
+    #: stored on ShowcasePage itself (see that entity's own docstring
+    #: for why the profile picture is deliberately "fixed").
+    photo_url: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +102,7 @@ class PublicShowcaseService:
         topics: InterviewTopicRepository,
         target_roles: TargetRoleRepository,
         users: UserRepository,
+        career_profiles: CareerProfileRepository,
         storage: PrivateObjectStorageRepository,
     ) -> None:
         self._share_links = share_links
@@ -89,6 +111,7 @@ class PublicShowcaseService:
         self._topics = topics
         self._target_roles = target_roles
         self._users = users
+        self._career_profiles = career_profiles
         self._storage = storage
 
     async def get_showcase_page(self, share_key: str) -> PublicShowcasePageView | None:
@@ -124,6 +147,13 @@ class PublicShowcaseService:
                 if article_link is not None:
                     article_share_keys[topic.id] = article_link.share_key
 
+        photo_url = await _resolve_photo_url(
+            self._career_profiles,
+            tenant_id=link.tenant_id,
+            user_id=link.user_id,
+            target_role_id=page.target_role_id,
+        )
+
         return PublicShowcasePageView(
             page=page,
             owner_display_name=owner.display_name,
@@ -131,6 +161,7 @@ class PublicShowcaseService:
             role_name=role.role_name,
             role_tag=role.tag,
             article_share_keys=article_share_keys,
+            photo_url=photo_url,
         )
 
     async def get_article(self, share_key: str) -> PublicArticleView | None:
