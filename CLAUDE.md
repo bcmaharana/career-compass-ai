@@ -162,9 +162,15 @@ The user runs the **backend via Docker Compose**, not native `uvicorn`,
 after working through several rounds of environment issues. PowerShell
 scripts at the repo root handle the common flows:
 
-- **`start-dev.ps1`** — run after every machine/Docker restart. Brings
-  up Postgres/Redis/MinIO/backend, applies migrations, seeds platform
-  defaults, launches the frontend dev server in a new window.
+- **`start-dev.ps1`** — brings up Postgres/Redis/MinIO/backend, applies
+  migrations, seeds platform defaults, launches the frontend dev server
+  in a new window. **Auto-run on every login**, not just manually: a
+  Windows Scheduled Task (`CareerCompassDevStart`, `schtasks`/Task
+  Scheduler — not something `docker-compose.yml` itself controls) fires
+  it ~2 minutes after logon, since Docker Desktop is also registered to
+  auto-launch at login and needs that head start. Still safe/idempotent
+  to run by hand too (e.g. after a manual `stop-dev.ps1`, or a Docker
+  restart that doesn't involve a full reboot).
 - **`stop-dev.ps1`** — the reverse: `docker compose down` on the dev
   stack (named volumes, so data survives), kills the frontend dev
   server on port 5173, and stops the host Ollama process — but only if
@@ -174,12 +180,31 @@ scripts at the repo root handle the common flows:
   out from under a live prod would break local-model AI chat there.
 - **`start-prod.ps1`** / **`stop-prod.ps1`** — the same start/stop
   pair for the production stack (`docker-compose.prod.yml`:
-  `compass-*-prod`, reachable via the Cloudflare Tunnel). `stop-prod.ps1`
+  `compass-*-prod`, reachable via the Cloudflare Tunnel). `start-prod.ps1`
+  is **also** auto-run on login the same way (`CareerCompassProdStart`
+  scheduled task, same ~2 minute post-logon delay) — combined with
+  prod's containers already carrying `restart: unless-stopped` and the
+  separately-scheduled `CloudflaredTunnel` task (see the lid-close/sleep
+  entry further down), a full machine reboot is expected to bring prod
+  back up on its own with no manual step. `stop-prod.ps1`
   requires typed `yes` confirmation (or `-Force` to skip it) since it
   takes the live app offline for real users — `down` still preserves
   the named prod volumes, so real data survives the cycle. Both
   verified live end-to-end, including a real round trip against the
   public `scaledbrain.com` URL (2026-08-11).
+  **Both scheduled tasks hardcode this repo's absolute path** in their
+  Action (script path + working directory) — if this repo is ever moved
+  again, those two tasks need updating too
+  (`Set-ScheduledTask -TaskName "CareerCompassDevStart"/"CareerCompassProdStart" -Action ...`),
+  or they'll silently keep pointing at the old location. Moved once
+  already: 2026-08-24, from `C:\Users\bcmah\workspace\career-compass-ai`
+  to `C:\Users\bcmah\workspace\enterprise\career-compass-ai` (see the
+  sibling `enterprise\platform` repo for why — this repo is now one
+  product among several under a shared platform identity design). Both
+  tasks were updated as part of that move; creating a **new** scheduled
+  task (as opposed to editing an existing one) needs an elevated/admin
+  PowerShell session — a non-elevated session can modify tasks it
+  already owns but gets "Access is denied" trying to register a new one.
 - **`sync-dependencies.ps1`** — run whenever `pyproject.toml` or
   `package.json` gains a new dependency. Rebuilds the backend Docker
   image, syncs the native venv (for editor/ruff/mypy support), runs

@@ -18,7 +18,7 @@
 # to skip the prompt for scripted/non-interactive use.
 #
 # Usage:
-#   cd C:\Users\bcmah\workspace\career-compass-ai
+#   cd C:\Users\bcmah\workspace\enterprise\career-compass-ai
 #   .\stop-prod.ps1
 #   .\stop-prod.ps1 -Force
 

@@ -1,6 +1,6 @@
 Write-Host "Starting Career Compass AI..." -ForegroundColor Green
 
-$root = "C:\Users\bcmah\workspace\career-compass-ai"
+$root = $PSScriptRoot
 
 # -----------------------------
 # Start Docker Compose services

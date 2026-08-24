@@ -13,7 +13,7 @@
 # that don't already exist).
 #
 # Usage:
-#   cd C:\Users\bcmah\workspace\career-compass-ai
+#   cd C:\Users\bcmah\workspace\enterprise\career-compass-ai
 #   .\start-dev.ps1
 
 $ErrorActionPreference = "Stop"

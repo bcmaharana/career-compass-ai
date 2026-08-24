@@ -19,7 +19,7 @@
 # Safe to re-run at any time - every step no-ops if already stopped.
 #
 # Usage:
-#   cd C:\Users\bcmah\workspace\career-compass-ai
+#   cd C:\Users\bcmah\workspace\enterprise\career-compass-ai
 #   .\stop-dev.ps1
 
 $ErrorActionPreference = "Stop"

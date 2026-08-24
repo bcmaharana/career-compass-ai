@@ -20,7 +20,7 @@
 # head / the seed script both no-op if already current.
 #
 # Usage:
-#   cd C:\Users\bcmah\workspace\career-compass-ai
+#   cd C:\Users\bcmah\workspace\enterprise\career-compass-ai
 #   .\start-prod.ps1
 
 $ErrorActionPreference = "Stop"
