@@ -51,6 +51,7 @@ def _tenant_to_domain(model: TenantModel) -> Tenant:
         status=model.status,
         created_at=model.created_at,
         updated_at=model.updated_at,
+        platform_org_id=model.platform_org_id,
     )
 
 
@@ -103,6 +104,7 @@ def _user_to_domain(model: UserModel) -> User:
         job_search_employment_type=model.job_search_employment_type,
         middle_name=model.middle_name,
         handle=model.handle,
+        platform_account_id=model.platform_account_id,
     )
 
 
@@ -181,6 +183,7 @@ class SqlAlchemyTenantRepository:
             subdomain=tenant.subdomain,
             plan_tier=tenant.plan_tier,
             status=tenant.status,
+            platform_org_id=tenant.platform_org_id,
         )
         self._session.add(model)
         await self._session.flush()
@@ -194,6 +197,13 @@ class SqlAlchemyTenantRepository:
     async def get_by_subdomain(self, subdomain: str) -> Tenant | None:
         result = await self._session.execute(
             select(TenantModel).where(TenantModel.subdomain == subdomain)
+        )
+        model = result.scalar_one_or_none()
+        return _tenant_to_domain(model) if model else None
+
+    async def get_by_platform_org_id(self, platform_org_id: UUID) -> Tenant | None:
+        result = await self._session.execute(
+            select(TenantModel).where(TenantModel.platform_org_id == platform_org_id)
         )
         model = result.scalar_one_or_none()
         return _tenant_to_domain(model) if model else None
@@ -243,6 +253,7 @@ class SqlAlchemyUserRepository:
             mfa_enabled=user.mfa_enabled,
             agreed_to_terms_at=user.agreed_to_terms_at,
             terms_version=user.terms_version,
+            platform_account_id=user.platform_account_id,
         )
         self._session.add(model)
         await self._session.flush()
@@ -267,6 +278,18 @@ class SqlAlchemyUserRepository:
         result = await self._session.execute(
             select(UserModel).where(
                 UserModel.tenant_id == tenant_id, UserModel.phone_number_e164 == phone_e164
+            )
+        )
+        model = result.scalar_one_or_none()
+        return _user_to_domain(model) if model else None
+
+    async def get_by_platform_account_id(
+        self, tenant_id: UUID, platform_account_id: UUID
+    ) -> User | None:
+        result = await self._session.execute(
+            select(UserModel).where(
+                UserModel.tenant_id == tenant_id,
+                UserModel.platform_account_id == platform_account_id,
             )
         )
         model = result.scalar_one_or_none()
@@ -299,6 +322,7 @@ class SqlAlchemyUserRepository:
         model.job_search_employment_time = user.job_search_employment_time
         model.job_search_employment_type = user.job_search_employment_type
         model.middle_name = user.middle_name
+        model.platform_account_id = user.platform_account_id
         # handle is deliberately NOT written here — see set_handle below,
         # the only path allowed to change it, since it needs savepoint
         # protection against a cross-tenant collision this RLS-scoped

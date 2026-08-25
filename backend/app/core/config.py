@@ -172,6 +172,17 @@ class Settings(BaseSettings):
     # domain in .env.production.
     frontend_base_url: str = Field(default="http://localhost:5173")
 
+    # --- Platform Identity federation (see the sibling `enterprise/platform`
+    # repo and docs/adr/ADR-010-platform-identity-integration.md) ---
+    # The RS256 *public* key Platform Identity signs its tokens with —
+    # never a secret, safe to hold in config the same way any other
+    # public key would be. Empty means the handoff endpoint is
+    # unconfigured and returns a clear error rather than a broken 500,
+    # same "degrade to a clean error, not silently misbehave" pattern
+    # firebase_project_id/firebase_service_account_file already use for
+    # phone login.
+    platform_identity_public_key_pem: str = Field(default="")
+
     # --- Platform admin bootstrap ---
     # The one seed-time bootstrap step this genuinely needs: with no
     # platform admins granted yet, nobody could ever reach the admin

@@ -22,6 +22,10 @@ class Tenant:
     status: str
     created_at: datetime
     updated_at: datetime
+    #: Links this tenant to a Platform Identity Organization — see
+    #: docs/adr/ADR-010-platform-identity-integration.md. None for
+    #: every tenant that predates Platform Identity.
+    platform_org_id: UUID | None = None
 
 
 @dataclass(slots=True)
@@ -118,6 +122,13 @@ class User:
     #: handle-derivation rule; it has no other use in this app.
     middle_name: str | None = None
     handle: str | None = None
+    #: Links this user to a canonical Platform Identity Account — see
+    #: docs/adr/ADR-010-platform-identity-integration.md. Unique per
+    #: tenant, not globally (the same real person's Platform Account
+    #: can link to a User row in more than one CCAI tenant). None for
+    #: every user who predates Platform Identity or has never logged in
+    #: via the platform-handoff path.
+    platform_account_id: UUID | None = None
 
     @property
     def is_active(self) -> bool:

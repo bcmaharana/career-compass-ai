@@ -18,6 +18,7 @@ from app.api.dependencies import (
     get_delete_account_service,
     get_list_audit_events_service,
     get_list_feature_flags_service,
+    get_platform_handoff_service,
     get_register_tenant_service,
     get_request_organization_signup_service,
     get_request_password_reset_service,
@@ -36,6 +37,7 @@ from app.api.v1.identity.schemas import (
     OrganizationSignupRequest,
     PersonalSignupRequest,
     PhoneLoginRequest,
+    PlatformHandoffRequest,
     RegisterTenantRequest,
     RegisterTenantResponse,
     RequestPasswordResetRequest,
@@ -52,6 +54,7 @@ from app.application.identity.dto import LoginResult
 from app.application.identity.get_current_user import GetCurrentUserService
 from app.application.identity.list_audit_events import ListAuditEventsService
 from app.application.identity.list_feature_flags import ListFeatureFlagsService
+from app.application.identity.platform_handoff import PlatformHandoffService
 from app.application.identity.register_tenant import RegisterTenantService
 from app.application.identity.request_organization_signup import (
     RequestOrganizationSignupService,
@@ -155,6 +158,20 @@ async def login_phone(
     result = await service.execute_phone(
         subdomain=request.subdomain, firebase_id_token=request.firebase_id_token
     )
+    return _login_response(result)
+
+
+@router.post("/platform-handoff", response_model=LoginResponse)
+async def platform_handoff(
+    request: PlatformHandoffRequest,
+    service: PlatformHandoffService = Depends(get_platform_handoff_service),
+) -> LoginResponse:
+    """Exchanges a Platform Identity token for a normal local Career
+    Compass AI session — see
+    docs/adr/ADR-010-platform-identity-integration.md. Public (no
+    Authorization header required): the platform token itself is the
+    proof of identity being exchanged here."""
+    result = await service.execute(platform_token=request.platform_token)
     return _login_response(result)
 
 

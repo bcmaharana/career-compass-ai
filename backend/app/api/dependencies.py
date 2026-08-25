@@ -150,6 +150,7 @@ from app.application.identity.get_current_user import GetCurrentUserService
 from app.application.identity.handle_service import HandleService
 from app.application.identity.list_audit_events import ListAuditEventsService
 from app.application.identity.list_feature_flags import ListFeatureFlagsService
+from app.application.identity.platform_handoff import PlatformHandoffService
 from app.application.identity.register_tenant import RegisterTenantService
 from app.application.identity.request_organization_signup import (
     RequestOrganizationSignupService,
@@ -523,6 +524,24 @@ def get_authenticate_user_service(
         audit=audit,
         phone_verifier=phone_verifier,
         personal_phone_logins=personal_phone_logins,
+    )
+
+
+def get_platform_handoff_service(
+    tenants: SqlAlchemyTenantRepository = Depends(get_tenant_repository),
+    users: SqlAlchemyUserRepository = Depends(get_user_repository),
+    tenant_context: SqlAlchemyTenantContextBinder = Depends(get_tenant_context_binder),
+    identity_provider: InternalJWTProvider = Depends(get_internal_jwt_provider),
+    register_tenant: RegisterTenantService = Depends(get_register_tenant_service),
+    audit: AuditService = Depends(get_plain_audit_service),
+) -> PlatformHandoffService:
+    return PlatformHandoffService(
+        tenants=tenants,
+        users=users,
+        tenant_context=tenant_context,
+        identity_provider=identity_provider,
+        register_tenant=register_tenant,
+        audit=audit,
     )
 
 

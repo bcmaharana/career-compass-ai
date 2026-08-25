@@ -46,6 +46,14 @@ class TenantModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    #: Links this tenant to a Platform Identity Organization (the
+    #: sibling `enterprise/platform` repo's federated-identity account
+    #: layer — see docs/adr/ADR-010-platform-identity-integration.md).
+    #: Globally unique (not per-anything) — one Enterprise tenant per
+    #: platform org. None for every tenant that predates Platform
+    #: Identity, and for Personal tenants, which link at the User level
+    #: instead (platform_account_id on UserModel below), never here.
+    platform_org_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
 
 
 class OrganizationModel(Base):
@@ -127,6 +135,18 @@ class UserModel(Base):
     #: user sets one immediately; computed lazily by
     #: UpdateUserProfileService, never backfilled in bulk.
     handle: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: Links this local user row back to a canonical Platform Identity
+    #: Account (see docs/adr/ADR-010-platform-identity-integration.md).
+    #: Unique per tenant, not globally — the same real person's
+    #: Platform Account can legitimately link to a User row in more
+    #: than one CCAI tenant (their Personal tenant AND, separately, an
+    #: Enterprise tenant they belong to), so global uniqueness would be
+    #: wrong. None for every user who predates Platform Identity, and
+    #: stays None indefinitely for any user who never goes through the
+    #: platform-handoff login path.
+    platform_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=True
+    )
 
 
 class PermissionModel(Base):

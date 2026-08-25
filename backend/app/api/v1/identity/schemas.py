@@ -83,6 +83,13 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1)
 
 
+class PlatformHandoffRequest(BaseModel):
+    #: A signed JWT issued by Platform Identity (the sibling
+    #: `enterprise/platform` repo) — see
+    #: docs/adr/ADR-010-platform-identity-integration.md.
+    platform_token: str = Field(min_length=1)
+
+
 class PhoneLoginRequest(BaseModel):
     #: None/omitted means "Personal account" — same convention as
     #: LoginRequest.subdomain (see AuthenticateUserService.execute_phone).

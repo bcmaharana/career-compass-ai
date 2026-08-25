@@ -3787,6 +3787,70 @@ Known environment gotchas already solved, don't reintroduce:
   rebuild and restart (no new Alembic migration this session — only the
   seed-script prompt re-seed and the direct, narrowly-scoped Education
   data cleanup, both already applied to prod ahead of the code deploy).
+- **Platform Identity integration** (2026-08-25) — done, verified live
+  in dev; prod not yet deployed. The sibling `enterprise/platform` repo
+  is a new federated identity/entitlements service for the company's
+  growing multi-product portfolio (Career Compass AI is product #1) —
+  see `docs/adr/ADR-010-platform-identity-integration.md` for the
+  design and the platform repo's own ADR-001/ADR-002 for the
+  company-wide decision. This repo's own signup/login/RLS/session model
+  is **completely unchanged** — the integration is a one-time exchange,
+  not native token consumption. New: `platform_account_id` on `User`
+  (unique per tenant, not globally — the real account this launches
+  with already spans a Personal tenant and a separate Enterprise
+  `scaledbrain` tenant), `platform_org_id` on `Tenant` (globally
+  unique), migration `3be0e5e5f7f6` (hand-trimmed from a much larger
+  raw `--autogenerate` diff that also proposed dropping ~10 unrelated
+  indexes/constraints — functional indexes and the `search_vector`
+  generated column's `NOT NULL` don't perfectly round-trip through
+  SQLAlchemy's declarative metadata, which autogenerate otherwise reads
+  as "these were removed"; only the two real column+index additions
+  were kept). New public endpoint `POST /identity/platform-handoff`
+  (`PlatformHandoffService`,
+  `app/adapters/identity_providers/platform_token_verifier.py` for RS256
+  signature verification via `pyjwt[crypto]`, a new explicit dependency
+  — `cryptography` was already present transitively, likely via
+  `firebase-admin`, but declaring it explicitly is the correct fix, not
+  relying on that). Tenant resolution branches on where the platform
+  entitlement came from: org-scoped resolves via `Tenant.platform_org_id`
+  (a real `ORG_NOT_PROVISIONED` error if not yet linked — never
+  fabricates a tenant for an org); direct/Personal resolves via the
+  *existing* `derive_personal_subdomain(email)`, JIT-creating a new
+  Personal tenant through the *existing*
+  `RegisterTenantService.execute_with_hashed_password` exactly as the
+  real email-verification signup flow already does. Deliberately does
+  **not** JIT-create a second user in an already-existing org-linked
+  tenant with no matching user — this app has no multi-user-per-tenant
+  invite flow anywhere else (every Enterprise tenant today has exactly
+  one user), so that case is a real `NO_MATCHING_USER` error rather
+  than silently inventing multi-user support as a side effect. A
+  platform-provisioned user gets an unusable random local password
+  (`hash_password(secrets.token_urlsafe(32))`) — their real login path
+  is the platform handoff from the moment their row is first created.
+  **Verified with a real cross-repo end-to-end test, not just unit
+  tests**: logged into Platform Identity as a real (throwaway) account,
+  handed the resulting token to this repo's new endpoint, confirmed it
+  JIT-provisioned a brand-new Personal tenant+user, the returned CCAI
+  token worked against a real protected endpoint (`GET /identity/me`),
+  `platform_account_id` persisted correctly, and a second handoff with
+  a fresh platform token found and reused the same tenant/user rather
+  than duplicating it. Negative cases also verified live: an account
+  with no active `career_compass_ai` entitlement is rejected
+  (`403 NO_ENTITLEMENT`, zero tenant/user created), and a tampered
+  token is rejected (`INVALID_PLATFORM_TOKEN`). 624 pre-existing unit
+  tests still passing (2 pre-existing, unrelated failures in
+  `test_config.py` — one asserts a stale `jwt_access_token_expire_minutes`
+  default that real dev `.env` already overrides to 15, the other
+  constructs `Settings(app_env="production")` without a real JWT
+  secret and correctly trips the production-placeholder-secret guard
+  added in an earlier session; neither touched by this change), mypy
+  strict clean across all 10 new/changed files. Local password login
+  (`POST /identity/login`) is **unchanged and still fully enabled** —
+  per the platform repo's own ADR-002, it only gets disabled after the
+  handoff path is confirmed working for the real
+  `bcmaharana@hotmail.com` account specifically (today's verification
+  used a throwaway test account); that real-account migration
+  (Phase 2.5 on the platform side) hasn't happened yet.
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in
