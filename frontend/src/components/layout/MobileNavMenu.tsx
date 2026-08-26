@@ -1,8 +1,9 @@
 import { useMountTransition } from "@/hooks/useMountTransition";
 import { NAV_ITEMS, matchNavItem } from "@/lib/nav-items";
+import { PLATFORM_BASE_URL } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 import { useMobileDropdownStore } from "@/stores/mobile-dropdown-store";
-import { Menu } from "lucide-react";
+import { LayoutGrid, Menu } from "lucide-react";
 import { useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
@@ -68,6 +69,15 @@ export function MobileNavMenu() {
               visible ? "scale-100 opacity-100" : "scale-95 opacity-0",
             )}
           >
+            <a
+              href={PLATFORM_BASE_URL}
+              role="menuitem"
+              className="flex items-center gap-3 border-b border-white/10 px-4 py-2.5 text-sm font-medium text-primary-foreground/80 hover:bg-white/5 hover:text-primary-foreground"
+            >
+              <LayoutGrid className="h-4 w-4 shrink-0" />
+              Back to Hub
+            </a>
+
             {NAV_ITEMS.map(({ to, label, icon: Icon, end, children }) => {
               const isActive = activeTo === to;
               return (

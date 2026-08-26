@@ -5,9 +5,10 @@ import { RightNav } from "@/components/layout/RightNav";
 import { Tooltip } from "@/components/ui/tooltip";
 import { formatLastLogin } from "@/lib/format-last-login";
 import { NAV_ITEMS, matchNavItem } from "@/lib/nav-items";
+import { PLATFORM_BASE_URL } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import { ChevronDown, ChevronRight, Clock, Compass, Menu } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock, Compass, LayoutGrid, Menu } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CSSProperties, RefObject } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
@@ -190,16 +191,34 @@ export function DesktopShell({ mainRef, onLogout }: DesktopShellProps) {
             )}
           </Link>
 
-          <button
-            type="button"
-            onClick={toggleLeftNav}
-            aria-label={leftNavCollapsed ? "Expand navigation" : "Collapse navigation"}
-            aria-expanded={!leftNavCollapsed}
-            title={leftNavCollapsed ? "Expand navigation" : "Collapse navigation"}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground"
+          <div
+            className={cn(
+              // Collapsed rail is only wide enough (--shell-icon-nav-w)
+              // for one 36px button at a time — stack the two vertically
+              // there instead of side by side, which would overflow it.
+              leftNavCollapsed ? "flex flex-col items-center gap-1" : "flex items-center gap-1",
+            )}
           >
-            <Menu className="h-5 w-5" />
-          </button>
+            <a
+              href={PLATFORM_BASE_URL}
+              aria-label="Back to Hub"
+              title="Back to Hub"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground"
+            >
+              <LayoutGrid className="h-5 w-5" />
+            </a>
+
+            <button
+              type="button"
+              onClick={toggleLeftNav}
+              aria-label={leftNavCollapsed ? "Expand navigation" : "Collapse navigation"}
+              aria-expanded={!leftNavCollapsed}
+              title={leftNavCollapsed ? "Expand navigation" : "Collapse navigation"}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <div className="h-px bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)]" />

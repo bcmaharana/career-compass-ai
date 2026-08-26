@@ -17,6 +17,7 @@ type PersonalSignupRequest = components["schemas"]["PersonalSignupRequest"];
 type OrganizationSignupRequest = components["schemas"]["OrganizationSignupRequest"];
 type SignupRequestResponse = components["schemas"]["SignupRequestResponse"];
 type VerifySignupRequest = components["schemas"]["VerifySignupRequest"];
+type PlatformHandoffRequest = components["schemas"]["PlatformHandoffRequest"];
 
 function toAuthenticatedUser(data: LoginResponse): AuthenticatedUser {
   return {
@@ -43,6 +44,22 @@ export function useLogin() {
   return useMutation({
     mutationFn: (credentials: LoginRequest) =>
       apiClient.post<LoginResponse>("/api/v1/identity/login", credentials),
+    onSuccess: (data) => setSession(data.access_token, toAuthenticatedUser(data)),
+  });
+}
+
+/**
+ * Exchanges a Platform Identity token (arrives via ?token= on
+ * /platform-handoff, see PlatformHandoffPage.tsx) for a normal CCAI
+ * session — same LoginResponse shape and session handling as every
+ * other login path, see docs/adr/ADR-010-platform-identity-integration.md.
+ */
+export function usePlatformHandoff() {
+  const setSession = useAuthStore((state) => state.setSession);
+
+  return useMutation({
+    mutationFn: (body: PlatformHandoffRequest) =>
+      apiClient.post<LoginResponse>("/api/v1/identity/platform-handoff", body),
     onSuccess: (data) => setSession(data.access_token, toAuthenticatedUser(data)),
   });
 }

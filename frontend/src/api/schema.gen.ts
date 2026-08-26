@@ -109,6 +109,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity/platform-handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Platform Handoff
+         * @description Exchanges a Platform Identity token for a normal local Career
+         *     Compass AI session — see
+         *     docs/adr/ADR-010-platform-identity-integration.md. Public (no
+         *     Authorization header required): the platform token itself is the
+         *     proof of identity being exchanged here.
+         */
+        post: operations["platform_handoff_api_v1_identity_platform_handoff_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identity/signup/verify": {
         parameters: {
             query?: never;
@@ -3767,6 +3791,13 @@ export interface components {
              */
             granted_by_user_id: string;
         };
+        /** PlatformHandoffRequest */
+        PlatformHandoffRequest: {
+            /** Platform Token */
+            platform_token: string;
+            /** Org Id */
+            org_id?: string | null;
+        };
         /** PlatformPermissionResponse */
         PlatformPermissionResponse: {
             /** Code */
@@ -4842,6 +4873,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PhoneLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platform_handoff_api_v1_identity_platform_handoff_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformHandoffRequest"];
             };
         };
         responses: {

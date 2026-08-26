@@ -171,7 +171,9 @@ async def platform_handoff(
     docs/adr/ADR-010-platform-identity-integration.md. Public (no
     Authorization header required): the platform token itself is the
     proof of identity being exchanged here."""
-    result = await service.execute(platform_token=request.platform_token)
+    result = await service.execute(
+        platform_token=request.platform_token, requested_scope=request.org_id
+    )
     return _login_response(result)
 
 

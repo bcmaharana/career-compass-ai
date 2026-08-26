@@ -4,6 +4,7 @@ import { CoachPage } from "@/features/coach/CoachPage";
 import { DashboardPage } from "@/features/dashboard/DashboardPage";
 import { ForgotPasswordPage } from "@/features/auth/ForgotPasswordPage";
 import { LoginPage } from "@/features/auth/LoginPage";
+import { PlatformHandoffPage } from "@/features/auth/PlatformHandoffPage";
 import { ResetPasswordPage } from "@/features/auth/ResetPasswordPage";
 import { VerifyEmailPage } from "@/features/auth/VerifyEmailPage";
 import { LandingPage } from "@/features/landing/LandingPage";
@@ -68,6 +69,10 @@ export const router = createBrowserRouter([
   {
     path: "/verify-email",
     element: <VerifyEmailPage />,
+  },
+  {
+    path: "/platform-handoff",
+    element: <PlatformHandoffPage />,
   },
   {
     path: "/terms",

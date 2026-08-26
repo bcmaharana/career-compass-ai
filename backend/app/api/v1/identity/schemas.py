@@ -88,6 +88,14 @@ class PlatformHandoffRequest(BaseModel):
     #: `enterprise/platform` repo) — see
     #: docs/adr/ADR-010-platform-identity-integration.md.
     platform_token: str = Field(min_length=1)
+    #: Disambiguates which of possibly several active career_compass_ai
+    #: entitlements this handoff should honor, for an account with both
+    #: a Personal entitlement and one or more Enterprise (org) ones —
+    #: see PlatformHandoffService._select_entitlement. `None` (the
+    #: default, omit entirely for the common single-scope case) takes
+    #: whichever's found first; `"personal"` requires the direct one;
+    #: any other value is treated as a literal Platform Organization id.
+    org_id: str | None = None
 
 
 class PhoneLoginRequest(BaseModel):

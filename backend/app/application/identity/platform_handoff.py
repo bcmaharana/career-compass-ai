@@ -20,6 +20,20 @@ resolve via derive_personal_subdomain(email) — creating a brand new
 Personal tenant via the existing RegisterTenantService if none exists
 yet, the same JIT-provisioning ADR-001 describes.
 
+Which entitlement counts as "the" active one (2026-08-25, multi-scope
+accounts): a single Platform account can hold BOTH a direct entitlement
+(Personal) and an org-inherited one (Enterprise) for this same product
+at once — Platform Identity's claims union both, unfiltered (see
+ListMyEntitlementsService on that side). `requested_scope` disambiguates
+which one this specific handoff should honor: `None` keeps the original,
+pre-multi-scope behavior (take whichever's first — correct and
+unambiguous when there's only one, which is still the common case);
+`"personal"` requires the direct (org_id is None) one; any other string
+is treated as a literal org_id and requires an entitlement matching it
+exactly. The platform's own ProductCard.tsx is what actually supplies a
+real scope value when there's a genuine choice to make — see that
+file's own picker UI.
+
 Deliberately does NOT create a new User in an already-existing,
 org-linked tenant when no match is found there: Career Compass AI has
 no multi-user-per-tenant invite flow yet (every Enterprise tenant today
@@ -37,6 +51,7 @@ from uuid import UUID
 from app.adapters.identity_providers.internal_jwt import InternalJWTProvider
 from app.adapters.identity_providers.platform_token_verifier import (
     PlatformAccountClaims,
+    PlatformEntitlement,
     verify_platform_token,
 )
 from app.application.identity.audit_service import AuditService
@@ -66,17 +81,17 @@ class PlatformHandoffService:
         self._register_tenant = register_tenant
         self._audit = audit
 
-    async def execute(self, *, platform_token: str) -> LoginResult:
+    async def execute(
+        self, *, platform_token: str, requested_scope: str | None = None
+    ) -> LoginResult:
         claims = verify_platform_token(platform_token)
 
-        ccai_entitlement = next(
-            (
-                e
-                for e in claims.entitlements
-                if e.product_code == "career_compass_ai" and e.status == "active"
-            ),
-            None,
-        )
+        active_entitlements = [
+            e
+            for e in claims.entitlements
+            if e.product_code == "career_compass_ai" and e.status == "active"
+        ]
+        ccai_entitlement = self._select_entitlement(active_entitlements, requested_scope)
         if ccai_entitlement is None:
             raise ForbiddenError(
                 "This Platform Identity account has no active Career Compass AI "
@@ -139,6 +154,18 @@ class PlatformHandoffService:
             last_login_at=identity_claims.last_login_at,
             roles=identity_claims.roles,
         )
+
+    @staticmethod
+    def _select_entitlement(
+        entitlements: list[PlatformEntitlement], requested_scope: str | None
+    ) -> PlatformEntitlement | None:
+        if not entitlements:
+            return None
+        if requested_scope is None:
+            return entitlements[0]
+        if requested_scope == "personal":
+            return next((e for e in entitlements if e.org_id is None), None)
+        return next((e for e in entitlements if e.org_id == requested_scope), None)
 
     async def _find_or_link_user(
         self, tenant_id: UUID, claims: PlatformAccountClaims
