@@ -23,6 +23,7 @@ import { Select } from "@/components/ui/select";
 import { DeleteScopeChoiceDialog } from "@/features/interview-prep/DeleteScopeChoiceDialog";
 import { ScopeTagSelector, type ScopeOption } from "@/features/interview-prep/ScopeTagSelector";
 import { TopicVisibilityToggle } from "@/features/interview-prep/TopicVisibilityToggle";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { groupInterviewTopicsBySection } from "@/lib/group-interview-topics-by-section";
 import { getErrorMessage } from "@/lib/errors";
 import { publicArticleUrl } from "@/lib/public-sharing-url";
@@ -152,8 +153,20 @@ export function InterviewTopicsSection({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>({ name: "", section: "", scopeTargetRoleIds: [scope] });
+  const [formSnapshot, setFormSnapshot] = useState<FormState>({
+    name: "",
+    section: "",
+    scopeTargetRoleIds: [scope],
+  });
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<InterviewTopic | null>(null);
+
+  const isDialogDirty = dialogOpen && JSON.stringify(form) !== JSON.stringify(formSnapshot);
+  const { confirmDiscard, guardElement } = useUnsavedChangesGuard(isDialogDirty);
+
+  async function handleDialogClose() {
+    if (await confirmDiscard()) setDialogOpen(false);
+  }
 
   const scopeOptions: ScopeOption[] = [
     { id: null, label: "Master (generic)" },
@@ -165,14 +178,18 @@ export function InterviewTopicsSection({
   }
 
   function openAddDialog() {
+    const initial = { name: "", section: "", scopeTargetRoleIds: [scope] };
     setEditingId(null);
-    setForm({ name: "", section: "", scopeTargetRoleIds: [scope] });
+    setForm(initial);
+    setFormSnapshot(initial);
     setDialogOpen(true);
   }
 
   function openEditDialog(topic: InterviewTopic) {
+    const initial = toFormState(topic);
     setEditingId(topic.id);
-    setForm(toFormState(topic));
+    setForm(initial);
+    setFormSnapshot(initial);
     setDialogOpen(true);
   }
 
@@ -279,7 +296,9 @@ export function InterviewTopicsSection({
 
       <Dialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => {
+          void handleDialogClose();
+        }}
         title={editingId ? "Edit article" : "Add article"}
       >
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -371,6 +390,8 @@ export function InterviewTopicsSection({
           isPending={deleteTopic.isPending}
         />
       )}
+
+      {guardElement}
     </Card>
   );
 }
@@ -836,6 +857,14 @@ function ArticleColumnCard({
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState<ArticleColumn>(column);
 
+  // `column` never changes while isEditing is true (see the effect
+  // below, which only re-seeds draft once editing stops) — so it's
+  // safe to use directly as the "before" snapshot for dirty-checking,
+  // no separate captured-at-edit-start state needed.
+  const isColumnDirty = isEditing && JSON.stringify(draft) !== JSON.stringify(column);
+  const { confirmDiscard: confirmDiscardColumn, guardElement: columnGuardElement } =
+    useUnsavedChangesGuard(isColumnDirty);
+
   // Re-seeds the draft only when the column identity changes or edit
   // mode is freshly entered — not reactively on every background
   // refetch, matching this app's "initialize once, don't clobber
@@ -984,7 +1013,15 @@ function ArticleColumnCard({
               <Button variant="outline" size="sm" onClick={save} disabled={isSaving}>
                 {isSaving ? "Saving..." : "Save"}
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  void (async () => {
+                    if (await confirmDiscardColumn()) setIsEditing(false);
+                  })();
+                }}
+              >
                 Cancel
               </Button>
             </div>
@@ -1046,6 +1083,7 @@ function ArticleColumnCard({
           </div>
         )}
       </div>
+      {columnGuardElement}
     </div>
   );
 }

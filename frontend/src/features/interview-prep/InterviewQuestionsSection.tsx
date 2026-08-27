@@ -25,6 +25,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { DeleteScopeChoiceDialog } from "@/features/interview-prep/DeleteScopeChoiceDialog";
 import { ScopeTagSelector, type ScopeOption } from "@/features/interview-prep/ScopeTagSelector";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { groupInterviewQuestionsByCategory } from "@/lib/group-interview-questions-by-category";
 import { getErrorMessage } from "@/lib/errors";
 import { renderMarkdownMessage } from "@/lib/markdown-message";
@@ -88,16 +89,20 @@ export function InterviewQuestionsSection({
   const deleteQuestion = useDeleteInterviewQuestion(scope);
   const moveQuestion = useMoveInterviewQuestion(scope);
 
+  const EMPTY_FORM: FormState = { question: "", topic_id: "", category: "", scopeTargetRoleIds: [scope] };
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>({
-    question: "",
-    topic_id: "",
-    category: "",
-    scopeTargetRoleIds: [scope],
-  });
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [formSnapshot, setFormSnapshot] = useState<FormState>(EMPTY_FORM);
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<InterviewQuestion | null>(null);
+
+  const isDialogDirty = dialogOpen && JSON.stringify(form) !== JSON.stringify(formSnapshot);
+  const { confirmDiscard, guardElement } = useUnsavedChangesGuard(isDialogDirty);
+
+  async function handleDialogClose() {
+    if (await confirmDiscard()) setDialogOpen(false);
+  }
 
   const scopeOptions: ScopeOption[] = [
     { id: null, label: "Master (generic)" },
@@ -110,18 +115,21 @@ export function InterviewQuestionsSection({
 
   function openAddDialog() {
     setEditingId(null);
-    setForm({ question: "", topic_id: "", category: "", scopeTargetRoleIds: [scope] });
+    setForm(EMPTY_FORM);
+    setFormSnapshot(EMPTY_FORM);
     setDialogOpen(true);
   }
 
   function openEditDialog(question: InterviewQuestion) {
-    setEditingId(question.id);
-    setForm({
+    const initial = {
       question: question.question,
       topic_id: question.topic_id ?? "",
       category: question.category ?? "",
       scopeTargetRoleIds: question.scope_target_role_ids,
-    });
+    };
+    setEditingId(question.id);
+    setForm(initial);
+    setFormSnapshot(initial);
     setDialogOpen(true);
   }
 
@@ -235,7 +243,9 @@ export function InterviewQuestionsSection({
 
       <Dialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => {
+          void handleDialogClose();
+        }}
         title={editingId ? "Edit question" : "Add question"}
       >
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -341,6 +351,8 @@ export function InterviewQuestionsSection({
           isPending={deleteQuestion.isPending}
         />
       )}
+
+      {guardElement}
     </Card>
   );
 }
@@ -415,6 +427,10 @@ function QuestionCard({
   // caught this list's "x" button deleting immediately with no
   // confirmation, unlike everything else here.
   const [deleteLinkIndex, setDeleteLinkIndex] = useState<number | null>(null);
+
+  const isAnswerDirty = isEditingAnswer && manualAnswerDraft !== (question.manual_answer ?? "");
+  const { confirmDiscard: confirmDiscardAnswer, guardElement: answerGuardElement } =
+    useUnsavedChangesGuard(isAnswerDirty);
 
   const linkedTopic = topics.find((t) => t.id === question.topic_id);
 
@@ -571,7 +587,15 @@ function QuestionCard({
                 >
                   {updateQuestion.isPending ? "Saving..." : "Save answer"}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setIsEditingAnswer(false)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    void (async () => {
+                      if (await confirmDiscardAnswer()) setIsEditingAnswer(false);
+                    })();
+                  }}
+                >
                   Cancel
                 </Button>
               </div>
@@ -747,6 +771,8 @@ function QuestionCard({
         }
         isPending={updateQuestion.isPending}
       />
+
+      {answerGuardElement}
     </div>
   );
 }
@@ -792,6 +818,13 @@ function FollowUpQuestionCard({
   const [linkUrl, setLinkUrl] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
   const [deleteLinkIndex, setDeleteLinkIndex] = useState<number | null>(null);
+
+  const isQuestionDirty = isEditingQuestion && questionDraft !== followUp.question;
+  const { confirmDiscard: confirmDiscardQuestion, guardElement: questionGuardElement } =
+    useUnsavedChangesGuard(isQuestionDirty);
+  const isAnswerDirty = isEditingAnswer && manualAnswerDraft !== (followUp.manual_answer ?? "");
+  const { confirmDiscard: confirmDiscardAnswer, guardElement: answerGuardElement } =
+    useUnsavedChangesGuard(isAnswerDirty);
 
   function startEditingQuestion() {
     setQuestionDraft(followUp.question);
@@ -929,7 +962,15 @@ function FollowUpQuestionCard({
             >
               {updateFollowUp.isPending ? "Saving..." : "Save"}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setIsEditingQuestion(false)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                void (async () => {
+                  if (await confirmDiscardQuestion()) setIsEditingQuestion(false);
+                })();
+              }}
+            >
               Cancel
             </Button>
           </div>
@@ -968,7 +1009,15 @@ function FollowUpQuestionCard({
                   >
                     {updateFollowUp.isPending ? "Saving..." : "Save answer"}
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setIsEditingAnswer(false)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      void (async () => {
+                        if (await confirmDiscardAnswer()) setIsEditingAnswer(false);
+                      })();
+                    }}
+                  >
                     Cancel
                   </Button>
                 </div>
@@ -1087,6 +1136,9 @@ function FollowUpQuestionCard({
         }
         isPending={updateFollowUp.isPending}
       />
+
+      {questionGuardElement}
+      {answerGuardElement}
     </div>
   );
 }
