@@ -11,6 +11,14 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
+from app.adapters.db.base import async_session_factory, set_tenant_context
+from app.adapters.db.repositories import (
+    SqlAlchemyRoleRepository,
+    SqlAlchemyTenantRepository,
+    SqlAlchemyUserRepository,
+)
+from app.adapters.identity_providers.internal_jwt import InternalJWTProvider
+
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("apply_migrations_and_seed")]
 
 
@@ -19,8 +27,18 @@ def _unique_subdomain() -> str:
 
 
 async def _register_and_login(client: AsyncClient) -> tuple[str, dict]:
-    """Registers a fresh tenant and logs in as its admin. Returns
-    (bearer_token, registration_response_body).
+    """Registers a fresh tenant and mints a real session for its admin.
+    Returns (bearer_token, registration_response_body).
+
+    Used to call POST /identity/login for the second half of this — that
+    endpoint is now permanently disabled (ADR-002, local password login
+    was disabled once the platform federated-identity handoff was
+    verified working). Mints a real, working session the same way
+    test_identity_flow.py's own `_mint_session` does: calling
+    InternalJWTProvider.authenticate_with_credentials directly, the same
+    real production code the (now-disabled) login endpoint used to call
+    through AuthenticateUserService, just without that orchestration
+    layer's now-removed subdomain-resolution/audit-logging wrapper.
     """
     subdomain = _unique_subdomain()
     registration = await client.post(
@@ -39,16 +57,23 @@ async def _register_and_login(client: AsyncClient) -> tuple[str, dict]:
     assert registration.status_code == 201, registration.text
     reg_body = registration.json()
 
-    login = await client.post(
-        "/api/v1/identity/login",
-        json={
-            "subdomain": subdomain,
-            "email": f"admin@{subdomain}.com",
-            "password": "correct-horse-battery",
-        },
-    )
-    assert login.status_code == 200, login.text
-    return login.json()["access_token"], reg_body
+    async with async_session_factory() as session:
+        tenant_repo = SqlAlchemyTenantRepository(session)
+        tenant = await tenant_repo.get_by_subdomain(subdomain)
+        assert tenant is not None, f"no tenant with subdomain {subdomain!r}"
+        await set_tenant_context(session, tenant.id)
+        users = SqlAlchemyUserRepository(session)
+        roles = SqlAlchemyRoleRepository(session)
+        provider = InternalJWTProvider(users, roles)
+        claims = await provider.authenticate_with_credentials(
+            email=f"admin@{subdomain}.com",
+            password="correct-horse-battery",
+            tenant_id=str(tenant.id),
+        )
+        access_token = provider.issue_access_token(claims)
+        await session.commit()
+
+    return access_token, reg_body
 
 
 def _auth(token: str) -> dict:

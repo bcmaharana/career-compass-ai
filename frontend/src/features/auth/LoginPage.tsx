@@ -1,3 +1,4 @@
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PLATFORM_BASE_URL } from "@/lib/platform";
 import { Compass } from "lucide-react";
@@ -48,7 +49,9 @@ export function LoginPage() {
         </defs>
       </svg>
 
-      <div className="w-full max-w-sm rounded-lg bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] p-1.5">
+      <div className="w-full max-w-sm">
+        <Breadcrumb segments={[{ label: "Career Compass AI" }]} className="mb-2 justify-center" />
+        <div className="rounded-lg bg-[linear-gradient(90deg,#a855f7_12.5%,#3b82f6_37.5%,#22c55e_58.33%,#fdba74_75%,#fca5a5_91.67%)] p-1.5">
         <Card className="border-0">
           <CardHeader className="items-center text-center">
             <Compass
@@ -75,6 +78,7 @@ export function LoginPage() {
             </p>
           </CardContent>
         </Card>
+        </div>
       </div>
     </div>
   );

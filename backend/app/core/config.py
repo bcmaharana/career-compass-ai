@@ -182,6 +182,15 @@ class Settings(BaseSettings):
     # firebase_project_id/firebase_service_account_file already use for
     # phone login.
     platform_identity_public_key_pem: str = Field(default="")
+    # Base URL of the Platform Identity service itself (e.g.
+    # "https://scaledbrain.com" in prod, "http://host.docker.internal:8001"
+    # in dev) — used by PlatformHandoffService to make one extra call
+    # back (GET /api/v1/auth/me/profile, using the very platform token
+    # already being verified) to sync the full profile field set into
+    # this tenant's local User row. Empty means profile sync is simply
+    # skipped (best-effort, non-fatal) rather than erroring the whole
+    # handoff — see platform_profile_sync.py.
+    platform_identity_base_url: str = Field(default="")
 
     # --- Platform admin bootstrap ---
     # The one seed-time bootstrap step this genuinely needs: with no

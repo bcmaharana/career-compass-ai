@@ -20,6 +20,7 @@ import { Select } from "@/components/ui/select";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
@@ -91,6 +92,7 @@ export function ExperienceSection({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [formSnapshot, setFormSnapshot] = useState<FormState>(EMPTY_FORM);
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Experience | null>(null);
   const [clearSectionOpen, setClearSectionOpen] = useState(false);
@@ -115,13 +117,23 @@ export function ExperienceSection({
   function openAddDialog() {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setFormSnapshot(EMPTY_FORM);
     setDialogOpen(true);
   }
 
   function openEditDialog(experience: Experience) {
+    const initial = toFormState(experience);
     setEditingId(experience.id);
-    setForm(toFormState(experience));
+    setForm(initial);
+    setFormSnapshot(initial);
     setDialogOpen(true);
+  }
+
+  const isDialogDirty = dialogOpen && JSON.stringify(form) !== JSON.stringify(formSnapshot);
+  const { confirmDiscard, guardElement } = useUnsavedChangesGuard(isDialogDirty);
+
+  async function handleDialogClose() {
+    if (await confirmDiscard()) setDialogOpen(false);
   }
 
   // Pre-fills the Add form from a Master item the user picked — nothing
@@ -345,7 +357,9 @@ export function ExperienceSection({
 
       <Dialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => {
+          void handleDialogClose();
+        }}
         title={editingId ? "Edit experience" : "Add experience"}
       >
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -473,6 +487,8 @@ export function ExperienceSection({
         confirmLabel="Clear"
         confirmPendingLabel="Clearing..."
       />
+
+      {guardElement}
     </Card>
   );
 }

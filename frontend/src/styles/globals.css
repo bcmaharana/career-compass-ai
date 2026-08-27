@@ -95,7 +95,17 @@
      * via justify-center rather than the box shrinking to fit it.
      */
     --shell-icon-endbox-h: 5.875rem;
-    --shell-header-h: 4.5rem;
+    /*
+     * 4.5rem originally (title+quote row + purpose row). Bumped to fit a
+     * third row above those two — the Hub/Career-Compass-AI/page-name
+     * breadcrumb (Breadcrumb component, AppHeader.tsx) — desktop (md+)
+     * only, so --shell-mobile-header-h below is untouched; every fixed
+     * region's top-[...] inset and <main>'s own top offset derive from
+     * this one variable already (DesktopShell.tsx), so growing it here
+     * is the only change needed, per the "one variable, nothing can
+     * drift" contract this file documents throughout.
+     */
+    --shell-header-h: 5.75rem;
     --shell-footer-h: 4.5rem;
     /*
      * Mobile shell only (below `md` — AppHeader.tsx applies this via

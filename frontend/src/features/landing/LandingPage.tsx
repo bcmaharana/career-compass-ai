@@ -1,3 +1,4 @@
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -152,12 +153,15 @@ export function LandingPage() {
         </defs>
       </svg>
 
-      <header className="fixed inset-x-0 top-0 z-20 flex items-center justify-between bg-primary px-6 py-5 shadow-card sm:px-10">
-        <div className="flex items-center gap-2">
-          <Compass className="h-6 w-6" strokeWidth={2} color="url(#rainbow-accent-gradient)" />
-          <span className="font-display text-lg font-semibold text-primary-foreground">
-            Career Compass AI
-          </span>
+      <header className="fixed inset-x-0 top-0 z-20 flex items-center justify-between bg-primary px-6 py-4 shadow-card sm:px-10">
+        <div className="flex flex-col gap-0.5">
+          <Breadcrumb segments={[{ label: "Career Compass AI" }]} variant="dark" />
+          <div className="flex items-center gap-2">
+            <Compass className="h-6 w-6" strokeWidth={2} color="url(#rainbow-accent-gradient)" />
+            <span className="font-display text-lg font-semibold text-primary-foreground">
+              Career Compass AI
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <Tooltip content="Sign up">
@@ -181,7 +185,7 @@ export function LandingPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-6 pb-24 pt-[88px] text-center sm:px-10 sm:pt-[104px]">
+      <main className="mx-auto max-w-4xl px-6 pb-24 pt-[104px] text-center sm:px-10 sm:pt-[120px]">
         {/* Decorative hero graphic — an abstract knowledge-graph motif
             (nodes/edges), thematically tied to the actual CIKG
             (Career Intelligence Knowledge Graph) product rather than a

@@ -17,7 +17,6 @@ from app.adapters.identity_providers.internal_jwt import InternalJWTProvider
 from app.application.identity.audit_service import AuditService
 from app.application.identity.dto import LoginResult
 from app.core.exceptions import UnauthorizedError
-from app.domain.identity.personal_accounts import derive_personal_subdomain
 from app.domain.identity.repositories import (
     PersonalPhoneLoginRepository,
     TenantContextBinder,
@@ -54,54 +53,20 @@ class AuthenticateUserService:
     async def execute(
         self, *, subdomain: str | None, email: str, password: str
     ) -> LoginResult:
-        # A blank/omitted subdomain means "Personal account" — the
-        # frontend never asks a Personal user for one, at signup or at
-        # login, so this recomputes the same deterministic lookup key
-        # PersonalSignupService derived when the account was created.
-        resolved_subdomain = subdomain or derive_personal_subdomain(email)
-        tenant = await self._tenants.get_by_subdomain(resolved_subdomain)
-        if tenant is None:
-            # Deliberately the same error as a bad password would produce
-            # — do not reveal whether a subdomain exists.
-            raise UnauthorizedError("Invalid email or password.", code="INVALID_CREDENTIALS")
-
-        await self._tenant_context.bind(tenant.id)
-
-        try:
-            claims = await self._identity_provider.authenticate_with_credentials(
-                email=email, password=password, tenant_id=str(tenant.id)
-            )
-        except UnauthorizedError:
-            await self._audit.record(
-                tenant_id=tenant.id,
-                action="auth.login_failure",
-                resource_type="user",
-                metadata={"email": email},
-            )
-            raise
-
-        access_token = self._identity_provider.issue_access_token(claims)
-
-        await self._audit.record(
-            tenant_id=tenant.id,
-            user_id=UUID(claims.user_id),
-            action="auth.login_success",
-            resource_type="user",
-            metadata={"email": email},
-        )
-
-        return LoginResult(
-            access_token=access_token,
-            token_type="bearer",
-            user_id=UUID(claims.user_id),
-            tenant_id=tenant.id,
-            email=claims.email,
-            full_name=claims.full_name,
-            first_name=claims.first_name,
-            last_name=claims.last_name,
-            salutation=claims.salutation,
-            last_login_at=claims.last_login_at,
-            roles=claims.roles,
+        # Disabled per ADR-002's own cutover decision, now that the real
+        # bcmaharana@hotmail.com/@gmail.com accounts are confirmed
+        # working end-to-end through the platform handoff (Phase 2.5) —
+        # all real authentication happens in exactly one place (the
+        # platform) from here on. This is the one login path that was
+        # still a genuine credential check against this app's own
+        # database; every other entry point (the frontend's LoginPage,
+        # SignupPage) already redirects to the platform and never reaches
+        # this method at all. Raised before any tenant lookup/audit
+        # logging — same immediate-short-circuit shape as the
+        # phone-login-not-configured guard below.
+        raise UnauthorizedError(
+            "Local password login has been disabled. Please sign in via the platform.",
+            code="LOCAL_LOGIN_DISABLED",
         )
 
     async def execute_phone(

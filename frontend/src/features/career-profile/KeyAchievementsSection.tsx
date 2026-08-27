@@ -20,6 +20,7 @@ import { Select } from "@/components/ui/select";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
@@ -80,6 +81,7 @@ export function KeyAchievementsSection({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [formSnapshot, setFormSnapshot] = useState<FormState>(EMPTY_FORM);
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<KeyAchievement | null>(null);
   const [clearSectionOpen, setClearSectionOpen] = useState(false);
@@ -87,13 +89,23 @@ export function KeyAchievementsSection({
   function openAddDialog() {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setFormSnapshot(EMPTY_FORM);
     setDialogOpen(true);
   }
 
   function openEditDialog(achievement: KeyAchievement) {
+    const initial = toFormState(achievement);
     setEditingId(achievement.id);
-    setForm(toFormState(achievement));
+    setForm(initial);
+    setFormSnapshot(initial);
     setDialogOpen(true);
+  }
+
+  const isDialogDirty = dialogOpen && JSON.stringify(form) !== JSON.stringify(formSnapshot);
+  const { confirmDiscard, guardElement } = useUnsavedChangesGuard(isDialogDirty);
+
+  async function handleDialogClose() {
+    if (await confirmDiscard()) setDialogOpen(false);
   }
 
   function copyFromMaster(achievementId: string) {
@@ -267,7 +279,9 @@ export function KeyAchievementsSection({
 
       <Dialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => {
+          void handleDialogClose();
+        }}
         title={editingId ? "Edit achievement" : "Add achievement"}
       >
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -359,6 +373,8 @@ export function KeyAchievementsSection({
         confirmLabel="Clear"
         confirmPendingLabel="Clearing..."
       />
+
+      {guardElement}
     </Card>
   );
 }

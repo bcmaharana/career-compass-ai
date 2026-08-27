@@ -20,6 +20,7 @@ import { Select } from "@/components/ui/select";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
@@ -86,6 +87,7 @@ export function EducationSection({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [formSnapshot, setFormSnapshot] = useState<FormState>(EMPTY_FORM);
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Education | null>(null);
   const [clearSectionOpen, setClearSectionOpen] = useState(false);
@@ -93,13 +95,23 @@ export function EducationSection({
   function openAddDialog() {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setFormSnapshot(EMPTY_FORM);
     setDialogOpen(true);
   }
 
   function openEditDialog(education: Education) {
+    const initial = toFormState(education);
     setEditingId(education.id);
-    setForm(toFormState(education));
+    setForm(initial);
+    setFormSnapshot(initial);
     setDialogOpen(true);
+  }
+
+  const isDialogDirty = dialogOpen && JSON.stringify(form) !== JSON.stringify(formSnapshot);
+  const { confirmDiscard, guardElement } = useUnsavedChangesGuard(isDialogDirty);
+
+  async function handleDialogClose() {
+    if (await confirmDiscard()) setDialogOpen(false);
   }
 
   function copyFromMaster(educationId: string) {
@@ -278,7 +290,9 @@ export function EducationSection({
 
       <Dialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => {
+          void handleDialogClose();
+        }}
         title={editingId ? "Edit education" : "Add education"}
       >
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -386,6 +400,8 @@ export function EducationSection({
         confirmLabel="Clear"
         confirmPendingLabel="Clearing..."
       />
+
+      {guardElement}
     </Card>
   );
 }

@@ -10,12 +10,9 @@ import {
   LineChart,
   MessageCircleQuestion,
   Settings,
-  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
-  User,
   UserCircle,
-  UserX,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -121,14 +118,14 @@ export const NAV_ITEMS: NavItem[] = [
  * defaulting into Profile, so nothing here should render as if it were
  * already selected.
  */
+/**
+ * Profile, Platform Admin, and Account (delete) moved to the platform
+ * Hub's own Settings (2026-08-26) — the Hub is now the canonical
+ * identity, so editing profile fields, managing platform-admin access,
+ * and deleting the account all happen there instead. Only the two
+ * CCAI-specific settings remain here.
+ */
 export const SETTINGS_NAV_ITEMS: NavItem[] = [
-  {
-    to: "/settings/profile",
-    label: "Profile",
-    icon: User,
-    end: true,
-    purpose: "View and update your name and title.",
-  },
   {
     to: "/settings/ai-model",
     label: "AI Model",
@@ -143,34 +140,13 @@ export const SETTINGS_NAV_ITEMS: NavItem[] = [
     end: true,
     purpose: "Set the location and filters used when searching for job listings.",
   },
-  {
-    to: "/settings/platform-admin",
-    label: "Platform Admin",
-    icon: ShieldCheck,
-    end: true,
-    purpose: "Manage platform-wide settings and admin access.",
-  },
-  {
-    to: "/settings/account",
-    label: "Account",
-    icon: UserX,
-    end: true,
-    purpose: "Permanently delete your account and all your data.",
-  },
 ];
 
-/**
- * Settings sub-nav entries that require no special access — everyone
- * signed in sees these. "Platform Admin" is deliberately excluded here
- * (see AccountPanelContent.tsx, which appends it back only for a caller
- * with at least one platform.* permission) — it stays in
- * SETTINGS_NAV_ITEMS itself so matchNavItem still resolves the right
- * page title/purpose for someone who *does* have access and is actually
- * on that page.
- */
-export const STANDARD_SETTINGS_NAV_ITEMS: NavItem[] = SETTINGS_NAV_ITEMS.filter(
-  (item) => item.to !== "/settings/platform-admin",
-);
+/** No item in SETTINGS_NAV_ITEMS needs special-access gating any more
+ * (Platform Admin, the one that did, moved to the Hub) — kept as its
+ * own export since AccountPanelContent.tsx and other callers still
+ * reference it by this name. */
+export const STANDARD_SETTINGS_NAV_ITEMS: NavItem[] = SETTINGS_NAV_ITEMS;
 
 /** Header title/purpose only for the bare /settings landing page — kept
  * out of SETTINGS_NAV_ITEMS so it never renders as a clickable sub-nav
@@ -228,4 +204,55 @@ export function matchNavItem(pathname: string): NavItem {
     return matchAgainst(SETTINGS_NAV_ITEMS, pathname) ?? SETTINGS_LANDING_ITEM;
   }
   return matchAgainst(NAV_ITEMS, pathname) ?? NAV_ITEMS[0]!;
+}
+
+export interface BreadcrumbSegment {
+  label: string;
+  /** Omitted on the last segment — the current page is never a link. */
+  href?: string;
+}
+
+/**
+ * Layer-2/layer-3 breadcrumb trail for the current authenticated route —
+ * "Hub" itself is prepended separately by whatever renders this (a
+ * constant, not route-dependent). "Career Compass AI" always links to
+ * /dashboard, matching the app's own top-level home. A NAV_ITEMS child
+ * (e.g. Interview Prep under Learning Intelligence) gets its parent as a
+ * middle segment; a top-level item or the /welcome page gets a flat
+ * 2-segment trail; /settings/* gets "Settings" as the middle segment,
+ * mirroring matchNavItem's own branching rather than duplicating it.
+ */
+export function getBreadcrumbTrail(pathname: string): BreadcrumbSegment[] {
+  const trail: BreadcrumbSegment[] = [{ label: "Career Compass AI", href: "/dashboard" }];
+
+  if (pathname === "/welcome") {
+    trail.push({ label: WELCOME_ITEM.label });
+    return trail;
+  }
+
+  if (isSettingsRoute(pathname)) {
+    const item = matchAgainst(SETTINGS_NAV_ITEMS, pathname);
+    if (!item) {
+      trail.push({ label: SETTINGS_LANDING_ITEM.label });
+      return trail;
+    }
+    trail.push({ label: SETTINGS_LANDING_ITEM.label, href: "/settings" });
+    trail.push({ label: item.label });
+    return trail;
+  }
+
+  for (const parent of NAV_ITEMS) {
+    const child = parent.children?.find((c) =>
+      c.end ? pathname === c.to : pathname.startsWith(c.to),
+    );
+    if (child) {
+      trail.push({ label: parent.label, href: parent.to });
+      trail.push({ label: child.label });
+      return trail;
+    }
+  }
+
+  const item = matchAgainst(NAV_ITEMS, pathname) ?? NAV_ITEMS[0]!;
+  trail.push({ label: item.label });
+  return trail;
 }

@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
 import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Select } from "@/components/ui/select";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { getErrorMessage } from "@/lib/errors";
 import { resolveValidTargetRoleId, useTargetRoleScopeStore } from "@/stores/target-role-scope-store";
 import { RefreshCw } from "lucide-react";
@@ -84,6 +85,7 @@ export function LearningIntelligencePage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [formSnapshot, setFormSnapshot] = useState<FormState>(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<LearningItem | null>(null);
 
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
@@ -121,13 +123,23 @@ export function LearningIntelligencePage() {
   function openAddDialog() {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setFormSnapshot(EMPTY_FORM);
     setDialogOpen(true);
   }
 
   function openEditDialog(item: LearningItem) {
+    const initial = toFormState(item);
     setEditingId(item.id);
-    setForm(toFormState(item));
+    setForm(initial);
+    setFormSnapshot(initial);
     setDialogOpen(true);
+  }
+
+  const isDialogDirty = dialogOpen && JSON.stringify(form) !== JSON.stringify(formSnapshot);
+  const { confirmDiscard, guardElement } = useUnsavedChangesGuard(isDialogDirty);
+
+  async function handleDialogClose() {
+    if (await confirmDiscard()) setDialogOpen(false);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -306,7 +318,9 @@ export function LearningIntelligencePage() {
 
       <Dialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => {
+          void handleDialogClose();
+        }}
         title={editingId ? "Edit learning item" : "Add learning item"}
       >
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -395,6 +409,8 @@ export function LearningIntelligencePage() {
         description={deleteTarget ? `Remove "${deleteTarget.title}"? This can't be undone.` : ""}
         isPending={deleteItem.isPending}
       />
+
+      {guardElement}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { withHttps } from "@/lib/url";
@@ -65,6 +66,7 @@ export function RecruiterContactsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [formSnapshot, setFormSnapshot] = useState<FormState>(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<RecruiterContact | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
@@ -72,13 +74,23 @@ export function RecruiterContactsPage() {
   function openAddDialog() {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setFormSnapshot(EMPTY_FORM);
     setDialogOpen(true);
   }
 
   function openEditDialog(contact: RecruiterContact) {
+    const initial = toFormState(contact);
     setEditingId(contact.id);
-    setForm(toFormState(contact));
+    setForm(initial);
+    setFormSnapshot(initial);
     setDialogOpen(true);
+  }
+
+  const isDialogDirty = dialogOpen && JSON.stringify(form) !== JSON.stringify(formSnapshot);
+  const { confirmDiscard, guardElement } = useUnsavedChangesGuard(isDialogDirty);
+
+  async function handleDialogClose() {
+    if (await confirmDiscard()) setDialogOpen(false);
   }
 
   function toggleExpanded(id: string) {
@@ -262,7 +274,9 @@ export function RecruiterContactsPage() {
 
       <Dialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => {
+          void handleDialogClose();
+        }}
         title={editingId ? "Edit contact" : "Add contact"}
       >
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -340,6 +354,8 @@ export function RecruiterContactsPage() {
         description={deleteTarget ? `Remove "${deleteTarget.name}"? This can't be undone.` : ""}
         isPending={deleteContact.isPending}
       />
+
+      {guardElement}
     </div>
   );
 }

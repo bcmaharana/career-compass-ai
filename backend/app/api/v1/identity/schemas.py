@@ -98,6 +98,13 @@ class PlatformHandoffRequest(BaseModel):
     org_id: str | None = None
 
 
+class PlatformAccountDeletedRequest(BaseModel):
+    #: A short-lived, purpose-specific token (distinct from a normal
+    #: session/handoff token) proving the Hub genuinely just deleted
+    #: this account — see platform_deletion_verifier.py.
+    token: str = Field(min_length=1)
+
+
 class PhoneLoginRequest(BaseModel):
     #: None/omitted means "Personal account" — same convention as
     #: LoginRequest.subdomain (see AuthenticateUserService.execute_phone).

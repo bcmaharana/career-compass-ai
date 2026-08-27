@@ -18,6 +18,7 @@ from app.api.dependencies import (
     get_delete_account_service,
     get_list_audit_events_service,
     get_list_feature_flags_service,
+    get_platform_account_deletion_service,
     get_platform_handoff_service,
     get_register_tenant_service,
     get_request_organization_signup_service,
@@ -37,6 +38,7 @@ from app.api.v1.identity.schemas import (
     OrganizationSignupRequest,
     PersonalSignupRequest,
     PhoneLoginRequest,
+    PlatformAccountDeletedRequest,
     PlatformHandoffRequest,
     RegisterTenantRequest,
     RegisterTenantResponse,
@@ -54,6 +56,10 @@ from app.application.identity.dto import LoginResult
 from app.application.identity.get_current_user import GetCurrentUserService
 from app.application.identity.list_audit_events import ListAuditEventsService
 from app.application.identity.list_feature_flags import ListFeatureFlagsService
+from app.adapters.identity_providers.platform_deletion_verifier import (
+    verify_platform_deletion_assertion,
+)
+from app.application.identity.platform_account_deletion import PlatformAccountDeletionService
 from app.application.identity.platform_handoff import PlatformHandoffService
 from app.application.identity.register_tenant import RegisterTenantService
 from app.application.identity.request_organization_signup import (
@@ -175,6 +181,24 @@ async def platform_handoff(
         platform_token=request.platform_token, requested_scope=request.org_id
     )
     return _login_response(result)
+
+
+@router.post("/platform-account-deleted", status_code=status.HTTP_204_NO_CONTENT)
+async def platform_account_deleted(
+    request: PlatformAccountDeletedRequest,
+    service: PlatformAccountDeletionService = Depends(get_platform_account_deletion_service),
+) -> None:
+    """The Hub calls this, best-effort, right after deleting an account
+    that held a career_compass_ai entitlement — see platform's own
+    DeleteAccountService. Public (no Authorization header): the signed
+    deletion-assertion token itself is the proof, same shape as
+    /platform-handoff. Idempotent — see PlatformAccountDeletionService's
+    own docstring for how both the Personal and Enterprise cases
+    resolve."""
+    assertion = verify_platform_deletion_assertion(request.token)
+    await service.execute(
+        platform_account_id=assertion.account_id, email=assertion.email, org_id=assertion.org_id
+    )
 
 
 @router.post("/signup/verify", response_model=LoginResponse)

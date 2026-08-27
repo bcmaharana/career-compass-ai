@@ -3,7 +3,8 @@ import { useQuoteOfTheDay } from "@/api/queries/quotes";
 import { MobileAccountMenu } from "@/components/layout/MobileAccountMenu";
 import { MobileNavMenu } from "@/components/layout/MobileNavMenu";
 import { ProfileIconMenu } from "@/components/layout/ProfileIconMenu";
-import { matchNavItem } from "@/lib/nav-items";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { getBreadcrumbTrail, matchNavItem } from "@/lib/nav-items";
 import { Compass } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -77,6 +78,7 @@ interface AppHeaderProps {
 export function AppHeader({ onLogout }: AppHeaderProps) {
   const location = useLocation();
   const { label, purpose } = matchNavItem(location.pathname);
+  const breadcrumbTrail = getBreadcrumbTrail(location.pathname);
   const { data: quote } = useQuoteOfTheDay();
   const { data: profile } = useCareerProfile();
   const isMobile = Boolean(onLogout);
@@ -104,6 +106,7 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+        <Breadcrumb segments={breadcrumbTrail} variant="dark" className="hidden md:flex" />
         <div className="flex items-baseline justify-between gap-4">
           <h1 className="truncate bg-[linear-gradient(90deg,#c084fc_12.5%,#60a5fa_37.5%,#4ade80_58.33%,#fb923c_75%,#e08585_91.67%)] bg-clip-text font-display text-lg font-semibold leading-tight text-transparent md:text-2xl">
             {label}

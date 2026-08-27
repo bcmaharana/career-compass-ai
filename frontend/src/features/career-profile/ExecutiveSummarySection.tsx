@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, Eraser } from "lucide-react";
@@ -44,7 +45,16 @@ export function ExecutiveSummarySection({
 
   const [isEditing, setIsEditing] = useState(false);
   const [summary, setSummary] = useState("");
+  const [originalSummary, setOriginalSummary] = useState("");
   const [clearOpen, setClearOpen] = useState(false);
+
+  const { confirmDiscard, guardElement } = useUnsavedChangesGuard(
+    isEditing && summary !== originalSummary,
+  );
+
+  async function handleCancel() {
+    if (await confirmDiscard()) setIsEditing(false);
+  }
 
   // This component doesn't remount when the Master/Target-Role-Profile
   // switcher (TargetRolesWidget.tsx) changes `scope` — same instance,
@@ -59,7 +69,9 @@ export function ExecutiveSummarySection({
   }, [scope]);
 
   function openEdit() {
-    setSummary(profile?.summary ?? "");
+    const initial = profile?.summary ?? "";
+    setSummary(initial);
+    setOriginalSummary(initial);
     setIsEditing(true);
     // The Edit button lives in the header, reachable even while the
     // section is collapsed — without this, starting an edit while
@@ -155,7 +167,12 @@ export function ExecutiveSummarySection({
                 <Button onClick={handleSave} disabled={updateProfile.isPending}>
                   {updateProfile.isPending ? "Saving..." : "Save"}
                 </Button>
-                <Button variant="ghost" onClick={() => setIsEditing(false)}>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    void handleCancel();
+                  }}
+                >
                   Cancel
                 </Button>
               </div>
@@ -185,6 +202,8 @@ export function ExecutiveSummarySection({
         confirmLabel="Clear"
         confirmPendingLabel="Clearing..."
       />
+
+      {guardElement}
     </Card>
   );
 }

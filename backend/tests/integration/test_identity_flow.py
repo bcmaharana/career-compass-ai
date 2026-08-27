@@ -20,14 +20,19 @@ from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 from sqlalchemy import text
 
 from app.adapters.db.base import async_session_factory, set_tenant_context
-from app.adapters.db.repositories import SqlAlchemyRoleRepository, SqlAlchemyUserRepository
+from app.adapters.db.repositories import (
+    SqlAlchemyRoleRepository,
+    SqlAlchemyTenantRepository,
+    SqlAlchemyUserRepository,
+)
+from app.adapters.identity_providers.internal_jwt import InternalJWTProvider
 from app.api.dependencies import get_email_provider, get_firebase_phone_verifier
 from app.core.email_provider_interface import EmailMessage
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.domain.identity.entities import User, UserRoleAssignment
 from app.domain.identity.personal_accounts import derive_personal_subdomain
 from app.main import app
@@ -57,13 +62,73 @@ async def _register_tenant(client: AsyncClient, subdomain: str) -> dict:
     return response.json()
 
 
-async def _login(client: AsyncClient, subdomain: str, email: str, password: str) -> dict:
-    response = await client.post(
-        "/api/v1/identity/login",
-        json={"subdomain": subdomain, "email": email, "password": password},
-    )
-    assert response.status_code == 200, response.text
-    return response.json()
+async def _attempt_login_via_api(
+    client: AsyncClient, *, subdomain: str | None, email: str, password: str
+) -> Response:
+    """Calls the real, now-permanently-disabled POST /identity/login —
+    used only by TestLogin below, which tests that disabled behavior
+    itself. Every other test in this file that just needs a *working
+    session* for some unrelated check uses _mint_session instead."""
+    body: dict = {"email": email, "password": password}
+    if subdomain is not None:
+        body["subdomain"] = subdomain
+    response = await client.post("/api/v1/identity/login", json=body)
+    return response
+
+
+async def _mint_session(subdomain: str, email: str, password: str) -> dict:
+    """Mints a real, working session for an Enterprise tenant's admin
+    (or any local-password user) WITHOUT going through the now-disabled
+    POST /identity/login — this is the direct replacement for what
+    every "just get me a token so I can test something unrelated" call
+    site in this file used to do via that endpoint.
+
+    Deliberately calls InternalJWTProvider.authenticate_with_credentials
+    directly — the real, unmodified password-verification/claims
+    -assembly code AuthenticateUserService.execute() used to delegate
+    to before it was disabled — rather than reimplementing that logic
+    here. This intentionally bypasses two things that only lived in the
+    now-disabled orchestration layer, not the credential check itself:
+    subdomain-to-tenant resolution (this helper takes the tenant's own
+    subdomain directly, since the calling test already knows it) and
+    audit logging (no `auth.login_success` event is recorded — there is
+    no more HTTP-reachable way to produce one via local login at all,
+    so no test should expect to see it; see
+    TestRoleBasedAccessControl.test_org_admin_can_read_audit_events).
+
+    Returns the same shape the old, disabled endpoint returned
+    (access_token/tenant_id/email/roles/...), so every existing call
+    site's `login["access_token"]` etc. still works unchanged.
+    """
+    async with async_session_factory() as session:
+        tenant_repo = SqlAlchemyTenantRepository(session)
+        tenant = await tenant_repo.get_by_subdomain(subdomain)
+        assert tenant is not None, f"no tenant with subdomain {subdomain!r}"
+
+        await set_tenant_context(session, tenant.id)
+        users = SqlAlchemyUserRepository(session)
+        roles = SqlAlchemyRoleRepository(session)
+        provider = InternalJWTProvider(users, roles)
+
+        claims = await provider.authenticate_with_credentials(
+            email=email, password=password, tenant_id=str(tenant.id)
+        )
+        access_token = provider.issue_access_token(claims)
+        await session.commit()
+
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user_id": claims.user_id,
+            "tenant_id": claims.tenant_id,
+            "email": claims.email,
+            "full_name": claims.full_name,
+            "first_name": claims.first_name,
+            "last_name": claims.last_name,
+            "salutation": claims.salutation,
+            "last_login_at": claims.last_login_at,
+            "roles": list(claims.roles),
+        }
 
 
 class TestTenantRegistration:
@@ -102,92 +167,63 @@ class TestTenantRegistration:
 
 
 class TestLogin:
-    async def test_login_with_correct_credentials_returns_token(self, client: AsyncClient) -> None:
-        subdomain = _unique_subdomain()
-        await _register_tenant(client, subdomain)
+    """POST /identity/login is permanently disabled per ADR-002's cutover
+    decision — all real authentication happens through the platform's
+    federated handoff now (see AuthenticateUserService.execute's own
+    docstring). These tests replace the old ones that proved a
+    successful password login worked; that behavior no longer exists
+    anywhere in this codebase, so there's nothing left to test but the
+    rejection itself, regardless of what's sent.
+    """
 
-        result = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
-
-        assert result["access_token"]
-        assert result["token_type"] == "bearer"
-        assert result["email"] == f"admin@{subdomain}.com"
-        assert result["roles"] == ["organization_admin"]
-
-    async def test_first_login_has_no_last_login_at(self, client: AsyncClient) -> None:
-        subdomain = _unique_subdomain()
-        await _register_tenant(client, subdomain)
-
-        result = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
-
-        assert result["last_login_at"] is None
-
-    async def test_second_login_returns_the_previous_logins_time(self, client: AsyncClient) -> None:
-        subdomain = _unique_subdomain()
-        await _register_tenant(client, subdomain)
-
-        first = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
-        assert first["last_login_at"] is None
-
-        second = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
-
-        # Reflects *before* this second login, not "now" — a stable
-        # value to display as "Last logged in @ ...", not one that
-        # already moved to the moment you're reading it.
-        assert second["last_login_at"] is not None
-
-        third = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
-        assert third["last_login_at"] != second["last_login_at"]
-
-    async def test_login_reflects_updated_salutation(self, client: AsyncClient) -> None:
-        subdomain = _unique_subdomain()
-        await _register_tenant(client, subdomain)
-
-        first = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
-        assert first["salutation"] == "Ms."
-
-        headers = {"Authorization": f"Bearer {first['access_token']}"}
-        await client.patch(
-            "/api/v1/identity/me",
-            headers=headers,
-            json={"salutation": "Dr.", "first_name": "Jordan", "last_name": "Rivera"},
-        )
-
-        second = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
-        assert second["salutation"] == "Dr."
-
-    async def test_login_with_wrong_password_returns_401(self, client: AsyncClient) -> None:
-        subdomain = _unique_subdomain()
-        await _register_tenant(client, subdomain)
-
-        response = await client.post(
-            "/api/v1/identity/login",
-            json={
-                "subdomain": subdomain,
-                "email": f"admin@{subdomain}.com",
-                "password": "wrong-password",
-            },
-        )
-
-        assert response.status_code == 401
-        assert response.json()["error"]["code"] == "INVALID_CREDENTIALS"
-
-    async def test_login_with_unknown_subdomain_returns_401_not_404(
+    async def test_login_is_disabled_even_with_correct_credentials(
         self, client: AsyncClient
     ) -> None:
-        # Deliberately the same error/status as a bad password — see
-        # AuthenticateUserService's comment on not revealing whether a
-        # subdomain exists.
-        response = await client.post(
-            "/api/v1/identity/login",
-            json={
-                "subdomain": "definitely-does-not-exist",
-                "email": "nobody@example.com",
-                "password": "irrelevant",
-            },
+        subdomain = _unique_subdomain()
+        await _register_tenant(client, subdomain)
+
+        response = await _attempt_login_via_api(
+            client,
+            subdomain=subdomain,
+            email=f"admin@{subdomain}.com",
+            password="correct-horse-battery",
         )
 
         assert response.status_code == 401
-        assert response.json()["error"]["code"] == "INVALID_CREDENTIALS"
+        assert response.json()["error"]["code"] == "LOCAL_LOGIN_DISABLED"
+
+    async def test_login_is_disabled_with_wrong_password(self, client: AsyncClient) -> None:
+        subdomain = _unique_subdomain()
+        await _register_tenant(client, subdomain)
+
+        response = await _attempt_login_via_api(
+            client,
+            subdomain=subdomain,
+            email=f"admin@{subdomain}.com",
+            password="wrong-password",
+        )
+
+        assert response.status_code == 401
+        assert response.json()["error"]["code"] == "LOCAL_LOGIN_DISABLED"
+
+    async def test_login_is_disabled_with_unknown_subdomain(self, client: AsyncClient) -> None:
+        response = await _attempt_login_via_api(
+            client,
+            subdomain="definitely-does-not-exist",
+            email="nobody@example.com",
+            password="irrelevant",
+        )
+
+        assert response.status_code == 401
+        assert response.json()["error"]["code"] == "LOCAL_LOGIN_DISABLED"
+
+    async def test_login_is_disabled_with_omitted_subdomain(self, client: AsyncClient) -> None:
+        response = await _attempt_login_via_api(
+            client, subdomain=None, email="nobody@example.com", password="irrelevant"
+        )
+
+        assert response.status_code == 401
+        assert response.json()["error"]["code"] == "LOCAL_LOGIN_DISABLED"
 
 
 class FakeEmailProvider:
@@ -331,22 +367,24 @@ class TestPasswordReset:
         # The one check that would catch a repository update() gap that
         # unit tests (in-memory fakes) can't reproduce: confirm against
         # the *real* database that the old password now fails and the
-        # new one works.
-        old_password_attempt = await client.post(
-            "/api/v1/identity/login",
-            json={
-                "subdomain": subdomain,
-                "email": admin_email,
-                "password": "correct-horse-battery",
-            },
-        )
-        assert old_password_attempt.status_code == 401
+        # new one works. Used to prove this via two /identity/login
+        # attempts — that endpoint is now permanently disabled (ADR-002),
+        # so this reads the real stored hash directly instead, which
+        # proves the exact same thing: the row was genuinely updated to
+        # a hash of the new password, not the old one.
+        async with async_session_factory() as session:
+            tenant_repo = SqlAlchemyTenantRepository(session)
+            tenant = await tenant_repo.get_by_subdomain(subdomain)
+            assert tenant is not None
+            await set_tenant_context(session, tenant.id)
+            result = await session.execute(
+                text("SELECT hashed_password FROM users WHERE email = :email"),
+                {"email": admin_email},
+            )
+            stored_hash = result.scalar_one()
 
-        new_password_attempt = await client.post(
-            "/api/v1/identity/login",
-            json={"subdomain": subdomain, "email": admin_email, "password": "brand-new-password-1"},
-        )
-        assert new_password_attempt.status_code == 200
+        assert verify_password("brand-new-password-1", stored_hash)
+        assert not verify_password("correct-horse-battery", stored_hash)
 
     async def test_token_cannot_be_reused(
         self, client: AsyncClient, email_provider: FakeEmailProvider
@@ -463,12 +501,23 @@ class TestPersonalSignup:
         assert request_response.status_code == 202
 
         # The real proof this is verify-then-create, not create-then-flag:
-        # logging in before the link is clicked must fail — there is no
-        # account yet.
-        login_attempt = await client.post(
-            "/api/v1/identity/login", json={"email": email, "password": "a-real-password-1"}
-        )
-        assert login_attempt.status_code == 401
+        # no user row exists yet — there is no account until the link is
+        # clicked. Used to prove this via a login attempt; login is now
+        # permanently disabled (ADR-002) so it would 401 either way,
+        # proving nothing — check the real table directly instead. `users`
+        # is RLS-protected, so a tenant context must be bound first — a
+        # throwaway UUID is fine here since the check is inherently
+        # cross-tenant (this email has no tenant at all yet); a session
+        # with no context bound at all can inherit an empty string from a
+        # pooled connection a prior test already bound, which fails the
+        # policy's ::uuid cast rather than returning NULL as a fresh
+        # session would.
+        async with async_session_factory() as session:
+            await set_tenant_context(session, uuid.uuid4())
+            result = await session.execute(
+                text("SELECT count(*) FROM users WHERE email = :email"), {"email": email}
+            )
+            assert result.scalar_one() == 0
 
     async def test_signup_without_agreeing_to_terms_is_rejected(
         self, client: AsyncClient, email_provider: FakeEmailProvider
@@ -495,7 +544,7 @@ class TestPersonalSignup:
             )
             assert result.scalar_one() == 0
 
-    async def test_signup_then_login_with_no_subdomain(
+    async def test_signup_then_verify_yields_a_working_session(
         self, client: AsyncClient, email_provider: FakeEmailProvider
     ) -> None:
         email = _unique_email()
@@ -504,22 +553,19 @@ class TestPersonalSignup:
         )
 
         # Verification itself auto-logs in (registration IS a real
-        # LoginResponse) — also confirm a separate, later login with no
-        # subdomain works too, proving the deterministic-subdomain
-        # derivation is stable across requests.
-        response = await client.post(
-            "/api/v1/identity/login",
-            json={"email": email, "password": "a-real-password-1"},
-        )
-
-        assert response.status_code == 200, response.text
-        body = response.json()
-        assert body["access_token"]
-        assert body["email"] == email
-        assert body["tenant_id"] == registration["tenant_id"]
+        # LoginResponse) — used to also confirm a separate, later login
+        # with no subdomain worked too, proving the deterministic
+        # -subdomain derivation was stable across requests. Login is now
+        # permanently disabled (ADR-002); there is no more HTTP-reachable
+        # "log in again later" path for a Personal account to re-prove
+        # that stability against at all, so this just confirms the one
+        # real session verification itself produced still works.
+        assert registration["access_token"]
+        assert registration["email"] == email
 
         me = await client.get(
-            "/api/v1/identity/me", headers={"Authorization": f"Bearer {body['access_token']}"}
+            "/api/v1/identity/me",
+            headers={"Authorization": f"Bearer {registration['access_token']}"},
         )
         assert me.status_code == 200
         assert me.json()["user_id"] == registration["user_id"]
@@ -590,26 +636,12 @@ class TestPersonalSignup:
         assert verify_response.status_code == 401
         assert verify_response.json()["error"]["code"] == "INVALID_SIGNUP_TOKEN"
 
-    async def test_enterprise_admin_cannot_login_by_omitting_subdomain(
-        self, client: AsyncClient
-    ) -> None:
-        subdomain = _unique_subdomain()
-        registration = await _register_tenant(client, subdomain)
-
-        response = await client.post(
-            "/api/v1/identity/login",
-            json={
-                "email": f"admin@{subdomain}.com",
-                "password": "correct-horse-battery",
-            },
-        )
-
-        assert response.status_code == 401
-        assert response.json()["error"]["code"] == "INVALID_CREDENTIALS"
-        # Confirm it's a real rejection, not a coincidental cross-tenant
-        # match — the enterprise account still logs in fine with its
-        # real subdomain.
-        assert registration["tenant_id"]
+    # test_enterprise_admin_cannot_login_by_omitting_subdomain removed:
+    # login is now unconditionally disabled (ADR-002) regardless of
+    # subdomain, correct credentials, or anything else — this specific
+    # scenario is now just a special case of
+    # TestLogin.test_login_is_disabled_even_with_correct_credentials,
+    # not a distinct behavior worth its own test anymore.
 
 
 class TestOrganizationSignup:
@@ -633,17 +665,19 @@ class TestOrganizationSignup:
         )
         assert request_response.status_code == 202
 
-        login_attempt = await client.post(
-            "/api/v1/identity/login",
-            json={
-                "subdomain": subdomain,
-                "email": f"admin@{subdomain}.com",
-                "password": "a-real-password-1",
-            },
-        )
-        assert login_attempt.status_code == 401
+        # Same reasoning as TestPersonalSignup's sibling test: login is
+        # permanently disabled now, so a login attempt would 401
+        # regardless of whether an account exists — check the real
+        # table directly instead. tenants has no RLS (see _mint_session's
+        # own docstring), so no tenant context needs binding here.
+        async with async_session_factory() as session:
+            result = await session.execute(
+                text("SELECT count(*) FROM tenants WHERE subdomain = :subdomain"),
+                {"subdomain": subdomain},
+            )
+            assert result.scalar_one() == 0
 
-    async def test_signup_then_login_with_chosen_subdomain(
+    async def test_signup_then_verify_with_chosen_subdomain(
         self, client: AsyncClient, email_provider: FakeEmailProvider
     ) -> None:
         subdomain = _unique_subdomain()
@@ -668,12 +702,15 @@ class TestOrganizationSignup:
         verify_response = await client.post("/api/v1/identity/signup/verify", json={"token": token})
         assert verify_response.status_code == 200, verify_response.text
         assert verify_response.json()["email"] == admin_email
-
-        response = await client.post(
-            "/api/v1/identity/login",
-            json={"subdomain": subdomain, "email": admin_email, "password": "a-real-password-1"},
+        # verify_response already IS a real working session (login is
+        # permanently disabled now, so there's no separate login left to
+        # additionally prove works) — confirmed via a real /me call.
+        me = await client.get(
+            "/api/v1/identity/me",
+            headers={"Authorization": f"Bearer {verify_response.json()['access_token']}"},
         )
-        assert response.status_code == 200
+        assert me.status_code == 200
+        assert me.json()["email"] == admin_email
 
     async def test_taken_subdomain_signup_is_rejected(
         self, client: AsyncClient, email_provider: FakeEmailProvider
@@ -756,7 +793,7 @@ class TestPersonalPhoneLogin:
     ) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
 
         await client.patch(
@@ -1050,7 +1087,7 @@ class TestDeleteAccount:
         public_response = await client.get(f"/api/v1/public/showcase-pages/{share_key}")
         assert public_response.status_code == 404
 
-    async def test_delete_removes_the_tenant_and_login_then_fails(
+    async def test_delete_removes_the_tenant(
         self, client: AsyncClient, email_provider: FakeEmailProvider
     ) -> None:
         email = _unique_email()
@@ -1072,13 +1109,11 @@ class TestDeleteAccount:
         delete_response = await client.delete("/api/v1/identity/me", headers=headers)
         assert delete_response.status_code == 204
 
-        login_attempt = await client.post(
-            "/api/v1/identity/login", json={"email": email, "password": "a-real-password-1"}
-        )
-        assert login_attempt.status_code == 401
-
-        # Confirm it's genuinely gone from Postgres, not just
-        # unreachable via the login path.
+        # Used to also confirm a login attempt now fails — meaningless
+        # proof now that login is unconditionally disabled regardless of
+        # whether the account exists (ADR-002). Confirming the row is
+        # genuinely gone from Postgres is the real, still-meaningful
+        # check, and stands on its own.
         async with async_session_factory() as session:
             result = await session.execute(
                 text("SELECT count(*) FROM tenants WHERE id = :tenant_id"),
@@ -1103,12 +1138,17 @@ class TestDeleteAccount:
             headers={"Authorization": f"Bearer {registration_a['access_token']}"},
         )
 
-        # Tenant B's account is completely unaffected.
-        login_b = await client.post(
-            "/api/v1/identity/login", json={"email": email_b, "password": "a-real-password-1"}
+        # Tenant B's account is completely unaffected — proven by its own
+        # still-live session from signup/verify (login is disabled now,
+        # so a fresh login can no longer be the proof here; the session
+        # verification itself already produced still working is just as
+        # strong a proof of "unaffected").
+        me_b = await client.get(
+            "/api/v1/identity/me",
+            headers={"Authorization": f"Bearer {registration_b['access_token']}"},
         )
-        assert login_b.status_code == 200
-        assert login_b.json()["tenant_id"] == registration_b["tenant_id"]
+        assert me_b.status_code == 200
+        assert me_b.json()["tenant_id"] == registration_b["tenant_id"]
 
 
 class TestCurrentUser:
@@ -1129,7 +1169,7 @@ class TestCurrentUser:
     async def test_me_returns_the_authenticated_user(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         registration = await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
 
         response = await client.get(
             "/api/v1/identity/me", headers={"Authorization": f"Bearer {login['access_token']}"}
@@ -1146,7 +1186,7 @@ class TestUpdateCurrentUser:
     async def test_updates_name_and_salutation(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
 
         response = await client.patch(
@@ -1170,7 +1210,7 @@ class TestUpdateCurrentUser:
     async def test_blank_salutation_clears_it(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
 
         response = await client.patch(
@@ -1187,7 +1227,7 @@ class TestUpdateCurrentUser:
     async def test_rejects_blank_first_name(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
 
         response = await client.patch(
@@ -1211,7 +1251,7 @@ class TestUpdateCurrentUser:
     async def test_updates_and_persists_phone_number(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
 
         response = await client.patch(
@@ -1236,7 +1276,7 @@ class TestUpdateCurrentUser:
         # it yet must not be forced to start sending it.
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
 
         response = await client.patch(
@@ -1251,7 +1291,7 @@ class TestUpdateCurrentUser:
     async def test_blank_phone_number_clears_it(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
         await client.patch(
             "/api/v1/identity/me",
@@ -1280,7 +1320,7 @@ class TestUpdateCurrentUser:
     async def test_updates_and_persists_country_language(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
 
         response = await client.patch(
@@ -1308,7 +1348,7 @@ class TestUpdateCurrentUser:
     async def test_omitting_country_language_is_allowed(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
 
         response = await client.patch(
@@ -1325,7 +1365,7 @@ class TestUpdateCurrentUser:
     async def test_blank_country_language_clears_them(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
         await client.patch(
             "/api/v1/identity/me",
@@ -1358,7 +1398,7 @@ class TestUpdateCurrentUser:
     async def test_updates_and_persists_structured_address(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
 
         response = await client.patch(
@@ -1395,7 +1435,7 @@ class TestUpdateCurrentUser:
     async def test_omitting_address_fields_is_allowed(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
 
         response = await client.patch(
@@ -1415,7 +1455,7 @@ class TestUpdateCurrentUser:
     async def test_blank_address_fields_clear_them(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
         await client.patch(
             "/api/v1/identity/me",
@@ -1451,7 +1491,7 @@ class TestUpdateCurrentUser:
     async def test_rejects_invalid_country_code(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
 
         response = await client.patch(
@@ -1530,7 +1570,7 @@ class TestVisaStatusAndProfessionalLinks:
     async def test_updates_and_persists_all_three_fields(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
 
         response = await client.patch(
@@ -1563,7 +1603,7 @@ class TestVisaStatusAndProfessionalLinks:
     async def test_omitting_the_three_fields_is_allowed(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
 
         response = await client.patch(
@@ -1581,7 +1621,7 @@ class TestVisaStatusAndProfessionalLinks:
     async def test_blank_values_are_stored_as_none(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
         headers = {"Authorization": f"Bearer {login['access_token']}"}
 
         await client.patch(
@@ -1621,7 +1661,7 @@ class TestRoleBasedAccessControl:
     async def test_org_admin_can_read_audit_events(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         await _register_tenant(client, subdomain)
-        login = await _login(client, subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
+        login = await _mint_session(subdomain, f"admin@{subdomain}.com", "correct-horse-battery")
 
         response = await client.get(
             "/api/v1/identity/audit-events",
@@ -1632,14 +1672,19 @@ class TestRoleBasedAccessControl:
         actions = {event["action"] for event in response.json()}
         assert "tenant.created" in actions
         assert "user.created" in actions
-        assert "auth.login_success" in actions
+        # No "auth.login_success" assertion anymore: that event was only
+        # ever recorded by the now-disabled AuthenticateUserService.execute
+        # (ADR-002) — _mint_session deliberately bypasses that disabled
+        # orchestration layer to get a session directly, so it never
+        # produces one, and there is no more HTTP-reachable local-login
+        # path that could produce one either.
 
     async def test_employee_role_is_denied_audit_events(self, client: AsyncClient) -> None:
         subdomain = _unique_subdomain()
         registration = await _register_tenant(client, subdomain)
         password = await _create_employee_user(registration["tenant_id"], subdomain)
 
-        login = await _login(client, subdomain, f"employee@{subdomain}.com", password)
+        login = await _mint_session(subdomain, f"employee@{subdomain}.com", password)
 
         response = await client.get(
             "/api/v1/identity/audit-events",
@@ -1654,7 +1699,7 @@ class TestRoleBasedAccessControl:
         registration = await _register_tenant(client, subdomain)
         password = await _create_employee_user(registration["tenant_id"], subdomain)
 
-        login = await _login(client, subdomain, f"employee@{subdomain}.com", password)
+        login = await _mint_session(subdomain, f"employee@{subdomain}.com", password)
 
         response = await client.get(
             "/api/v1/identity/me", headers={"Authorization": f"Bearer {login['access_token']}"}
@@ -1668,14 +1713,14 @@ class TestCrossTenantIsolation:
     async def test_audit_events_never_leak_across_tenants(self, client: AsyncClient) -> None:
         subdomain_a = _unique_subdomain()
         subdomain_b = _unique_subdomain()
-        await _register_tenant(client, subdomain_a)
-        await _register_tenant(client, subdomain_b)
+        registration_a = await _register_tenant(client, subdomain_a)
+        registration_b = await _register_tenant(client, subdomain_b)
 
-        login_a = await _login(
-            client, subdomain_a, f"admin@{subdomain_a}.com", "correct-horse-battery"
+        login_a = await _mint_session(
+            subdomain_a, f"admin@{subdomain_a}.com", "correct-horse-battery"
         )
-        login_b = await _login(
-            client, subdomain_b, f"admin@{subdomain_b}.com", "correct-horse-battery"
+        login_b = await _mint_session(
+            subdomain_b, f"admin@{subdomain_b}.com", "correct-horse-battery"
         )
 
         events_a = await client.get(
@@ -1687,13 +1732,22 @@ class TestCrossTenantIsolation:
             headers={"Authorization": f"Bearer {login_b['access_token']}"},
         )
 
-        emails_seen_by_a = {e["metadata"].get("email") for e in events_a.json()}
-        emails_seen_by_b = {e["metadata"].get("email") for e in events_b.json()}
+        # Used to check metadata.email — that field only ever came from
+        # the now-permanently-disabled auth.login_success/failure events
+        # (RegisterTenantService's own tenant.created/user.created events
+        # never carried email in their metadata at all, confirmed by
+        # reading that service directly; a real, previously-invisible gap
+        # this rewrite surfaced by actually running the suite, not
+        # assumed). resource_id (the real admin_user_id) is tenant
+        # -specific and always present regardless, and proves the same
+        # cross-tenant-isolation claim just as well.
+        resource_ids_seen_by_a = {e["resource_id"] for e in events_a.json()}
+        resource_ids_seen_by_b = {e["resource_id"] for e in events_b.json()}
 
-        assert f"admin@{subdomain_a}.com" in emails_seen_by_a
-        assert f"admin@{subdomain_b}.com" not in emails_seen_by_a
-        assert f"admin@{subdomain_b}.com" in emails_seen_by_b
-        assert f"admin@{subdomain_a}.com" not in emails_seen_by_b
+        assert registration_a["admin_user_id"] in resource_ids_seen_by_a
+        assert registration_b["admin_user_id"] not in resource_ids_seen_by_a
+        assert registration_b["admin_user_id"] in resource_ids_seen_by_b
+        assert registration_a["admin_user_id"] not in resource_ids_seen_by_b
 
     async def test_current_user_tenant_id_matches_own_tenant_only(
         self, client: AsyncClient
@@ -1703,8 +1757,8 @@ class TestCrossTenantIsolation:
         registration_a = await _register_tenant(client, subdomain_a)
         registration_b = await _register_tenant(client, subdomain_b)
 
-        login_a = await _login(
-            client, subdomain_a, f"admin@{subdomain_a}.com", "correct-horse-battery"
+        login_a = await _mint_session(
+            subdomain_a, f"admin@{subdomain_a}.com", "correct-horse-battery"
         )
 
         response = await client.get(

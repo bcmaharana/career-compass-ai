@@ -150,6 +150,7 @@ from app.application.identity.get_current_user import GetCurrentUserService
 from app.application.identity.handle_service import HandleService
 from app.application.identity.list_audit_events import ListAuditEventsService
 from app.application.identity.list_feature_flags import ListFeatureFlagsService
+from app.application.identity.platform_account_deletion import PlatformAccountDeletionService
 from app.application.identity.platform_handoff import PlatformHandoffService
 from app.application.identity.register_tenant import RegisterTenantService
 from app.application.identity.request_organization_signup import (
@@ -542,6 +543,20 @@ def get_platform_handoff_service(
         identity_provider=identity_provider,
         register_tenant=register_tenant,
         audit=audit,
+    )
+
+
+def get_platform_account_deletion_service(
+    tenants: SqlAlchemyTenantRepository = Depends(get_tenant_repository),
+    users: SqlAlchemyUserRepository = Depends(get_user_repository),
+    tenant_context: SqlAlchemyTenantContextBinder = Depends(get_tenant_context_binder),
+    session: AsyncSession = Depends(get_db_session),
+) -> PlatformAccountDeletionService:
+    return PlatformAccountDeletionService(
+        tenants=tenants,
+        users=users,
+        account_deletion=SqlAlchemyAccountDeletionRepository(session),
+        tenant_context=tenant_context,
     )
 
 

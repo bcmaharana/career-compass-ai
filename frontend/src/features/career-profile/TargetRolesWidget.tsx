@@ -12,6 +12,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip } from "@/components/ui/tooltip";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { Pencil, Plus, X } from "lucide-react";
@@ -88,7 +89,12 @@ export function TargetRolesWidget({ onNavigate }: TargetRolesWidgetProps) {
     );
   }
 
-  function closeForm() {
+  const isAddFormDirty = formOpen && (tag.trim() !== "" || roleName.trim() !== "");
+  const { confirmDiscard: confirmDiscardAdd, guardElement: addGuardElement } =
+    useUnsavedChangesGuard(isAddFormDirty);
+
+  async function closeForm() {
+    if (!(await confirmDiscardAdd())) return;
     setFormOpen(false);
     setTag("");
     setRoleName("");
@@ -98,6 +104,15 @@ export function TargetRolesWidget({ onNavigate }: TargetRolesWidgetProps) {
     setEditing(role);
     setEditTag(role.tag);
     setEditRoleName(role.role_name);
+  }
+
+  const isEditDirty =
+    editing !== null && (editTag !== editing.tag || editRoleName !== editing.role_name);
+  const { confirmDiscard: confirmDiscardEdit, guardElement: editGuardElement } =
+    useUnsavedChangesGuard(isEditDirty);
+
+  async function closeEdit() {
+    if (await confirmDiscardEdit()) setEditing(null);
   }
 
   function handleEditSave(event: FormEvent) {
@@ -254,7 +269,13 @@ export function TargetRolesWidget({ onNavigate }: TargetRolesWidgetProps) {
         </p>
       )}
 
-      <Dialog open={editing !== null} onClose={() => setEditing(null)} title="Edit target role">
+      <Dialog
+        open={editing !== null}
+        onClose={() => {
+          void closeEdit();
+        }}
+        title="Edit target role"
+      >
         <form className="flex flex-col gap-4" onSubmit={handleEditSave}>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="target-role-tag">Tag (up to 3 characters)</Label>
@@ -310,6 +331,9 @@ export function TargetRolesWidget({ onNavigate }: TargetRolesWidgetProps) {
         }
         isPending={deleteTargetRole.isPending}
       />
+
+      {addGuardElement}
+      {editGuardElement}
     </div>
   );
 }

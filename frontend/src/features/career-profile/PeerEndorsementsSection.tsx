@@ -20,6 +20,7 @@ import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-edito
 import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";
 import { itemAlternateClass, type SectionOrderProps } from "@/features/career-profile/section-order";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, Eraser, Pencil, Plus, Quote, Trash2 } from "lucide-react";
@@ -87,6 +88,7 @@ export function PeerEndorsementsSection({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [formSnapshot, setFormSnapshot] = useState<FormState>(EMPTY_FORM);
   const [isEditMode, setIsEditMode] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PeerEndorsement | null>(null);
   const [clearSectionOpen, setClearSectionOpen] = useState(false);
@@ -94,13 +96,23 @@ export function PeerEndorsementsSection({
   function openAddDialog() {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setFormSnapshot(EMPTY_FORM);
     setDialogOpen(true);
   }
 
   function openEditDialog(endorsement: PeerEndorsement) {
+    const initial = toFormState(endorsement);
     setEditingId(endorsement.id);
-    setForm(toFormState(endorsement));
+    setForm(initial);
+    setFormSnapshot(initial);
     setDialogOpen(true);
+  }
+
+  const isDialogDirty = dialogOpen && JSON.stringify(form) !== JSON.stringify(formSnapshot);
+  const { confirmDiscard, guardElement } = useUnsavedChangesGuard(isDialogDirty);
+
+  async function handleDialogClose() {
+    if (await confirmDiscard()) setDialogOpen(false);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -276,7 +288,9 @@ export function PeerEndorsementsSection({
 
       <Dialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => {
+          void handleDialogClose();
+        }}
         title={editingId ? "Edit recommendation" : "Add recommendation"}
       >
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -355,6 +369,8 @@ export function PeerEndorsementsSection({
         confirmLabel="Clear"
         confirmPendingLabel="Clearing..."
       />
+
+      {guardElement}
     </Card>
   );
 }

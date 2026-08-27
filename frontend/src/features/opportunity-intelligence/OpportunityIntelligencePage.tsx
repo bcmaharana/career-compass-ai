@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { formatDisplayDateTime } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { resolveValidTargetRoleId, useTargetRoleScopeStore } from "@/stores/target-role-scope-store";
@@ -429,7 +430,14 @@ function AddYourOwnJdDialog({ open, onClose, targetRoleId }: AddYourOwnJdDialogP
     startCustom.reset();
   }
 
-  function handleClose() {
+  const isDirty =
+    open &&
+    !startedSessionId &&
+    (jdText.trim() !== "" || company.trim() !== "" || roleTitle.trim() !== "");
+  const { confirmDiscard, guardElement } = useUnsavedChangesGuard(isDirty);
+
+  async function handleClose() {
+    if (!(await confirmDiscard())) return;
     reset();
     onClose();
   }
@@ -456,9 +464,12 @@ function AddYourOwnJdDialog({ open, onClose, targetRoleId }: AddYourOwnJdDialogP
   }
 
   return (
+    <>
     <Dialog
       open={open}
-      onClose={handleClose}
+      onClose={() => {
+        void handleClose();
+      }}
       title="Add Your Own JD"
       description="Paste a job description you found outside Opportunity Intelligence."
     >
@@ -548,5 +559,7 @@ function AddYourOwnJdDialog({ open, onClose, targetRoleId }: AddYourOwnJdDialogP
         </div>
       )}
     </Dialog>
+      {guardElement}
+    </>
   );
 }

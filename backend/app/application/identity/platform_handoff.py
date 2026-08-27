@@ -48,7 +48,10 @@ from __future__ import annotations
 import secrets
 from uuid import UUID
 
+import phonenumbers
+
 from app.adapters.identity_providers.internal_jwt import InternalJWTProvider
+from app.adapters.identity_providers.platform_profile_sync import fetch_platform_profile
 from app.adapters.identity_providers.platform_token_verifier import (
     PlatformAccountClaims,
     PlatformEntitlement,
@@ -62,6 +65,22 @@ from app.core.security import hash_password
 from app.domain.identity.entities import Tenant, User
 from app.domain.identity.personal_accounts import derive_personal_subdomain
 from app.domain.identity.repositories import TenantContextBinder, TenantRepository, UserRepository
+
+
+def _to_e164(phone_number: str | None, country: str | None) -> str | None:
+    """Same permissive, never-raises shape as UpdateUserProfileService's
+    own private helper of the same name — duplicated rather than
+    imported across modules since that one is deliberately
+    module-private."""
+    if not phone_number:
+        return None
+    try:
+        parsed = phonenumbers.parse(phone_number, country)
+    except phonenumbers.NumberParseException:
+        return None
+    if not phonenumbers.is_valid_number(parsed):
+        return None
+    return str(phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164))
 
 
 class PlatformHandoffService:
@@ -130,6 +149,8 @@ class PlatformHandoffService:
             else:
                 tenant, user = await self._create_personal_tenant_and_user(claims, subdomain)
 
+        user = await self._sync_profile_from_platform(user, platform_token)
+
         identity_claims = await self._identity_provider.claims_for_user(user)
         access_token = self._identity_provider.issue_access_token(identity_claims)
 
@@ -184,6 +205,35 @@ class PlatformHandoffService:
         if user is None:
             return None
         user.platform_account_id = UUID(claims.account_id)
+        return await self._users.update(user)
+
+    async def _sync_profile_from_platform(self, user: User, platform_token: str) -> User:
+        """Best-effort — see platform_profile_sync.py's own docstring
+        for why a failure here never blocks the handoff itself. Fires on
+        every handoff, not just first creation, so a profile edited on
+        the Hub shows up here the next time this person re-enters CCAI
+        from there."""
+        profile = await fetch_platform_profile(platform_token)
+        if profile is None:
+            return user
+
+        user.salutation = profile.salutation
+        user.first_name = profile.first_name
+        user.last_name = profile.last_name
+        user.middle_name = profile.middle_name
+        user.handle = profile.handle
+        user.phone_number = profile.phone_number
+        user.phone_number_e164 = _to_e164(profile.phone_number, profile.country)
+        user.country = profile.country
+        user.language = profile.language
+        user.address_line1 = profile.address_line1
+        user.address_line2 = profile.address_line2
+        user.city = profile.city
+        user.state = profile.state
+        user.postal_code = profile.postal_code
+        user.visa_status = profile.visa_status
+        user.linkedin_url = profile.linkedin_url
+        user.other_professional_url = profile.other_professional_url
         return await self._users.update(user)
 
     async def _create_personal_tenant_and_user(

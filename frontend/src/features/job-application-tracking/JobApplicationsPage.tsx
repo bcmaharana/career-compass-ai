@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
 import { ChevronDown, ChevronUp, ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
@@ -104,6 +105,7 @@ export function JobApplicationsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [formSnapshot, setFormSnapshot] = useState<FormState>(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<JobApplication | null>(null);
   const [unlinkTarget, setUnlinkTarget] = useState<JobApplication | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -111,13 +113,23 @@ export function JobApplicationsPage() {
   function openAddDialog() {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setFormSnapshot(EMPTY_FORM);
     setDialogOpen(true);
   }
 
   function openEditDialog(app: JobApplication) {
+    const initial = toFormState(app);
     setEditingId(app.id);
-    setForm(toFormState(app));
+    setForm(initial);
+    setFormSnapshot(initial);
     setDialogOpen(true);
+  }
+
+  const isDialogDirty = dialogOpen && JSON.stringify(form) !== JSON.stringify(formSnapshot);
+  const { confirmDiscard, guardElement } = useUnsavedChangesGuard(isDialogDirty);
+
+  async function handleDialogClose() {
+    if (await confirmDiscard()) setDialogOpen(false);
   }
 
   function toggleExpanded(id: string) {
@@ -289,7 +301,9 @@ export function JobApplicationsPage() {
 
       <Dialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => {
+          void handleDialogClose();
+        }}
         title={editingId ? "Edit application" : "Add application"}
       >
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -415,6 +429,8 @@ export function JobApplicationsPage() {
         confirmPendingLabel="Unlinking..."
         isPending={unlinkSession.isPending}
       />
+
+      {guardElement}
     </div>
   );
 }
@@ -431,38 +447,47 @@ function InterviewRoundList({
   const deleteRound = useDeleteInterviewRound();
   const moveRound = useMoveInterviewRound();
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingRoundId, setEditingRoundId] = useState<string | null>(null);
-  const [roundForm, setRoundForm] = useState({
+  const EMPTY_ROUND_FORM = {
     stage_label: "",
     round_date: "",
     interviewer_name: "",
     interviewer_title: "",
     notes: "",
-  });
+  };
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingRoundId, setEditingRoundId] = useState<string | null>(null);
+  const [roundForm, setRoundForm] = useState(EMPTY_ROUND_FORM);
+  const [roundFormSnapshot, setRoundFormSnapshot] = useState(EMPTY_ROUND_FORM);
   const [deleteRoundTarget, setDeleteRoundTarget] = useState<InterviewRound | null>(null);
+
+  const isRoundFormDirty =
+    formOpen && JSON.stringify(roundForm) !== JSON.stringify(roundFormSnapshot);
+  const { confirmDiscard: confirmDiscardRound, guardElement: roundGuardElement } =
+    useUnsavedChangesGuard(isRoundFormDirty);
+
+  async function handleRoundFormClose() {
+    if (await confirmDiscardRound()) setFormOpen(false);
+  }
 
   function openAddRound() {
     setEditingRoundId(null);
-    setRoundForm({
-      stage_label: "",
-      round_date: "",
-      interviewer_name: "",
-      interviewer_title: "",
-      notes: "",
-    });
+    setRoundForm(EMPTY_ROUND_FORM);
+    setRoundFormSnapshot(EMPTY_ROUND_FORM);
     setFormOpen(true);
   }
 
   function openEditRound(round: InterviewRound) {
-    setEditingRoundId(round.id);
-    setRoundForm({
+    const initial = {
       stage_label: round.stage_label,
       round_date: round.round_date ?? "",
       interviewer_name: round.interviewer_name ?? "",
       interviewer_title: round.interviewer_title ?? "",
       notes: round.notes ?? "",
-    });
+    };
+    setEditingRoundId(round.id);
+    setRoundForm(initial);
+    setRoundFormSnapshot(initial);
     setFormOpen(true);
   }
 
@@ -545,7 +570,9 @@ function InterviewRoundList({
 
       <Dialog
         open={formOpen}
-        onClose={() => setFormOpen(false)}
+        onClose={() => {
+          void handleRoundFormClose();
+        }}
         title={editingRoundId ? "Edit interview round" : "Add interview round"}
       >
         <form className="flex flex-col gap-4" onSubmit={handleRoundSubmit}>
@@ -617,6 +644,8 @@ function InterviewRoundList({
         }
         isPending={deleteRound.isPending}
       />
+
+      {roundGuardElement}
     </div>
   );
 }

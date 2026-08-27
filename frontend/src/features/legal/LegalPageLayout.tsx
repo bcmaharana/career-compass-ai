@@ -1,3 +1,4 @@
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { InlineLink } from "@/components/ui/inline-link";
 import { Compass } from "lucide-react";
 import type { ReactNode } from "react";
@@ -29,11 +30,14 @@ export function LegalPageLayout({ title, effectiveDate, summary, children }: Leg
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border">
-        <div className="container flex items-center justify-between py-4">
-          <Link to="/" className="flex items-center gap-2 text-foreground">
-            <Compass className="h-5 w-5 text-accent" strokeWidth={2} />
-            <span className="font-display text-sm font-semibold">Career Compass AI</span>
-          </Link>
+        <div className="container flex items-center justify-between py-3">
+          <div className="flex flex-col gap-0.5">
+            <Breadcrumb segments={[{ label: "Career Compass AI", href: "/" }, { label: title }]} />
+            <Link to="/" className="flex items-center gap-2 text-foreground">
+              <Compass className="h-5 w-5 text-accent" strokeWidth={2} />
+              <span className="font-display text-sm font-semibold">Career Compass AI</span>
+            </Link>
+          </div>
           <InlineLink to="/signup" className="text-sm">
             Back to sign up
           </InlineLink>

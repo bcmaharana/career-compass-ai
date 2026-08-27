@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { getErrorMessage } from "@/lib/errors";
 import { UserCircle } from "lucide-react";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
@@ -67,9 +68,18 @@ export function ProfileHeader() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [headline, setHeadline] = useState("");
+  const [originalHeadline, setOriginalHeadline] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [photoLoadFailed, setPhotoLoadFailed] = useState(false);
+
+  const { confirmDiscard, guardElement } = useUnsavedChangesGuard(
+    isEditing && headline !== originalHeadline,
+  );
+
+  async function handleCancel() {
+    if (await confirmDiscard()) setIsEditing(false);
+  }
 
   // Give a freshly-uploaded (or freshly-loaded) photo URL a clean
   // chance to load — without this, one failed load attempt (e.g. a
@@ -81,7 +91,9 @@ export function ProfileHeader() {
   }, [masterProfile?.photo_url]);
 
   function openEdit() {
-    setHeadline(profile?.headline ?? "");
+    const initial = profile?.headline ?? "";
+    setHeadline(initial);
+    setOriginalHeadline(initial);
     setIsEditing(true);
   }
 
@@ -198,7 +210,13 @@ export function ProfileHeader() {
               <Button size="sm" onClick={handleSave} disabled={updateProfile.isPending}>
                 {updateProfile.isPending ? "Saving..." : "Save"}
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  void handleCancel();
+                }}
+              >
                 Cancel
               </Button>
             </div>
@@ -215,6 +233,7 @@ export function ProfileHeader() {
         )}
         </CardContent>
       </Card>
+      {guardElement}
     </div>
   );
 }

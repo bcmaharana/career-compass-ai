@@ -1,12 +1,14 @@
 import { useChatMessages, useLatestConversation } from "@/api/queries/chat";
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { MobileShell } from "@/components/layout/MobileShell";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { matchNavItem } from "@/lib/nav-items";
+import { PLATFORM_BASE_URL } from "@/lib/platform";
 import { useAuthStore } from "@/stores/auth-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 /** Matches Tailwind's `md` breakpoint (768px) — the mobile-shell
  * threshold. Mirrors DesktopShell.tsx's own NARROW_QUERY/getIsNarrow
@@ -52,11 +54,12 @@ function useIsMobileShell(): boolean {
  * See those two files for the actual fixed regions each renders.
  */
 export function AppShell() {
-  const navigate = useNavigate();
   const location = useLocation();
   const clearSession = useAuthStore((state) => state.clearSession);
   const queryClient = useQueryClient();
   const isMobile = useIsMobileShell();
+
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   const chatMessages = useChatStore((state) => state.messages);
   const setChatMessages = useChatStore((state) => state.setMessages);
@@ -195,14 +198,33 @@ export function AppShell() {
     mainRef.current?.scrollTo({ top: mainRef.current.scrollHeight, behavior: "smooth" });
   }, [chatMessages.length]);
 
+  // Every "Sign out" trigger in the app shell (RightNav, AppFooter's
+  // icon column, ProfileIconMenu, AccountPanelContent — see those files'
+  // own onLogout threading) calls this same handler, so gating it behind
+  // a confirmation here covers every one of them without touching any
+  // of those call sites individually. The actual sign-out only runs once
+  // performLogout() below is confirmed.
   function handleLogout() {
+    setLogoutConfirmOpen(true);
+  }
+
+  function performLogout() {
+    setLogoutConfirmOpen(false);
     clearSession();
     // The query cache is a module-level singleton, not scoped per
     // session — without clearing it, logging back in (even as a
     // different user) could briefly show whatever data the *previous*
     // session had cached before a background refetch replaced it.
     queryClient.clear();
-    navigate("/", { replace: true });
+    // A real cross-origin navigation (not react-router's navigate()) to
+    // the Hub's own /logout — this app's sign-out can only clear ITS OWN
+    // session; the Hub's session lives in a completely separate origin's
+    // localStorage, unreachable from here any other way. Without this,
+    // signing out of CCAI left the Hub's own session fully live — a real
+    // reported gap: visiting the Hub afterward still showed signed in,
+    // and clicking back into CCAI silently re-authenticated via a fresh
+    // handoff with no re-login at all.
+    window.location.href = `${PLATFORM_BASE_URL}/logout`;
   }
 
   return (
@@ -228,6 +250,16 @@ export function AppShell() {
       ) : (
         <DesktopShell mainRef={mainRef} onLogout={handleLogout} />
       )}
+
+      <ConfirmDialog
+        open={logoutConfirmOpen}
+        onCancel={() => setLogoutConfirmOpen(false)}
+        onConfirm={performLogout}
+        title="Sign out?"
+        description="You'll be signed out of Career Compass AI and the Hub — every product you're signed into."
+        confirmLabel="Sign out"
+        confirmPendingLabel="Signing out..."
+      />
     </div>
   );
 }
