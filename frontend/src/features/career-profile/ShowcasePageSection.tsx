@@ -1,9 +1,11 @@
 import { useCurrentUser } from "@/api/queries/auth";
 import { useInterviewTopics } from "@/api/queries/interview-prep";
 import {
+  useRemoveShowcaseBackgroundImage,
   useShowcasePage,
   useToggleShowcasePagePublic,
   useUpdateShowcasePage,
+  useUploadShowcaseBackgroundImage,
   useUploadShowcaseColumnImage,
 } from "@/api/queries/showcase-page";
 import type { components } from "@/api/schema.gen";
@@ -30,7 +32,6 @@ import {
   Plus,
   Trash2,
   Upload,
-  UserRound,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -297,7 +298,12 @@ export function ShowcasePageSection({
       </CardHeader>
       {isOpen && (
         <CardContent className="flex flex-col gap-3">
-          <ShowcaseHeaderBar page={page} onSave={saveHeader} isSaving={updatePage.isPending} />
+          <ShowcaseHeaderBar
+            page={page}
+            targetRoleId={targetRoleId}
+            onSave={saveHeader}
+            isSaving={updatePage.isPending}
+          />
 
           <p className="text-sm text-muted-foreground">
             A freeform, shareable page for this role — seeded once from your generated resume
@@ -370,29 +376,42 @@ export function ShowcasePageSection({
 type ShowcasePageData = components["schemas"]["ShowcasePageResponse"];
 
 /**
- * The page's top bar (direct 2026-08-24 request): profile picture on
- * the left, name + headline and the Executive Summary on the right.
- * `name`/`headline`/`summary` are this page's own independent copy —
- * seeded once from the real profile, then edited only here, same
- * "seed once, not a sync" precedent every other piece of this page's
- * content already follows (see ShowcasePage's own domain docstring).
+ * The page's top bar (direct 2026-08-24 request, background image
+ * added 2026-08-27): its own Name/Headline/Executive Summary fields on
+ * the right, a Background Image upload on the left. `name`/`headline`/
+ * `summary` are this page's own independent copy — seeded once from
+ * the real profile, then edited only here, same "seed once, not a
+ * sync" precedent every other piece of this page's content already
+ * follows (see ShowcasePage's own domain docstring). Name/Headline now
+ * also drive the public page's own brand header bar
+ * (PublicPageHeader/ShowcaseBrandTitle in PublicShowcasePage.tsx) —
+ * shown here verbatim, exactly as typed, with no case transform.
  *
- * The photo is deliberately NOT part of that copy and has no edit
- * affordance here at all ("the profile picture will be fixed" — direct
- * request): `photo_url` is resolved fresh by the backend from the real,
- * current Career Profile on every response, with the same
- * Master-fallback a Target Role Profile with no photo of its own
- * already gets for its seeded block content.
+ * The profile photo is deliberately NOT part of that copy and has no
+ * edit affordance here at all ("the profile picture will be fixed" —
+ * direct request) — it's the public page's own fallback (with
+ * Executive Summary beside it) whenever `background_image_url` is
+ * unset, but isn't previewed in this editor since it isn't editable
+ * here either way (see CareerProfilePage for that). `background_image_url`
+ * IS editable here, direct public-bucket upload exactly like a block's
+ * own image column.
  */
 function ShowcaseHeaderBar({
   page,
+  targetRoleId,
   onSave,
   isSaving,
 }: {
   page: ShowcasePageData;
+  targetRoleId: string;
   onSave: (next: { name: string | null; headline: string | null; summary: string | null }) => void;
   isSaving: boolean;
 }) {
+  const uploadBackgroundImage = useUploadShowcaseBackgroundImage(targetRoleId);
+  const removeBackgroundImage = useRemoveShowcaseBackgroundImage(targetRoleId);
+  const backgroundFileInputRef = useRef<HTMLInputElement>(null);
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+
   const [isEditing, setIsEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(page.name ?? "");
   const [headlineDraft, setHeadlineDraft] = useState(page.headline);
@@ -414,21 +433,66 @@ function ShowcaseHeaderBar({
     setIsEditing(false);
   }
 
+  function handleBackgroundFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) uploadBackgroundImage.mutate(file);
+  }
+
   const hasAnyContent = page.name || page.headline || page.summary || page.photo_url;
 
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border bg-card p-4 md:flex-row">
-      <div className="flex shrink-0 justify-center md:justify-start">
-        {page.photo_url ? (
+      <div className="flex w-full flex-col gap-2 md:w-56 md:shrink-0">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Background Image
+        </p>
+        {page.background_image_url ? (
           <img
-            src={page.photo_url}
+            src={page.background_image_url}
             alt=""
-            className="h-24 w-24 rounded-full border border-border object-cover"
+            className="h-32 w-full rounded-md border border-border object-cover"
           />
         ) : (
-          <div className="flex h-24 w-24 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground">
-            <UserRound className="h-8 w-8" />
+          <div className="flex h-32 w-full items-center justify-center rounded-md border border-dashed border-border text-muted-foreground">
+            <ImageOff className="h-6 w-6" />
           </div>
+        )}
+        <div className={cn("flex items-center", ACTION_BUTTON_ROW_GAP)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => backgroundFileInputRef.current?.click()}
+            disabled={uploadBackgroundImage.isPending}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            {uploadBackgroundImage.isPending
+              ? "Uploading..."
+              : page.background_image_url
+                ? "Replace"
+                : "Add image"}
+          </Button>
+          {page.background_image_url && (
+            <Button variant="ghost" size="sm" onClick={() => setRemoveConfirmOpen(true)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+        <input
+          ref={backgroundFileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={handleBackgroundFileChange}
+        />
+        <p className="text-xs text-muted-foreground">
+          Shown as this page's background on the public page. When unset, your profile photo and
+          Executive Summary show instead.
+        </p>
+        {uploadBackgroundImage.isError && (
+          <p role="alert" className="text-sm text-destructive">
+            {getErrorMessage(uploadBackgroundImage.error)}
+          </p>
         )}
       </div>
 
@@ -502,6 +566,18 @@ function ShowcaseHeaderBar({
           </p>
         )}
       </div>
+
+      <ConfirmDialog
+        open={removeConfirmOpen}
+        onCancel={() => setRemoveConfirmOpen(false)}
+        onConfirm={() => {
+          removeBackgroundImage.mutate();
+          setRemoveConfirmOpen(false);
+        }}
+        title="Remove background image?"
+        description="Your public page will fall back to your profile photo and Executive Summary. This can't be undone."
+        isPending={removeBackgroundImage.isPending}
+      />
     </div>
   );
 }

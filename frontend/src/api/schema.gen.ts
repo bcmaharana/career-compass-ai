@@ -133,6 +133,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity/platform-account-deleted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Platform Account Deleted
+         * @description The Hub calls this, best-effort, right after deleting an account
+         *     that held a career_compass_ai entitlement — see platform's own
+         *     DeleteAccountService. Public (no Authorization header): the signed
+         *     deletion-assertion token itself is the proof, same shape as
+         *     /platform-handoff. Idempotent — see PlatformAccountDeletionService's
+         *     own docstring for how both the Personal and Enterprise cases
+         *     resolve.
+         */
+        post: operations["platform_account_deleted_api_v1_identity_platform_account_deleted_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identity/signup/verify": {
         parameters: {
             query?: never;
@@ -2191,6 +2217,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/showcase-pages/{target_role_id}/background-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Showcase Background Image */
+        post: operations["upload_showcase_background_image_api_v1_showcase_pages__target_role_id__background_image_post"];
+        /** Remove Showcase Background Image */
+        delete: operations["remove_showcase_background_image_api_v1_showcase_pages__target_role_id__background_image_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/showcase-pages/{share_key}": {
         parameters: {
             query?: never;
@@ -2350,6 +2394,11 @@ export interface components {
             target_role_id?: string | null;
             /** Upload Token */
             upload_token?: string | null;
+        };
+        /** Body_upload_showcase_background_image_api_v1_showcase_pages__target_role_id__background_image_post */
+        Body_upload_showcase_background_image_api_v1_showcase_pages__target_role_id__background_image_post: {
+            /** File */
+            file: string;
         };
         /** Body_upload_showcase_column_image_api_v1_showcase_pages__target_role_id__columns__column_id__image_post */
         Body_upload_showcase_column_image_api_v1_showcase_pages__target_role_id__columns__column_id__image_post: {
@@ -3753,6 +3802,11 @@ export interface components {
             /** Photo Url */
             photo_url: string;
         };
+        /** PlatformAccountDeletedRequest */
+        PlatformAccountDeletedRequest: {
+            /** Token */
+            token: string;
+        };
         /** PlatformAdminGrantResponse */
         PlatformAdminGrantResponse: {
             /**
@@ -3948,6 +4002,8 @@ export interface components {
             summary: string | null;
             /** Photo Url */
             photo_url: string | null;
+            /** Background Image Url */
+            background_image_url: string | null;
             /** Blocks */
             blocks: components["schemas"]["PublicShowcaseBlock"][];
             /**
@@ -4372,6 +4428,8 @@ export interface components {
             summary: string | null;
             /** Photo Url */
             photo_url: string | null;
+            /** Background Image Url */
+            background_image_url: string | null;
             /** Share Key */
             share_key: string | null;
             /**
@@ -4917,6 +4975,37 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LoginResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platform_account_deleted_api_v1_identity_platform_account_deleted_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformAccountDeletedRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -9891,6 +9980,72 @@ export interface operations {
                 "multipart/form-data": components["schemas"]["Body_upload_showcase_column_image_api_v1_showcase_pages__target_role_id__columns__column_id__image_post"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShowcasePageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_showcase_background_image_api_v1_showcase_pages__target_role_id__background_image_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_showcase_background_image_api_v1_showcase_pages__target_role_id__background_image_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShowcasePageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_showcase_background_image_api_v1_showcase_pages__target_role_id__background_image_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

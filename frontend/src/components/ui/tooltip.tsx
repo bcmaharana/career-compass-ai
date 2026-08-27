@@ -21,11 +21,23 @@ interface TooltipProps {
    * like "Sign in" break across two lines inside that narrow box;
    * TargetRolesWidget's trigger is a wide flex-1 row, so nowrap doesn't
    * change anything there.
+   * "bottom-end": same as "bottom" but right-aligned with the trigger
+   * instead — for a trigger that's itself truncated to fill available
+   * width right up to a screen edge (PublicShowcasePage's brand-bar
+   * headline), where a left-anchored, nowrap tooltip has nowhere to
+   * grow but off-screen. Combine with `wrap` (below).
    * "right"/"left": vertically centered beside the trigger, opening
    * away from whichever screen edge the rail sits against — "right" for
    * Left Nav's collapsed icon rail, "left" for Right Nav's (opening
    * "right" there would push the tooltip off-screen). */
-  placement?: "bottom" | "right" | "left";
+  placement?: "bottom" | "bottom-end" | "right" | "left";
+  /** "bottom"/"bottom-end" only: wraps long content onto multiple lines
+   * within a viewport-bounded max-width, instead of the default
+   * single-line `whitespace-nowrap` (which grows indefinitely and can
+   * overflow the screen edge for a long string — direct 2026-08-27
+   * report against a long headline tooltip). Every existing short-text
+   * caller leaves this off, unaffected. */
+  wrap?: boolean;
 }
 
 /**
@@ -48,7 +60,13 @@ interface TooltipProps {
  * ancestor and stays on the simpler, already-working CSS mechanism
  * rather than risk a regression there for an unaffected case.
  */
-export function Tooltip({ content, children, className, placement = "bottom" }: TooltipProps) {
+export function Tooltip({
+  content,
+  children,
+  className,
+  placement = "bottom",
+  wrap = false,
+}: TooltipProps) {
   const [sidePlacementVisible, setSidePlacementVisible] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLDivElement>(null);
@@ -107,7 +125,11 @@ export function Tooltip({ content, children, className, placement = "bottom" }: 
       {children}
       <div
         role="tooltip"
-        className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-normal text-background shadow-card group-hover:block"
+        className={cn(
+          "pointer-events-none absolute top-full z-20 mt-1 hidden rounded-md bg-foreground px-2 py-1 text-xs font-normal text-background shadow-card group-hover:block",
+          placement === "bottom-end" ? "right-0" : "left-0",
+          wrap ? "max-w-[min(85vw,20rem)] whitespace-normal break-words" : "whitespace-nowrap",
+        )}
       >
         {content}
       </div>

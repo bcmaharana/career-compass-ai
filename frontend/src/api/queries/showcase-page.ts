@@ -71,3 +71,30 @@ export function useUploadShowcaseColumnImage(targetRoleId: string | null) {
     },
   });
 }
+
+export function useUploadShowcaseBackgroundImage(targetRoleId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) =>
+      apiClient.uploadFile<ShowcasePageResponse>(
+        `/api/v1/showcase-pages/${targetRoleId}/background-image`,
+        file,
+      ),
+    onSuccess: (data) => {
+      if (targetRoleId) queryClient.setQueryData(KEYS.page(targetRoleId), data);
+    },
+  });
+}
+
+export function useRemoveShowcaseBackgroundImage(targetRoleId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiClient.delete<ShowcasePageResponse>(
+        `/api/v1/showcase-pages/${targetRoleId}/background-image`,
+      ),
+    onSuccess: (data) => {
+      if (targetRoleId) queryClient.setQueryData(KEYS.page(targetRoleId), data);
+    },
+  });
+}
