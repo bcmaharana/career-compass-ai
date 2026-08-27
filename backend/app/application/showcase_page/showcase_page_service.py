@@ -36,7 +36,7 @@ from app.adapters.documents.resume_data import (
 from app.application.career_profile.career_profile_service import CareerProfileService
 from app.application.career_profile.resume_export_service import ResumeExportService
 from app.application.career_profile.target_role_service import TargetRoleService
-from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.core.exceptions import CareerCompassError, ConflictError, NotFoundError, ValidationError
 from app.core.rich_text import sanitize_rich_text
 from app.domain.career_profile.storage import ObjectStorageRepository
 from app.domain.identity.repositories import UserRepository
@@ -338,5 +338,59 @@ class ShowcasePageService:
         # a stable URL the browser's image cache won't otherwise re-fetch).
         column.image_url = f"{url}?v={int(datetime.now(UTC).timestamp())}"
 
+        page.updated_at = datetime.now(UTC)
+        return await self._pages.update(page)
+
+    async def upload_background_image(
+        self,
+        *,
+        tenant_id: UUID,
+        user_id: UUID,
+        target_role_id: UUID,
+        content: bytes,
+        content_type: str,
+    ) -> ShowcasePage:
+        if content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
+            raise ValidationError(
+                f"Unsupported image type '{content_type}'. Allowed: "
+                f"{sorted(ALLOWED_IMAGE_CONTENT_TYPES)}",
+                code="UNSUPPORTED_IMAGE_TYPE",
+            )
+        if len(content) > MAX_IMAGE_SIZE_BYTES:
+            raise ValidationError(
+                f"Image exceeds the {MAX_IMAGE_SIZE_BYTES // (1024 * 1024)}MB limit.",
+                code="IMAGE_TOO_LARGE",
+            )
+        page = await self.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
+
+        extension = _EXTENSION_BY_CONTENT_TYPE[content_type]
+        # Stable key per page (not per upload) — same cache-busting-
+        # query-param reasoning as upload_image/CareerProfileService.upload_photo.
+        key = f"{_IMAGE_KEY_PREFIX}{tenant_id}/{page.id}/background.{extension}"
+        url = await self._storage.upload(key=key, content=content, content_type=content_type)
+        page.background_image_url = f"{url}?v={int(datetime.now(UTC).timestamp())}"
+
+        page.updated_at = datetime.now(UTC)
+        return await self._pages.update(page)
+
+    async def remove_background_image(
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID
+    ) -> ShowcasePage:
+        page = await self.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
+        if page.background_image_url is not None:
+            key = showcase_block_image_key_from_url(page.background_image_url)
+            if key is not None:
+                try:
+                    await self._storage.delete(key=key)
+                except CareerCompassError:
+                    # Best-effort, same "DB field is the source of truth"
+                    # reasoning as CareerProfileService.delete_photo.
+                    pass
+
+        page.background_image_url = None
         page.updated_at = datetime.now(UTC)
         return await self._pages.update(page)

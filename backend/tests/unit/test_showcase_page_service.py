@@ -628,6 +628,82 @@ class TestUploadImage:
             )
 
 
+class TestUploadBackgroundImage:
+    async def test_sets_the_pages_background_image_url(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+
+        updated = await fx.service.upload_background_image(
+            tenant_id=fx.tenant_id,
+            user_id=fx.user_id,
+            target_role_id=role.id,
+            content=b"fake-bytes",
+            content_type="image/png",
+        )
+
+        assert updated.background_image_url is not None
+        assert updated.background_image_url.startswith(
+            "https://example.test/showcase-pages/"
+        )
+
+    async def test_rejects_unsupported_content_type(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+
+        with pytest.raises(ValidationError):
+            await fx.service.upload_background_image(
+                tenant_id=fx.tenant_id,
+                user_id=fx.user_id,
+                target_role_id=role.id,
+                content=b"data",
+                content_type="application/pdf",
+            )
+
+    async def test_rejects_oversized_image(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+
+        with pytest.raises(ValidationError):
+            await fx.service.upload_background_image(
+                tenant_id=fx.tenant_id,
+                user_id=fx.user_id,
+                target_role_id=role.id,
+                content=b"x" * (MAX_IMAGE_SIZE_BYTES + 1),
+                content_type="image/png",
+            )
+
+
+class TestRemoveBackgroundImage:
+    async def test_clears_the_field_and_deletes_from_storage(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+        await fx.service.upload_background_image(
+            tenant_id=fx.tenant_id,
+            user_id=fx.user_id,
+            target_role_id=role.id,
+            content=b"fake-bytes",
+            content_type="image/png",
+        )
+        assert len(fx.storage.uploaded) == 1
+
+        updated = await fx.service.remove_background_image(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id
+        )
+
+        assert updated.background_image_url is None
+        assert fx.storage.uploaded == {}
+
+    async def test_is_a_no_op_when_no_background_image_is_set(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+
+        updated = await fx.service.remove_background_image(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id
+        )
+
+        assert updated.background_image_url is None
+
+
 class TestMultiColumnRows:
     async def test_a_row_can_hold_several_columns_of_different_types(self) -> None:
         fx = _Fixture()

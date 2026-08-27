@@ -71,12 +71,22 @@ class ShowcasePage:
     source `blocks` itself is seeded from), then fully independent and
     user-editable afterward — the same "seed once, not a sync"
     precedent every other piece of this page's content already follows.
-    Unlike `blocks`, there is deliberately no photo field here at all:
+    Unlike `blocks`, there is deliberately no *profile-photo* field here:
     the profile picture is NOT copied/editable on this page ("the
     profile picture will be fixed" — direct request), it always reflects
     whatever the real CareerProfile's current photo is, resolved fresh
     on every read via ShowcasePageService.get_photo_url/
     PublicShowcaseService's own equivalent, never persisted here.
+
+    `background_image_url` (2026-08-27) is a genuinely different thing —
+    a page-level image the owner uploads and fully controls here, public
+    -bucket direct URL exactly like a ShowcaseColumn's own `image_url`
+    (same key format/upload mechanics, see ShowcasePageService.upload_
+    background_image). Direct request: once name/headline moved into the
+    public page's own brand header bar, the top card no longer needs to
+    repeat them next to the (fixed) profile photo — a page can instead
+    set this to show a real background image there, with the profile
+    photo + Executive Summary layout as the fallback when it's unset.
     """
 
     id: UUID
@@ -90,6 +100,7 @@ class ShowcasePage:
     name: str | None = None
     headline: str | None = None
     summary: str | None = None
+    background_image_url: str | None = None
 
 
 #: Resource types a public_share_links row can point at — kept as a

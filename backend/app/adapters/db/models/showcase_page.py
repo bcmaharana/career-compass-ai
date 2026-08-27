@@ -53,6 +53,10 @@ class ShowcasePageModel(Base):
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     headline: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Page-level background image (2026-08-27) — a direct public-bucket
+    # URL the owner uploads themselves, unlike the profile photo above
+    # (which this page never stores, only ever resolves live).
+    background_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

@@ -151,14 +151,21 @@ class SqlAlchemyAccountDeletionRepository:
         # cleanup ever since that restructuring — fixed by iterating each
         # row's columns instead.
         showcase_pages_result = await self._session.execute(
-            select(ShowcasePageModel.blocks).where(ShowcasePageModel.tenant_id == tenant_id)
+            select(ShowcasePageModel.blocks, ShowcasePageModel.background_image_url).where(
+                ShowcasePageModel.tenant_id == tenant_id
+            )
         )
+        showcase_pages_rows = showcase_pages_result.all()
         showcase_block_image_urls = [
             str(column["image_url"])
-            for blocks in showcase_pages_result.scalars().all()
+            for blocks, _background_image_url in showcase_pages_rows
             for block in blocks
             for column in _columns_of(block)
             if column.get("type") == "image" and column.get("image_url")
+        ] + [
+            background_image_url
+            for _blocks, background_image_url in showcase_pages_rows
+            if background_image_url
         ]
 
         # 1. Career-profile sub-entities (-> career_profiles.id)

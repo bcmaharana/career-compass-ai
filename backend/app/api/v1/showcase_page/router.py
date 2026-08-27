@@ -86,6 +86,7 @@ async def _page_response(
         headline=page.headline,
         summary=page.summary,
         photo_url=photo_url,
+        background_image_url=page.background_image_url,
         share_key=share_key,
         created_at=page.created_at,
         updated_at=page.updated_at,
@@ -172,5 +173,45 @@ async def upload_showcase_column_image(
         column_id=column_id,
         content=content,
         content_type=file.content_type or "application/octet-stream",
+    )
+    return await _page_response(page, service, share_links)
+
+
+@router.post(
+    "/showcase-pages/{target_role_id}/background-image",
+    response_model=ShowcasePageResponse,
+)
+async def upload_showcase_background_image(
+    target_role_id: UUID,
+    file: UploadFile,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ShowcasePageService = Depends(get_showcase_page_service),
+    share_links: PublicShareLinkService = Depends(get_public_share_link_service),
+) -> ShowcasePageResponse:
+    content = await file.read()
+    page = await service.upload_background_image(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
+        content=content,
+        content_type=file.content_type or "application/octet-stream",
+    )
+    return await _page_response(page, service, share_links)
+
+
+@router.delete(
+    "/showcase-pages/{target_role_id}/background-image",
+    response_model=ShowcasePageResponse,
+)
+async def remove_showcase_background_image(
+    target_role_id: UUID,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ShowcasePageService = Depends(get_showcase_page_service),
+    share_links: PublicShareLinkService = Depends(get_public_share_link_service),
+) -> ShowcasePageResponse:
+    page = await service.remove_background_image(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
     )
     return await _page_response(page, service, share_links)

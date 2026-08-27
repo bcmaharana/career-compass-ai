@@ -59,6 +59,11 @@ class ShowcasePageResponse(BaseModel):
     #: response — never persisted on this page ("the profile picture
     #: will be fixed" — direct request, see ShowcasePage's own docstring).
     photo_url: str | None
+    #: Page-level image the owner uploads directly (see ShowcasePage's
+    #: own docstring) — None means the public page falls back to
+    #: photo_url + Executive Summary side by side, same as before this
+    #: field existed.
+    background_image_url: str | None
     #: The public URL's last path segment, present whenever this page
     #: has ever been made public (even if currently toggled back off —
     #: see PublicShareLink's own docstring for why the key persists

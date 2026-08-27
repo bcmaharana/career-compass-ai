@@ -53,6 +53,11 @@ class PublicShowcasePageResponse(BaseModel):
     headline: str | None
     summary: str | None
     photo_url: str | None
+    #: See ShowcasePageResponse's own field of the same name — when set,
+    #: the public page renders this as the top card's background image
+    #: (with Executive Summary moved into its own card below) instead of
+    #: the photo_url + Executive Summary side-by-side fallback layout.
+    background_image_url: str | None
     blocks: list[PublicShowcaseBlock]
     updated_at: datetime
 
