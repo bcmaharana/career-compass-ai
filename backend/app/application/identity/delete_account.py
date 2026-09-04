@@ -83,3 +83,12 @@ class DeleteAccountService:
                 await self._photo_storage.delete(key=key)
             except CareerCompassError:
                 logger.warning("account_deletion_showcase_image_cleanup_failed", key=key)
+
+        # Same private bucket/adapter as resumes.
+        for resume_key in artifacts.showcase_resume_file_keys:
+            try:
+                await self._resume_storage.delete_private(key=resume_key)
+            except CareerCompassError:
+                logger.warning(
+                    "account_deletion_showcase_resume_cleanup_failed", key=resume_key
+                )

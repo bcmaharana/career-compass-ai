@@ -170,6 +170,7 @@ class S3ObjectStorageRepository:
         key: str,
         expires_in_seconds: int = 300,
         download_filename: str | None = None,
+        disposition: str = "attachment",
     ) -> str:
         """download_filename, when given, sets ResponseContentDisposition
         so opening the URL downloads with that name (e.g. "Jordan Rivera
@@ -179,10 +180,17 @@ class S3ObjectStorageRepository:
         an already-uploaded object. Used by ResumeExportService; the
         resume-intelligence upload-and-parse flow never needs this
         (those files are never offered back out for direct download).
+
+        disposition ("attachment" by default, matching every caller's
+        behavior before this parameter existed) can be set to "inline"
+        so the browser opens the file in place instead of saving it —
+        see PrivateObjectStorageRepository.get_presigned_url's own
+        docstring for why a caller wanting both requests two separate
+        URLs rather than one.
         """
         params: dict[str, str] = {"Bucket": self._resumes_bucket, "Key": key}
         if download_filename is not None:
-            params["ResponseContentDisposition"] = f'attachment; filename="{download_filename}"'
+            params["ResponseContentDisposition"] = f'{disposition}; filename="{download_filename}"'
         try:
             return await asyncio.to_thread(
                 self._presign_client.generate_presigned_url,

@@ -64,6 +64,20 @@ class ShowcasePageResponse(BaseModel):
     #: photo_url + Executive Summary side by side, same as before this
     #: field existed.
     background_image_url: str | None
+    #: Original filename of the owner's uploaded resume document (PDF or
+    #: Word), None if none has been uploaded. Kept for display only —
+    #: the actual file lives in a private bucket, see resume_url.
+    resume_file_name: str | None
+    #: Fresh presigned URLs for the resume file above, resolved on every
+    #: response rather than stored (a persisted URL would expire long
+    #: before this page is re-fetched — see
+    #: ShowcasePageService.get_resume_urls). Both None whenever
+    #: resume_file_name is None. resume_view_url opens the file in place
+    #: (inline disposition); resume_download_url saves it (attachment)
+    #: — two separate URLs since one presigned URL can only carry one
+    #: disposition.
+    resume_view_url: str | None
+    resume_download_url: str | None
     #: The public URL's last path segment, present whenever this page
     #: has ever been made public (even if currently toggled back off —
     #: see PublicShareLink's own docstring for why the key persists

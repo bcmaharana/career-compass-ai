@@ -2235,6 +2235,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/showcase-pages/{target_role_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Showcase Resume */
+        post: operations["upload_showcase_resume_api_v1_showcase_pages__target_role_id__resume_post"];
+        /** Remove Showcase Resume */
+        delete: operations["remove_showcase_resume_api_v1_showcase_pages__target_role_id__resume_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/showcase-pages/{share_key}": {
         parameters: {
             query?: never;
@@ -2402,6 +2420,11 @@ export interface components {
         };
         /** Body_upload_showcase_column_image_api_v1_showcase_pages__target_role_id__columns__column_id__image_post */
         Body_upload_showcase_column_image_api_v1_showcase_pages__target_role_id__columns__column_id__image_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_upload_showcase_resume_api_v1_showcase_pages__target_role_id__resume_post */
+        Body_upload_showcase_resume_api_v1_showcase_pages__target_role_id__resume_post: {
             /** File */
             file: string;
         };
@@ -4004,6 +4027,10 @@ export interface components {
             photo_url: string | null;
             /** Background Image Url */
             background_image_url: string | null;
+            /** Resume View Url */
+            resume_view_url: string | null;
+            /** Resume Download Url */
+            resume_download_url: string | null;
             /** Blocks */
             blocks: components["schemas"]["PublicShowcaseBlock"][];
             /**
@@ -4430,6 +4457,12 @@ export interface components {
             photo_url: string | null;
             /** Background Image Url */
             background_image_url: string | null;
+            /** Resume File Name */
+            resume_file_name: string | null;
+            /** Resume View Url */
+            resume_view_url: string | null;
+            /** Resume Download Url */
+            resume_download_url: string | null;
             /** Share Key */
             share_key: string | null;
             /**
@@ -10037,6 +10070,72 @@ export interface operations {
         };
     };
     remove_showcase_background_image_api_v1_showcase_pages__target_role_id__background_image_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShowcasePageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_showcase_resume_api_v1_showcase_pages__target_role_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_showcase_resume_api_v1_showcase_pages__target_role_id__resume_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShowcasePageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_showcase_resume_api_v1_showcase_pages__target_role_id__resume_delete: {
         parameters: {
             query?: never;
             header?: never;

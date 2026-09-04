@@ -58,6 +58,7 @@ class TestDeleteAccount:
             showcase_block_image_urls=[
                 f"https://cdn.example.com/showcase-pages/{tenant_id}/{page_id}/{block_id}.jpg?v=1"
             ],
+            showcase_resume_file_keys=[f"showcase-resumes/{tenant_id}/{page_id}/resume.pdf"],
         )
         repo = FakeAccountDeletionRepository(artifacts)
         storage = FakeObjectStorage()
@@ -72,6 +73,7 @@ class TestDeleteAccount:
             "resumes/t/u/r1.pdf",
             "interview-topics/t/topic1.jpg",
             "tailored-resumes/t/s1/resume.docx",
+            f"showcase-resumes/{tenant_id}/{page_id}/resume.pdf",
         ]
         assert storage.deleted_photo_keys == [
             f"profile-photos/{tenant_id}/{profile_id}.jpg",
@@ -87,6 +89,7 @@ class TestDeleteAccount:
             interview_topic_image_keys=["interview-topics/t/topic1.jpg"],
             tailored_resume_file_keys=["tailored-resumes/t/s1/resume.pdf"],
             showcase_block_image_urls=[],
+            showcase_resume_file_keys=["showcase-resumes/t/p1/resume.pdf"],
         )
         repo = FakeAccountDeletionRepository(artifacts)
         storage = FakeObjectStorage(fail_photo_delete=True, fail_resume_delete=True)
@@ -109,6 +112,7 @@ class TestDeleteAccount:
             interview_topic_image_keys=[],
             tailored_resume_file_keys=[],
             showcase_block_image_urls=[],
+            showcase_resume_file_keys=[],
         )
         repo = FakeAccountDeletionRepository(artifacts)
         storage = FakeObjectStorage()

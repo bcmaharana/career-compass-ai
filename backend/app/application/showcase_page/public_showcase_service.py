@@ -28,6 +28,10 @@ from app.domain.career_profile.repositories import CareerProfileRepository, Targ
 from app.domain.identity.repositories import TenantContextBinder, UserRepository
 from app.domain.interview_prep.entities import InterviewTopic
 from app.domain.interview_prep.repositories import InterviewTopicRepository
+from app.application.showcase_page.showcase_page_service import (
+    RESUME_DOWNLOAD_URL_TTL_SECONDS,
+    resume_download_filename,
+)
 from app.domain.resume_intelligence.storage import PrivateObjectStorageRepository
 from app.domain.showcase_page.entities import ShowcasePage
 from app.domain.showcase_page.repositories import PublicShareLinkRepository, ShowcasePageRepository
@@ -73,6 +77,15 @@ class PublicShowcasePageView:
     #: stored on ShowcasePage itself (see that entity's own docstring
     #: for why the profile picture is deliberately "fixed").
     photo_url: str | None = None
+    #: Fresh presigned URLs for the owner's uploaded resume document
+    #: (private bucket, unlike photo_url/background_image_url's public
+    #: one) — both None whenever no resume has been uploaded.
+    #: resume_view_url opens inline, resume_download_url saves the file
+    #: — see ShowcasePageService.get_resume_urls's own docstring for why
+    #: these are two separate URLs, resolved fresh on every read rather
+    #: than stored.
+    resume_view_url: str | None = None
+    resume_download_url: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +167,26 @@ class PublicShowcaseService:
             target_role_id=page.target_role_id,
         )
 
+        resume_view_url: str | None = None
+        resume_download_url: str | None = None
+        if page.resume_file_key is not None:
+            extension = page.resume_file_key.rsplit(".", 1)[-1]
+            filename = resume_download_filename(
+                display_name=owner.display_name, extension=extension
+            )
+            resume_view_url = await self._storage.get_presigned_url(
+                key=page.resume_file_key,
+                expires_in_seconds=RESUME_DOWNLOAD_URL_TTL_SECONDS,
+                download_filename=filename,
+                disposition="inline",
+            )
+            resume_download_url = await self._storage.get_presigned_url(
+                key=page.resume_file_key,
+                expires_in_seconds=RESUME_DOWNLOAD_URL_TTL_SECONDS,
+                download_filename=filename,
+                disposition="attachment",
+            )
+
         return PublicShowcasePageView(
             page=page,
             owner_display_name=owner.display_name,
@@ -162,6 +195,8 @@ class PublicShowcaseService:
             role_tag=role.tag,
             article_share_keys=article_share_keys,
             photo_url=photo_url,
+            resume_view_url=resume_view_url,
+            resume_download_url=resume_download_url,
         )
 
     async def get_article(self, share_key: str) -> PublicArticleView | None:

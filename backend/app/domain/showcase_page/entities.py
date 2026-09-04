@@ -101,6 +101,15 @@ class ShowcasePage:
     headline: str | None = None
     summary: str | None = None
     background_image_url: str | None = None
+    #: Private-bucket storage key + original filename for an uploaded
+    #: resume DOCUMENT (PDF/Word) — deliberately separate from `blocks`'
+    #: seeded resume-derived content, and from background_image_url's
+    #: public bucket (this file carries the same PII as
+    #: resume_intelligence's own uploads). No parsing: stored and served
+    #: back byte-for-byte. See ShowcasePageService.upload_resume /
+    #: get_resume_download_url.
+    resume_file_key: str | None = None
+    resume_file_name: str | None = None
 
 
 #: Resource types a public_share_links row can point at — kept as a

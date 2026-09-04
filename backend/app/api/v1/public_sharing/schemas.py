@@ -58,6 +58,12 @@ class PublicShowcasePageResponse(BaseModel):
     #: (with Executive Summary moved into its own card below) instead of
     #: the photo_url + Executive Summary side-by-side fallback layout.
     background_image_url: str | None
+    #: Fresh presigned URLs for the owner's uploaded resume document,
+    #: both None whenever none has been uploaded — see
+    #: PublicShowcasePageView.resume_view_url/resume_download_url's own
+    #: docstring.
+    resume_view_url: str | None
+    resume_download_url: str | None
     blocks: list[PublicShowcaseBlock]
     updated_at: datetime
 

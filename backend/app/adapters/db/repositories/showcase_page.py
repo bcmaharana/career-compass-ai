@@ -87,6 +87,8 @@ def _page_to_domain(model: ShowcasePageModel) -> ShowcasePage:
         headline=model.headline,
         summary=model.summary,
         background_image_url=model.background_image_url,
+        resume_file_key=model.resume_file_key,
+        resume_file_name=model.resume_file_name,
     )
 
 
@@ -106,6 +108,8 @@ class SqlAlchemyShowcasePageRepository:
             headline=page.headline,
             summary=page.summary,
             background_image_url=page.background_image_url,
+            resume_file_key=page.resume_file_key,
+            resume_file_name=page.resume_file_name,
         )
         try:
             # SAVEPOINT, not a plain flush — same create-on-first-access
@@ -157,6 +161,8 @@ class SqlAlchemyShowcasePageRepository:
         model.headline = page.headline
         model.summary = page.summary
         model.background_image_url = page.background_image_url
+        model.resume_file_key = page.resume_file_key
+        model.resume_file_name = page.resume_file_name
         await self._session.flush()
         await self._session.refresh(model)
         return _page_to_domain(model)

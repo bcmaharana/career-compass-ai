@@ -21,8 +21,9 @@ that doesn't need to know about share links at all.
 from __future__ import annotations
 
 import html as html_lib
+import re
 import uuid
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -40,6 +41,7 @@ from app.core.exceptions import CareerCompassError, ConflictError, NotFoundError
 from app.core.rich_text import sanitize_rich_text
 from app.domain.career_profile.storage import ObjectStorageRepository
 from app.domain.identity.repositories import UserRepository
+from app.domain.resume_intelligence.storage import PrivateObjectStorageRepository
 from app.domain.showcase_page.entities import ShowcaseBlock, ShowcaseColumn, ShowcasePage
 from app.domain.showcase_page.repositories import ShowcasePageRepository
 
@@ -47,6 +49,47 @@ ALLOWED_IMAGE_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"
 MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5MB — same limit as profile photos / topic images
 _EXTENSION_BY_CONTENT_TYPE = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 _IMAGE_KEY_PREFIX = "showcase-pages/"
+
+# Same allowed set/extension mapping as resume_intelligence's own upload
+# (app/application/resume_intelligence/resume_extraction_service.py) —
+# PDF or Word only, no legacy .doc. No parsing happens on this file at
+# all (unlike that other upload path), so nothing here cares about
+# content beyond its declared type.
+ALLOWED_RESUME_CONTENT_TYPES = frozenset(
+    {"application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+)
+_RESUME_EXTENSION_BY_CONTENT_TYPE = {
+    "application/pdf": "pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+}
+MAX_RESUME_SIZE_BYTES = 10 * 1024 * 1024  # 10MB — same limit as resume_intelligence's own upload
+_RESUME_KEY_PREFIX = "showcase-resumes/"
+# Same reasoning as ResumeExportService's own _DOWNLOAD_URL_TTL_SECONDS —
+# this URL is meant to sit on a persistent public page, not a one-shot
+# immediate-use link, so it needs to outlive resume_intelligence's 300s.
+RESUME_DOWNLOAD_URL_TTL_SECONDS = 3600
+
+_UNSAFE_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]+')
+
+
+@dataclass(slots=True)
+class ResumeUrls:
+    view_url: str | None
+    download_url: str | None
+
+
+def resume_download_filename(*, display_name: str, extension: str) -> str:
+    """The presigned URL's ResponseContentDisposition filename — computed
+    fresh from the current owner display name on every read (same
+    "recompute at request time, never bake into storage" reasoning as
+    ResumeExportService's own _resume_filename), so a later name change
+    is reflected immediately without touching the stored file. Shared by
+    both ShowcasePageService (authenticated) and PublicShowcaseService
+    (anonymous) rather than duplicated, since both need the exact same
+    filename for the exact same underlying file.
+    """
+    safe_name = _UNSAFE_FILENAME_CHARS.sub(" ", display_name).strip() or "Resume"
+    return f"{safe_name} Resume.{extension}"
 
 
 def showcase_block_image_key_from_url(image_url: str) -> str | None:
@@ -164,6 +207,7 @@ class ShowcasePageService:
         resume_export: ResumeExportService,
         storage: ObjectStorageRepository,
         users: UserRepository,
+        resume_storage: PrivateObjectStorageRepository,
     ) -> None:
         self._pages = pages
         self._target_roles = target_roles
@@ -171,6 +215,15 @@ class ShowcasePageService:
         self._resume_export = resume_export
         self._storage = storage
         self._users = users
+        # Same concrete S3ObjectStorageRepository instance as `storage`
+        # above (structurally satisfies both Protocols against two
+        # different buckets — see that adapter's own module docstring),
+        # just typed against the private-bucket Protocol for the resume
+        # file methods (upload_private/get_presigned_url/delete_private)
+        # that ObjectStorageRepository doesn't declare. Same two-param
+        # convention ResumeExportService/DeleteAccountService already use
+        # for public-vs-private storage.
+        self._resume_storage = resume_storage
 
     async def get_or_create(
         self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID
@@ -394,3 +447,99 @@ class ShowcasePageService:
         page.background_image_url = None
         page.updated_at = datetime.now(UTC)
         return await self._pages.update(page)
+
+    async def upload_resume(
+        self,
+        *,
+        tenant_id: UUID,
+        user_id: UUID,
+        target_role_id: UUID,
+        filename: str,
+        content: bytes,
+        content_type: str,
+    ) -> ShowcasePage:
+        if content_type not in ALLOWED_RESUME_CONTENT_TYPES:
+            raise ValidationError(
+                f"Unsupported resume type '{content_type}'. Allowed: PDF, DOCX.",
+                code="UNSUPPORTED_RESUME_TYPE",
+            )
+        if len(content) > MAX_RESUME_SIZE_BYTES:
+            raise ValidationError(
+                f"Resume exceeds the {MAX_RESUME_SIZE_BYTES // (1024 * 1024)}MB limit.",
+                code="RESUME_TOO_LARGE",
+            )
+        page = await self.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
+
+        extension = _RESUME_EXTENSION_BY_CONTENT_TYPE[content_type]
+        # Stable key per page (not per upload, and not keyed by extension)
+        # — a re-upload in the other format overwrites in place rather
+        # than accumulating a stale file the new one doesn't replace,
+        # same "one file per owner" model as background_image_url.
+        key = f"{_RESUME_KEY_PREFIX}{tenant_id}/{page.id}/resume.{extension}"
+        if page.resume_file_key is not None and page.resume_file_key != key:
+            try:
+                await self._resume_storage.delete_private(key=page.resume_file_key)
+            except CareerCompassError:
+                pass
+        await self._resume_storage.upload_private(
+            key=key, content=content, content_type=content_type
+        )
+        page.resume_file_key = key
+        page.resume_file_name = filename
+
+        page.updated_at = datetime.now(UTC)
+        return await self._pages.update(page)
+
+    async def remove_resume(
+        self, *, tenant_id: UUID, user_id: UUID, target_role_id: UUID
+    ) -> ShowcasePage:
+        page = await self.get_or_create(
+            tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
+        )
+        if page.resume_file_key is not None:
+            try:
+                await self._resume_storage.delete_private(key=page.resume_file_key)
+            except CareerCompassError:
+                # Best-effort, same "DB field is the source of truth"
+                # reasoning as remove_background_image.
+                pass
+
+        page.resume_file_key = None
+        page.resume_file_name = None
+        page.updated_at = datetime.now(UTC)
+        return await self._pages.update(page)
+
+    async def get_resume_urls(
+        self, *, tenant_id: UUID, user_id: UUID, page: ShowcasePage
+    ) -> ResumeUrls:
+        """Fresh presigned URLs for the owner's own resume file, resolved
+        on every read rather than stored — same reasoning as
+        ResumeExportService.get_download_urls (a persisted presigned URL
+        would expire long before the page is re-fetched). Two separate
+        URLs, not one: "View" opens the file in place (inline
+        disposition) and "Download" saves it (attachment) — a single
+        presigned URL can only carry one disposition, since S3's SigV4
+        signature is computed over the full query string including
+        ResponseContentDisposition (see get_presigned_url's own
+        docstring)."""
+        if page.resume_file_key is None:
+            return ResumeUrls(view_url=None, download_url=None)
+        user = await self._users.get_by_id(tenant_id, user_id)
+        display_name = user.display_name if user and user.display_name else "Resume"
+        extension = page.resume_file_key.rsplit(".", 1)[-1]
+        filename = resume_download_filename(display_name=display_name, extension=extension)
+        view_url = await self._resume_storage.get_presigned_url(
+            key=page.resume_file_key,
+            expires_in_seconds=RESUME_DOWNLOAD_URL_TTL_SECONDS,
+            download_filename=filename,
+            disposition="inline",
+        )
+        download_url = await self._resume_storage.get_presigned_url(
+            key=page.resume_file_key,
+            expires_in_seconds=RESUME_DOWNLOAD_URL_TTL_SECONDS,
+            download_filename=filename,
+            disposition="attachment",
+        )
+        return ResumeUrls(view_url=view_url, download_url=download_url)

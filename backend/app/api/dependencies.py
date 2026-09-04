@@ -1376,7 +1376,9 @@ def get_showcase_page_service(
     storage: S3ObjectStorageRepository = Depends(get_object_storage),
     users: SqlAlchemyUserRepository = Depends(get_user_repository_scoped),
 ) -> ShowcasePageService:
-    return ShowcasePageService(pages, target_roles, career_profiles, resume_export, storage, users)
+    return ShowcasePageService(
+        pages, target_roles, career_profiles, resume_export, storage, users, resume_storage=storage
+    )
 
 
 # get_public_sharing_service depends on get_showcase_page_service and

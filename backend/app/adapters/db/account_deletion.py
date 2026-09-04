@@ -151,21 +151,28 @@ class SqlAlchemyAccountDeletionRepository:
         # cleanup ever since that restructuring — fixed by iterating each
         # row's columns instead.
         showcase_pages_result = await self._session.execute(
-            select(ShowcasePageModel.blocks, ShowcasePageModel.background_image_url).where(
-                ShowcasePageModel.tenant_id == tenant_id
-            )
+            select(
+                ShowcasePageModel.blocks,
+                ShowcasePageModel.background_image_url,
+                ShowcasePageModel.resume_file_key,
+            ).where(ShowcasePageModel.tenant_id == tenant_id)
         )
         showcase_pages_rows = showcase_pages_result.all()
         showcase_block_image_urls = [
             str(column["image_url"])
-            for blocks, _background_image_url in showcase_pages_rows
+            for blocks, _background_image_url, _resume_file_key in showcase_pages_rows
             for block in blocks
             for column in _columns_of(block)
             if column.get("type") == "image" and column.get("image_url")
         ] + [
             background_image_url
-            for _blocks, background_image_url in showcase_pages_rows
+            for _blocks, background_image_url, _resume_file_key in showcase_pages_rows
             if background_image_url
+        ]
+        showcase_resume_file_keys = [
+            resume_file_key
+            for _blocks, _background_image_url, resume_file_key in showcase_pages_rows
+            if resume_file_key
         ]
 
         # 1. Career-profile sub-entities (-> career_profiles.id)
@@ -329,4 +336,5 @@ class SqlAlchemyAccountDeletionRepository:
             interview_topic_image_keys=interview_topic_image_keys,
             tailored_resume_file_keys=tailored_resume_file_keys,
             showcase_block_image_urls=showcase_block_image_urls,
+            showcase_resume_file_keys=showcase_resume_file_keys,
         )

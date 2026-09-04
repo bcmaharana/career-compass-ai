@@ -102,9 +102,15 @@ class FakeUserRepository:
 
 class FakeStorage:
     async def get_presigned_url(
-        self, *, key: str, expires_in_seconds: int = 300, download_filename: str | None = None
+        self,
+        *,
+        key: str,
+        expires_in_seconds: int = 300,
+        download_filename: str | None = None,
+        disposition: str = "attachment",
     ) -> str:
-        return f"https://example.test/{key}"
+        suffix = f"?disposition={disposition}" if download_filename else ""
+        return f"https://example.test/{key}{suffix}"
 
 
 class FakeCareerProfileRepository:
@@ -260,6 +266,8 @@ class TestGetShowcasePage:
         assert view.role_tag == "SE"
         assert view.owner_handle == "JR"
         assert view.photo_url is None  # neither profile below exists at all here
+        assert view.resume_view_url is None  # no resume uploaded on this page
+        assert view.resume_download_url is None
 
     async def _make_public_page_fixture(
         self,
@@ -342,6 +350,26 @@ class TestGetShowcasePage:
 
         assert view is not None
         assert view.photo_url == "https://example.test/master-photo.jpg"
+
+    async def test_resolves_two_presigned_resume_urls_when_a_resume_is_uploaded(self) -> None:
+        fx, tenant_id, user_id, role_id = await self._make_public_page_fixture()
+        fx.pages.pages[
+            next(iter(fx.pages.pages))
+        ].resume_file_key = f"showcase-resumes/{tenant_id}/some-page-id/resume.pdf"
+
+        view = await fx.service.get_showcase_page("k")
+
+        assert view is not None
+        assert view.resume_view_url is not None
+        assert view.resume_view_url.startswith(
+            f"https://example.test/showcase-resumes/{tenant_id}/some-page-id/resume.pdf"
+        )
+        assert "disposition=inline" in view.resume_view_url
+        assert view.resume_download_url is not None
+        assert view.resume_download_url.startswith(
+            f"https://example.test/showcase-resumes/{tenant_id}/some-page-id/resume.pdf"
+        )
+        assert "disposition=attachment" in view.resume_download_url
 
     async def test_resolves_a_share_key_for_a_public_linked_article(self) -> None:
         fx = _Fixture()

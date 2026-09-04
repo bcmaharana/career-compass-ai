@@ -42,6 +42,11 @@ class TenantDeletionArtifacts:
     #: public bucket/adapter as profile_photos, not the private one
     #: resume/topic-image keys use.
     showcase_block_image_urls: list[str]
+    #: Private-bucket storage keys for every Showcase Page that had an
+    #: uploaded resume document set — same bucket/adapter as
+    #: resume_file_keys/tailored_resume_file_keys, different key prefix,
+    #: unlike showcase_block_image_urls' public bucket above.
+    showcase_resume_file_keys: list[str]
 
 
 class AccountDeletionRepository(Protocol):

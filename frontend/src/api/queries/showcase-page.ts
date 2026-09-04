@@ -98,3 +98,28 @@ export function useRemoveShowcaseBackgroundImage(targetRoleId: string | null) {
     },
   });
 }
+
+export function useUploadShowcaseResume(targetRoleId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) =>
+      apiClient.uploadFile<ShowcasePageResponse>(
+        `/api/v1/showcase-pages/${targetRoleId}/resume`,
+        file,
+      ),
+    onSuccess: (data) => {
+      if (targetRoleId) queryClient.setQueryData(KEYS.page(targetRoleId), data);
+    },
+  });
+}
+
+export function useRemoveShowcaseResume(targetRoleId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiClient.delete<ShowcasePageResponse>(`/api/v1/showcase-pages/${targetRoleId}/resume`),
+    onSuccess: (data) => {
+      if (targetRoleId) queryClient.setQueryData(KEYS.page(targetRoleId), data);
+    },
+  });
+}

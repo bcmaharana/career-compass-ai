@@ -71,6 +71,9 @@ async def _page_response(
     photo_url = await service.get_photo_url(
         tenant_id=page.tenant_id, user_id=page.user_id, target_role_id=page.target_role_id
     )
+    resume_urls = await service.get_resume_urls(
+        tenant_id=page.tenant_id, user_id=page.user_id, page=page
+    )
     return ShowcasePageResponse(
         id=page.id,
         target_role_id=page.target_role_id,
@@ -87,6 +90,9 @@ async def _page_response(
         summary=page.summary,
         photo_url=photo_url,
         background_image_url=page.background_image_url,
+        resume_file_name=page.resume_file_name,
+        resume_view_url=resume_urls.view_url,
+        resume_download_url=resume_urls.download_url,
         share_key=share_key,
         created_at=page.created_at,
         updated_at=page.updated_at,
@@ -210,6 +216,47 @@ async def remove_showcase_background_image(
     share_links: PublicShareLinkService = Depends(get_public_share_link_service),
 ) -> ShowcasePageResponse:
     page = await service.remove_background_image(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
+    )
+    return await _page_response(page, service, share_links)
+
+
+@router.post(
+    "/showcase-pages/{target_role_id}/resume",
+    response_model=ShowcasePageResponse,
+)
+async def upload_showcase_resume(
+    target_role_id: UUID,
+    file: UploadFile,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ShowcasePageService = Depends(get_showcase_page_service),
+    share_links: PublicShareLinkService = Depends(get_public_share_link_service),
+) -> ShowcasePageResponse:
+    content = await file.read()
+    page = await service.upload_resume(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        target_role_id=target_role_id,
+        filename=file.filename or "Resume",
+        content=content,
+        content_type=file.content_type or "application/octet-stream",
+    )
+    return await _page_response(page, service, share_links)
+
+
+@router.delete(
+    "/showcase-pages/{target_role_id}/resume",
+    response_model=ShowcasePageResponse,
+)
+async def remove_showcase_resume(
+    target_role_id: UUID,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ShowcasePageService = Depends(get_showcase_page_service),
+    share_links: PublicShareLinkService = Depends(get_public_share_link_service),
+) -> ShowcasePageResponse:
+    page = await service.remove_resume(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         target_role_id=target_role_id,

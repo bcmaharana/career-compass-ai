@@ -2,11 +2,13 @@ import { useCurrentUser } from "@/api/queries/auth";
 import { useInterviewTopics } from "@/api/queries/interview-prep";
 import {
   useRemoveShowcaseBackgroundImage,
+  useRemoveShowcaseResume,
   useShowcasePage,
   useToggleShowcasePagePublic,
   useUpdateShowcasePage,
   useUploadShowcaseBackgroundImage,
   useUploadShowcaseColumnImage,
+  useUploadShowcaseResume,
 } from "@/api/queries/showcase-page";
 import type { components } from "@/api/schema.gen";
 import { Button } from "@/components/ui/button";
@@ -27,6 +29,7 @@ import {
   ChevronDown,
   ChevronRight,
   ExternalLink,
+  FileText,
   ImageOff,
   Pencil,
   Plus,
@@ -395,6 +398,14 @@ type ShowcasePageData = components["schemas"]["ShowcasePageResponse"];
  * here either way (see CareerProfilePage for that). `background_image_url`
  * IS editable here, direct public-bucket upload exactly like a block's
  * own image column.
+ *
+ * Resume (2026-09-04): a real PDF/Word document the owner uploads and
+ * fully controls here — deliberately separate from `blocks`' own
+ * seeded resume-derived content, and stored in the private bucket (not
+ * the public one background_image_url/block images use, since it
+ * carries real PII), so the public page shows a fresh, time-limited
+ * download URL rather than a stable one. No parsing: stored and served
+ * back byte-for-byte.
  */
 function ShowcaseHeaderBar({
   page,
@@ -411,6 +422,11 @@ function ShowcaseHeaderBar({
   const removeBackgroundImage = useRemoveShowcaseBackgroundImage(targetRoleId);
   const backgroundFileInputRef = useRef<HTMLInputElement>(null);
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+
+  const uploadResume = useUploadShowcaseResume(targetRoleId);
+  const removeResume = useRemoveShowcaseResume(targetRoleId);
+  const resumeFileInputRef = useRef<HTMLInputElement>(null);
+  const [removeResumeConfirmOpen, setRemoveResumeConfirmOpen] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(page.name ?? "");
@@ -437,6 +453,12 @@ function ShowcaseHeaderBar({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (file) uploadBackgroundImage.mutate(file);
+  }
+
+  function handleResumeFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) uploadResume.mutate(file);
   }
 
   const hasAnyContent = page.name || page.headline || page.summary || page.photo_url;
@@ -492,6 +514,70 @@ function ShowcaseHeaderBar({
         {uploadBackgroundImage.isError && (
           <p role="alert" className="text-sm text-destructive">
             {getErrorMessage(uploadBackgroundImage.error)}
+          </p>
+        )}
+      </div>
+
+      <div className="flex w-full flex-col gap-2 md:w-56 md:shrink-0">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Resume
+        </p>
+        {page.resume_file_name ? (
+          <div className="flex flex-col gap-1 rounded-md border border-border bg-background p-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <p className="truncate text-sm">{page.resume_file_name}</p>
+            </div>
+            {(page.resume_view_url || page.resume_download_url) && (
+              <a
+                href={page.resume_view_url || page.resume_download_url || undefined}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-medium text-accent underline underline-offset-2 hover:text-accent/80"
+              >
+                View / Download
+              </a>
+            )}
+          </div>
+        ) : (
+          <div className="flex h-16 w-full items-center justify-center rounded-md border border-dashed border-border text-muted-foreground">
+            <FileText className="h-6 w-6" />
+          </div>
+        )}
+        <div className={cn("flex items-center", ACTION_BUTTON_ROW_GAP)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => resumeFileInputRef.current?.click()}
+            disabled={uploadResume.isPending}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            {uploadResume.isPending
+              ? "Uploading..."
+              : page.resume_file_name
+                ? "Replace"
+                : "Add resume"}
+          </Button>
+          {page.resume_file_name && (
+            <Button variant="ghost" size="sm" onClick={() => setRemoveResumeConfirmOpen(true)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+        <input
+          ref={resumeFileInputRef}
+          type="file"
+          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          className="hidden"
+          onChange={handleResumeFileChange}
+        />
+        <p className="text-xs text-muted-foreground">
+          A PDF or Word copy of your resume — shown as a direct view/download link on your public
+          page. Not parsed or used to seed any of this page's own content.
+        </p>
+        {uploadResume.isError && (
+          <p role="alert" className="text-sm text-destructive">
+            {getErrorMessage(uploadResume.error)}
           </p>
         )}
       </div>
@@ -577,6 +663,18 @@ function ShowcaseHeaderBar({
         title="Remove background image?"
         description="Your public page will fall back to your profile photo and Executive Summary. This can't be undone."
         isPending={removeBackgroundImage.isPending}
+      />
+
+      <ConfirmDialog
+        open={removeResumeConfirmOpen}
+        onCancel={() => setRemoveResumeConfirmOpen(false)}
+        onConfirm={() => {
+          removeResume.mutate();
+          setRemoveResumeConfirmOpen(false);
+        }}
+        title="Remove your resume?"
+        description="The view/download link will no longer appear on your public page. This can't be undone."
+        isPending={removeResume.isPending}
       />
     </div>
   );

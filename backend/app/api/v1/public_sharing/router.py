@@ -50,6 +50,8 @@ async def get_public_showcase_page(
         summary=view.page.summary,
         photo_url=view.photo_url,
         background_image_url=view.page.background_image_url,
+        resume_view_url=view.resume_view_url,
+        resume_download_url=view.resume_download_url,
         blocks=[
             PublicShowcaseBlock(
                 id=block.id,

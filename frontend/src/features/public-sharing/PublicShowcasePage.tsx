@@ -7,7 +7,7 @@ import { PublicPageHeader } from "@/features/public-sharing/PublicPageHeader";
 import { useNoIndex } from "@/hooks/useNoIndex";
 import { ApiError } from "@/api/client";
 import { stripHtml } from "@/lib/strip-html";
-import { ExternalLink, UserRound } from "lucide-react";
+import { ExternalLink, FileText, UserRound } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 type PublicShowcaseRow = components["schemas"]["PublicShowcaseBlock"];
@@ -105,6 +105,7 @@ export function PublicShowcasePage() {
         {page && (
           <div className="flex flex-col gap-4">
             <ShowcaseTopBar page={page} />
+            <ShowcaseResumeLink page={page} />
             {/* Executive Summary moves into its own card once a
                 background image is set — the top bar becomes just the
                 image then, with nowhere left to put the summary text
@@ -218,6 +219,48 @@ function ShowcaseTopBar({ page }: { page: PublicShowcasePageData }) {
         {page.summary && <RichTextDisplay html={page.summary} className="text-sm" />}
       </div>
     </div>
+  );
+}
+
+/** Below the top banner (direct 2026-09-04 request): a single link to
+ * the owner's uploaded resume document, rendered only once one has
+ * actually been uploaded. Briefly split into separate "viewed"
+ * (resume_view_url, inline disposition) / "downloaded"
+ * (resume_download_url, attachment disposition) links — reverted back
+ * to one link (direct 2026-09-04 follow-up, confirmed by real mobile
+ * testing: both dispositions offer the same view-or-save choice there,
+ * so the distinction wasn't worth two links). Points at resume_view_url
+ * (inline) rather than resume_download_url — opening inline still
+ * leaves a save/download option available via the browser's own PDF
+ * viewer or share sheet, whereas attachment forces an immediate save
+ * with no chance to view first. Firstname is taken from the page's own
+ * name (falling back to owner_display_name, same fallback
+ * ShowcaseBrandTitle already uses) rather than a dedicated backend
+ * field, since the full name is already available here and a
+ * first-token split is all "Firstname" needs. */
+function ShowcaseResumeLink({ page }: { page: PublicShowcasePageData }) {
+  const resumeUrl = page.resume_view_url || page.resume_download_url;
+  if (!resumeUrl) return null;
+  const fullName = page.name || page.owner_display_name;
+  const firstName = fullName.trim().split(/\s+/)[0] || fullName;
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-2 py-4">
+        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <p className="text-sm">
+          {firstName}'s Resume can be{" "}
+          <a
+            href={resumeUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-accent underline underline-offset-2 hover:text-accent/80"
+          >
+            viewed or downloaded from here
+          </a>
+          .
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 

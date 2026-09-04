@@ -57,6 +57,13 @@ class ShowcasePageModel(Base):
     # URL the owner uploads themselves, unlike the profile photo above
     # (which this page never stores, only ever resolves live).
     background_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Uploaded resume document (2026-09-04) — private-bucket key + the
+    # original filename, unlike background_image_url's public direct URL
+    # above (this file carries the same PII as resume_intelligence's own
+    # uploads, so it's never a directly-servable URL). See
+    # ShowcasePage's own docstring.
+    resume_file_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    resume_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

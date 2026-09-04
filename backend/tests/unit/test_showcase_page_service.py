@@ -20,6 +20,7 @@ from app.application.career_profile.resume_export_service import ResumeExportSer
 from app.application.career_profile.target_role_service import TargetRoleService
 from app.application.showcase_page.showcase_page_service import (
     MAX_IMAGE_SIZE_BYTES,
+    MAX_RESUME_SIZE_BYTES,
     ShowcasePageService,
 )
 from app.core.exceptions import NotFoundError, ValidationError
@@ -121,6 +122,33 @@ class FakePublicObjectStorage:
         self.uploaded.pop(key, None)
 
 
+class FakePrivateObjectStorage:
+    """Same shape as test_resume_export_service.py's own FakeStorage —
+    stands in for the private-bucket resume file methods
+    (ObjectStorageRepository's public upload()/delete() don't cover
+    these, see ShowcasePageService's own resume_storage param)."""
+
+    def __init__(self) -> None:
+        self.uploaded: dict[str, bytes] = {}
+
+    async def upload_private(self, *, key: str, content: bytes, content_type: str) -> None:
+        self.uploaded[key] = content
+
+    async def get_presigned_url(
+        self,
+        *,
+        key: str,
+        expires_in_seconds: int = 300,
+        download_filename: str | None = None,
+        disposition: str = "attachment",
+    ) -> str:
+        suffix = f"?filename={download_filename}&disposition={disposition}" if download_filename else ""
+        return f"https://example.test/{key}{suffix}"
+
+    async def delete_private(self, *, key: str) -> None:
+        self.uploaded.pop(key, None)
+
+
 class FakeShowcasePageRepository:
     def __init__(self) -> None:
         self.pages: dict[uuid.UUID, ShowcasePage] = {}
@@ -211,6 +239,7 @@ class _Fixture:
         self.experience_repo = FakeExperienceRepository()
         self.user_repo = FakeUserRepository()
         self.storage = FakePublicObjectStorage()
+        self.resume_storage = FakePrivateObjectStorage()
 
         self.target_roles = TargetRoleService(self.target_role_repo)  # type: ignore[arg-type]
         self.career_profiles = CareerProfileService(
@@ -237,6 +266,7 @@ class _Fixture:
             self.resume_export,
             self.storage,
             self.user_repo,  # type: ignore[arg-type]
+            resume_storage=self.resume_storage,  # type: ignore[arg-type]
         )
 
     def register_role_with_profile(self) -> TargetRole:
@@ -751,3 +781,167 @@ class TestMultiColumnRows:
         assert len(updated.blocks[0].columns) == 2
         assert updated.blocks[0].columns[0].html == "<p>Original</p>"
         assert updated.blocks[0].columns[1].type == "image"
+
+
+class TestUploadResume:
+    async def test_sets_the_resume_file_key_and_name(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+
+        updated = await fx.service.upload_resume(
+            tenant_id=fx.tenant_id,
+            user_id=fx.user_id,
+            target_role_id=role.id,
+            filename="Jordan Rivera Resume.pdf",
+            content=b"%PDF-fake",
+            content_type="application/pdf",
+        )
+
+        assert updated.resume_file_name == "Jordan Rivera Resume.pdf"
+        assert updated.resume_file_key is not None
+        assert updated.resume_file_key.startswith("showcase-resumes/")
+        assert updated.resume_file_key.endswith(".pdf")
+        assert fx.resume_storage.uploaded[updated.resume_file_key] == b"%PDF-fake"
+
+    async def test_reupload_in_a_different_format_removes_the_old_file(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+        first = await fx.service.upload_resume(
+            tenant_id=fx.tenant_id,
+            user_id=fx.user_id,
+            target_role_id=role.id,
+            filename="resume.pdf",
+            content=b"pdf-bytes",
+            content_type="application/pdf",
+        )
+        assert first.resume_file_key in fx.resume_storage.uploaded
+
+        second = await fx.service.upload_resume(
+            tenant_id=fx.tenant_id,
+            user_id=fx.user_id,
+            target_role_id=role.id,
+            filename="resume.docx",
+            content=b"docx-bytes",
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+
+        assert first.resume_file_key not in fx.resume_storage.uploaded
+        assert second.resume_file_key in fx.resume_storage.uploaded
+        assert len(fx.resume_storage.uploaded) == 1
+
+    async def test_rejects_unsupported_content_type(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+
+        with pytest.raises(ValidationError):
+            await fx.service.upload_resume(
+                tenant_id=fx.tenant_id,
+                user_id=fx.user_id,
+                target_role_id=role.id,
+                filename="resume.txt",
+                content=b"data",
+                content_type="text/plain",
+            )
+
+    async def test_rejects_oversized_resume(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+
+        with pytest.raises(ValidationError):
+            await fx.service.upload_resume(
+                tenant_id=fx.tenant_id,
+                user_id=fx.user_id,
+                target_role_id=role.id,
+                filename="resume.pdf",
+                content=b"x" * (MAX_RESUME_SIZE_BYTES + 1),
+                content_type="application/pdf",
+            )
+
+
+class TestRemoveResume:
+    async def test_clears_the_fields_and_deletes_from_storage(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+        await fx.service.upload_resume(
+            tenant_id=fx.tenant_id,
+            user_id=fx.user_id,
+            target_role_id=role.id,
+            filename="resume.pdf",
+            content=b"pdf-bytes",
+            content_type="application/pdf",
+        )
+        assert len(fx.resume_storage.uploaded) == 1
+
+        updated = await fx.service.remove_resume(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id
+        )
+
+        assert updated.resume_file_key is None
+        assert updated.resume_file_name is None
+        assert fx.resume_storage.uploaded == {}
+
+    async def test_is_a_no_op_when_no_resume_is_set(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+
+        updated = await fx.service.remove_resume(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id
+        )
+
+        assert updated.resume_file_key is None
+
+
+class TestGetResumeUrls:
+    async def test_returns_none_for_both_when_no_resume_is_set(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+        page = await fx.service.get_or_create(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, target_role_id=role.id
+        )
+
+        urls = await fx.service.get_resume_urls(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, page=page
+        )
+
+        assert urls.view_url is None
+        assert urls.download_url is None
+
+    async def test_returns_two_presigned_urls_carrying_the_owners_name(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+        page = await fx.service.upload_resume(
+            tenant_id=fx.tenant_id,
+            user_id=fx.user_id,
+            target_role_id=role.id,
+            filename="resume.pdf",
+            content=b"pdf-bytes",
+            content_type="application/pdf",
+        )
+
+        urls = await fx.service.get_resume_urls(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, page=page
+        )
+
+        assert urls.view_url is not None
+        assert urls.download_url is not None
+        assert "Jordan Rivera Resume.pdf" in urls.view_url
+        assert "Jordan Rivera Resume.pdf" in urls.download_url
+
+    async def test_view_url_is_inline_and_download_url_is_attachment(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+        page = await fx.service.upload_resume(
+            tenant_id=fx.tenant_id,
+            user_id=fx.user_id,
+            target_role_id=role.id,
+            filename="resume.pdf",
+            content=b"pdf-bytes",
+            content_type="application/pdf",
+        )
+
+        urls = await fx.service.get_resume_urls(
+            tenant_id=fx.tenant_id, user_id=fx.user_id, page=page
+        )
+
+        assert urls.view_url is not None and "disposition=inline" in urls.view_url
+        assert urls.download_url is not None and "disposition=attachment" in urls.download_url

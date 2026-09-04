@@ -11,7 +11,7 @@ public-read and one private.
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Literal, Protocol
 
 
 class PrivateObjectStorageRepository(Protocol):
@@ -31,15 +31,27 @@ class PrivateObjectStorageRepository(Protocol):
         key: str,
         expires_in_seconds: int = 300,
         download_filename: str | None = None,
+        disposition: Literal["inline", "attachment"] = "attachment",
     ) -> str:
         """Return a time-limited URL for retrieving a private object.
 
-        download_filename, when given, makes opening the URL download
-        with that name (via ResponseContentDisposition) instead of the
-        raw storage key — used by ResumeExportService
-        (app/application/career_profile/) so a link can carry a
-        human-readable filename computed fresh from current profile
+        download_filename, when given, sets ResponseContentDisposition to
+        carry that human-readable name instead of the raw storage key —
+        used by ResumeExportService (app/application/career_profile/) so
+        a link can carry a name computed fresh from current profile
         data, without needing to re-upload just to change it.
+
+        disposition controls whether the browser opens the file in place
+        ("inline" — e.g. a PDF rendered in a new tab) or saves it
+        ("attachment", the default, matching every existing caller's
+        behavior before this parameter existed) — meaningless when
+        download_filename is None, since ResponseContentDisposition is
+        only ever set together with a filename here. A caller wanting
+        both a "View" and a "Download" link for the same object (see
+        ShowcasePageService.get_resume_urls) requests two separate
+        presigned URLs, one per disposition — S3's SigV4 signature bakes
+        query params (including ResponseContentDisposition) into the URL
+        itself, so one URL can't serve both behaviors.
         """
         ...
 

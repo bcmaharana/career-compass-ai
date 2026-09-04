@@ -71,6 +71,7 @@ class FakeAccountDeletionRepository:
             interview_topic_image_keys=[],
             tailored_resume_file_keys=[],
             showcase_block_image_urls=[],
+            showcase_resume_file_keys=[],
         )
 
 
