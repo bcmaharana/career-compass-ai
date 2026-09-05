@@ -201,8 +201,8 @@ export function DesktopShell({ mainRef, onLogout }: DesktopShellProps) {
           >
             <a
               href={PLATFORM_BASE_URL}
-              aria-label="Back to Hub"
-              title="Back to Hub"
+              aria-label="Back to Core Grid"
+              title="Back to Core Grid"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground"
             >
               <LayoutGrid className="h-5 w-5" />

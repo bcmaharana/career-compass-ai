@@ -13,7 +13,7 @@ export interface BreadcrumbSegment {
 }
 
 /**
- * Layer-1/layer-2/layer-3 navigation trail — "Hub" is always the first
+ * Layer-1/layer-2/layer-3 navigation trail — "Core Grid" is always the first
  * segment (prepended here, not by callers), linking out to the platform's
  * own base URL. Every caller supplies just its own segments (see
  * getBreadcrumbTrail in lib/nav-items.ts for the authenticated-app shape).
@@ -33,7 +33,7 @@ export function Breadcrumb({
   variant?: "light" | "dark";
   className?: string;
 }) {
-  const full: BreadcrumbSegment[] = [{ label: "Hub", href: PLATFORM_BASE_URL }, ...segments];
+  const full: BreadcrumbSegment[] = [{ label: "Core Grid", href: PLATFORM_BASE_URL }, ...segments];
   const linkClass =
     variant === "dark"
       ? "text-primary-foreground/70 hover:text-primary-foreground hover:underline"

@@ -1,6 +1,6 @@
 /**
  * Base URL of the sibling `enterprise/platform` repo's own frontend
- * (the "Hub") — used by the "Back to Hub" links in DesktopShell.tsx/
+ * (the "Core Grid") — used by the "Back to Core Grid" links in DesktopShell.tsx/
  * MobileNavMenu.tsx. Falls back to that repo's own fixed dev port
  * (:5174) rather than an empty string, so a fresh dev checkout without
  * VITE_PLATFORM_BASE_URL set in .env.local still gets a working link

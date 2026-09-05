@@ -100,7 +100,7 @@ class PlatformHandoffRequest(BaseModel):
 
 class PlatformAccountDeletedRequest(BaseModel):
     #: A short-lived, purpose-specific token (distinct from a normal
-    #: session/handoff token) proving the Hub genuinely just deleted
+    #: session/handoff token) proving the Core Grid genuinely just deleted
     #: this account — see platform_deletion_verifier.py.
     token: str = Field(min_length=1)
 

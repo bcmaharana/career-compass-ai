@@ -75,7 +75,7 @@ export function MobileNavMenu() {
               className="flex items-center gap-3 border-b border-white/10 px-4 py-2.5 text-sm font-medium text-primary-foreground/80 hover:bg-white/5 hover:text-primary-foreground"
             >
               <LayoutGrid className="h-4 w-4 shrink-0" />
-              Back to Hub
+              Back to Core Grid
             </a>
 
             {NAV_ITEMS.map(({ to, label, icon: Icon, end, children }) => {

@@ -1,12 +1,12 @@
-"""Deletes this CCAI tenant's data in response to a Hub-side account
+"""Deletes this CCAI tenant's data in response to a Core-Grid-side account
 deletion — the counterpart to PlatformHandoffService, called via a new
-public endpoint the Hub's own DeleteAccountService POSTs to.
+public endpoint the Core Grid's own DeleteAccountService POSTs to.
 
 Resolution mirrors PlatformHandoffService's own two rules exactly,
 just for delete instead of provision: `org_id` set (an Enterprise
 account) resolves via `Tenant.platform_org_id` — a precise, deliberate
 1:1 link (an Enterprise Account is 1:1 with its Organization, see
-Membership's own docstring on the Hub), no derivation or guessing
+Membership's own docstring on the Core Grid), no derivation or guessing
 involved, so no extra ownership check is needed once that lookup
 succeeds. `org_id` None (a Personal account) resolves via the
 deterministic `derive_personal_subdomain(email)`, the same
@@ -17,7 +17,7 @@ that the resolved tenant's own user actually has this exact
 shares the email's subdomain hash is never touched.
 
 Idempotent: no matching (or already-deleted) tenant either way is a
-clean no-op, not an error — the Hub's own deletion already succeeded
+clean no-op, not an error — the Core Grid's own deletion already succeeded
 regardless of what this endpoint finds.
 """
 

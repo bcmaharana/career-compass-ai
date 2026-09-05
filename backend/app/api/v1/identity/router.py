@@ -188,7 +188,7 @@ async def platform_account_deleted(
     request: PlatformAccountDeletedRequest,
     service: PlatformAccountDeletionService = Depends(get_platform_account_deletion_service),
 ) -> None:
-    """The Hub calls this, best-effort, right after deleting an account
+    """The Core Grid calls this, best-effort, right after deleting an account
     that held a career_compass_ai entitlement — see platform's own
     DeleteAccountService. Public (no Authorization header): the signed
     deletion-assertion token itself is the proof, same shape as

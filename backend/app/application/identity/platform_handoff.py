@@ -211,7 +211,7 @@ class PlatformHandoffService:
         """Best-effort — see platform_profile_sync.py's own docstring
         for why a failure here never blocks the handoff itself. Fires on
         every handoff, not just first creation, so a profile edited on
-        the Hub shows up here the next time this person re-enters CCAI
+        the Core Grid shows up here the next time this person re-enters CCAI
         from there."""
         profile = await fetch_platform_profile(platform_token)
         if profile is None:

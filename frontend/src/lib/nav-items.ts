@@ -120,7 +120,7 @@ export const NAV_ITEMS: NavItem[] = [
  */
 /**
  * Profile, Platform Admin, and Account (delete) moved to the platform
- * Hub's own Settings (2026-08-26) — the Hub is now the canonical
+ * Core Grid's own Settings (2026-08-26) — the Core Grid is now the canonical
  * identity, so editing profile fields, managing platform-admin access,
  * and deleting the account all happen there instead. Only the two
  * CCAI-specific settings remain here.
@@ -143,7 +143,7 @@ export const SETTINGS_NAV_ITEMS: NavItem[] = [
 ];
 
 /** No item in SETTINGS_NAV_ITEMS needs special-access gating any more
- * (Platform Admin, the one that did, moved to the Hub) — kept as its
+ * (Platform Admin, the one that did, moved to the Core Grid) — kept as its
  * own export since AccountPanelContent.tsx and other callers still
  * reference it by this name. */
 export const STANDARD_SETTINGS_NAV_ITEMS: NavItem[] = SETTINGS_NAV_ITEMS;
@@ -214,7 +214,7 @@ export interface BreadcrumbSegment {
 
 /**
  * Layer-2/layer-3 breadcrumb trail for the current authenticated route —
- * "Hub" itself is prepended separately by whatever renders this (a
+ * "Core Grid" itself is prepended separately by whatever renders this (a
  * constant, not route-dependent). "Career Compass AI" always links to
  * /dashboard, matching the app's own top-level home. A NAV_ITEMS child
  * (e.g. Interview Prep under Learning Intelligence) gets its parent as a

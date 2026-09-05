@@ -97,7 +97,7 @@
     --shell-icon-endbox-h: 5.875rem;
     /*
      * 4.5rem originally (title+quote row + purpose row). Bumped to fit a
-     * third row above those two — the Hub/Career-Compass-AI/page-name
+     * third row above those two — the Core-Grid/Career-Compass-AI/page-name
      * breadcrumb (Breadcrumb component, AppHeader.tsx) — desktop (md+)
      * only, so --shell-mobile-header-h below is untouched; every fixed
      * region's top-[...] inset and <main>'s own top offset derive from

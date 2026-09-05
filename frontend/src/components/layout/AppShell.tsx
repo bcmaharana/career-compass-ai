@@ -217,11 +217,11 @@ export function AppShell() {
     // session had cached before a background refetch replaced it.
     queryClient.clear();
     // A real cross-origin navigation (not react-router's navigate()) to
-    // the Hub's own /logout — this app's sign-out can only clear ITS OWN
-    // session; the Hub's session lives in a completely separate origin's
+    // the Core Grid's own /logout — this app's sign-out can only clear ITS OWN
+    // session; the Core Grid's session lives in a completely separate origin's
     // localStorage, unreachable from here any other way. Without this,
-    // signing out of CCAI left the Hub's own session fully live — a real
-    // reported gap: visiting the Hub afterward still showed signed in,
+    // signing out of CCAI left the Core Grid's own session fully live — a real
+    // reported gap: visiting the Core Grid afterward still showed signed in,
     // and clicking back into CCAI silently re-authenticated via a fresh
     // handoff with no re-login at all.
     window.location.href = `${PLATFORM_BASE_URL}/logout`;
@@ -256,7 +256,7 @@ export function AppShell() {
         onCancel={() => setLogoutConfirmOpen(false)}
         onConfirm={performLogout}
         title="Sign out?"
-        description="You'll be signed out of Career Compass AI and the Hub — every product you're signed into."
+        description="You'll be signed out of Career Compass AI and the Core Grid — every product you're signed into."
         confirmLabel="Sign out"
         confirmPendingLabel="Signing out..."
       />

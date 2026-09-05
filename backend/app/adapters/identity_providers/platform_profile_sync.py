@@ -9,7 +9,7 @@ traffic, which this isn't. Best-effort: a failure here (network error,
 unconfigured base URL, unexpected response shape) returns None rather
 than raising — JIT provisioning must still succeed with whatever local
 data already exists (or defaults, on first-ever creation) even if the
-Hub happens to be unreachable at that exact moment.
+Core Grid happens to be unreachable at that exact moment.
 """
 
 from __future__ import annotations

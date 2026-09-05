@@ -13,7 +13,7 @@ import { useEffect } from "react";
  * pointing back at `/platform-handoff` (see that page, unchanged —
  * it already knows how to receive `?token=` from exactly this kind of
  * redirect, since it was originally built for "already signed into
- * the Hub, click a product card").
+ * the Core Grid, click a product card").
  *
  * `window.location.origin` (not a hardcoded domain) so this works
  * correctly in dev, prod, or any future domain without a code change

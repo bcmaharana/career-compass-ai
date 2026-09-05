@@ -21,7 +21,7 @@ from app.core.exceptions import UnauthorizedError
 class PlatformDeletionAssertion:
     account_id: str
     email: str
-    #: None for a Personal account; set to the Hub Organization's id for
+    #: None for a Personal account; set to the Core Grid Organization's id for
     #: an Enterprise account — lets PlatformAccountDeletionService
     #: resolve the tenant via Tenant.platform_org_id (the same lookup
     #: PlatformHandoffService already uses at handoff time) instead of

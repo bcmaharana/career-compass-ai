@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
 /**
  * Bare /settings landing — a real card per category (icon, name, and its
  * one-line `purpose` from nav-items.ts). Profile, Platform Admin, and
- * Account (delete) moved to the platform Hub's own Settings
+ * Account (delete) moved to the platform Core Grid's own Settings
  * (2026-08-26) — only CCAI-specific categories remain here, so this no
  * longer needs any permission-based gating of its own.
  *
