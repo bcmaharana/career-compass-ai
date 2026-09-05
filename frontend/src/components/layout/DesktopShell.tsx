@@ -2,13 +2,14 @@ import { AppFooter } from "@/components/layout/AppFooter";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { ChatThread } from "@/components/layout/ChatThread";
 import { RightNav } from "@/components/layout/RightNav";
+import { CoreGridIcon } from "@/components/ui/core-grid-icon";
 import { Tooltip } from "@/components/ui/tooltip";
 import { formatLastLogin } from "@/lib/format-last-login";
 import { NAV_ITEMS, matchNavItem } from "@/lib/nav-items";
 import { PLATFORM_BASE_URL } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import { ChevronDown, ChevronRight, Clock, Compass, LayoutGrid, Menu } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock, Compass, Menu } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CSSProperties, RefObject } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
@@ -203,9 +204,9 @@ export function DesktopShell({ mainRef, onLogout }: DesktopShellProps) {
               href={PLATFORM_BASE_URL}
               aria-label="Back to Core Grid"
               title="Back to Core Grid"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/10 text-primary-foreground/80 hover:border-white/45 hover:text-primary-foreground"
             >
-              <LayoutGrid className="h-5 w-5" />
+              <CoreGridIcon className="h-4 w-4" />
             </a>
 
             <button
