@@ -46,3 +46,7 @@ Thumbs.db
 # --- Old local project archives (pre-git snapshots, not needed in history) ---
 archived-packages/
 files.zip
+
+# --- Oracle migration data export (real DB dump/object storage/secrets -
+# never committed, transferred to the new VM via scp then deleted) ---
+migration-export/

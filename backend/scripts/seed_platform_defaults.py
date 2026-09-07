@@ -542,6 +542,14 @@ MODEL_CATALOG: list[tuple[str, str, float]] = [
     ("groq", "qwen/qwen3.6-27b", 0.0),
 ]
 
+# Models kept selectable in dev/local (Ollama runs fine on this laptop)
+# but sunset in production — hidden from the Settings > AI Model picker,
+# existing preferences silently fall back to the platform default.
+# Ahead of moving prod off this laptop's hardware (Oracle Cloud Always
+# Free migration), since a small free-tier VM can't guarantee Ollama is
+# reachable, let alone fast enough for real users.
+RETIRED_MODELS_IN_PRODUCTION: frozenset[str] = frozenset({"qwen2.5:7b", "qwen2.5:3b"})
+
 PERMISSIONS: list[tuple[str, str]] = [
     ("user:read", "View users within the tenant."),
     ("user:write", "Create, update, or deactivate users within the tenant."),
@@ -715,18 +723,31 @@ async def _seed_ai_platform_defaults(session: AsyncSession) -> None:
     for provider, model_name, cost_per_1k_tokens in MODEL_CATALOG:
         if model_name in existing_by_name:
             continue
+        retired = settings.is_production and model_name in RETIRED_MODELS_IN_PRODUCTION
         session.add(
             ModelVersionModel(
                 id=uuid.uuid4(),
                 provider=provider,
                 model_name=model_name,
                 version="1",
-                status="active",
+                status="sunset" if retired else "active",
                 cost_per_1k_tokens=cost_per_1k_tokens,
                 is_default=(model_name == settings.ai_default_model),
             )
         )
-        logger.info("seeded_model_version", model_name=model_name)
+        logger.info("seeded_model_version", model_name=model_name, status="sunset" if retired else "active")
+
+    # Existing rows are never mutated by the insert loop above (it only
+    # ever adds what's missing) — so a model retired from production
+    # after already having been seeded there as "active" (this app's own
+    # qwen2.5:7b/3b, seeded back in Phase 4 before this migration) needs
+    # an explicit sunset step here, not just removal from MODEL_CATALOG.
+    if settings.is_production:
+        for model_name in RETIRED_MODELS_IN_PRODUCTION:
+            model = existing_by_name.get(model_name)
+            if model is not None and model.status == "active":
+                model.status = "sunset"
+                logger.info("sunset_model_version", model_name=model_name)
     await session.flush()
 
     # If nothing in the catalog matches AI_DEFAULT_MODEL (e.g. it was

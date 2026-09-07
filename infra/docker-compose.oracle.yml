@@ -1,0 +1,48 @@
+# Oracle Cloud Always Free overlay — applied ON TOP OF docker-compose.prod.yml,
+# never standalone. Adds per-service memory/CPU ceilings sized for a
+# VM.Standard.A1.Flex instance provisioned with 2 OCPUs / 12 GB RAM
+# (Oracle's Always Free allocation), so one container under load can't
+# starve the others of memory and get them OOM-killed — docker-compose.prod.yml
+# itself stays host-agnostic with no limits, since it's still what runs
+# on a full-size dev machine too.
+#
+# `mem_limit`/`cpus` (the legacy top-level Compose fields, not
+# `deploy.resources.limits`) are used deliberately — they're honored by
+# a plain `docker compose up` with no Swarm mode involved, which is all
+# this VM ever runs.
+#
+# Budget rationale: memory limits sum to ~5.9 GB out of 12 GB total,
+# leaving real headroom for the OS, the Docker daemon itself, and any
+# host-level process (e.g. Ollama, if ever installed directly on this
+# VM rather than containerized) that isn't part of this compose stack
+# at all. CPU limits sum to 3.0 "cpus" against a real 2-OCPU host —
+# that's intentional oversubscription of *ceilings*, not a guarantee:
+# no single container can single-handedly consume both real cores, but
+# nothing here reserves more than the 2 cores that actually exist.
+#
+# Usage (always both files together, prod first):
+#   docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.oracle.yml up -d --build
+#
+# Already wired into infra/oracle-start.sh / infra/oracle-stop.sh — use
+# those rather than typing the two -f flags by hand.
+
+services:
+  postgres:
+    mem_limit: 3g
+    cpus: 1.0
+
+  redis:
+    mem_limit: 256m
+    cpus: 0.25
+
+  minio:
+    mem_limit: 512m
+    cpus: 0.5
+
+  backend:
+    mem_limit: 2g
+    cpus: 1.0
+
+  frontend:
+    mem_limit: 128m
+    cpus: 0.25
