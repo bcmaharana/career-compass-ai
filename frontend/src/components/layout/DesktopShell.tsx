@@ -200,15 +200,6 @@ export function DesktopShell({ mainRef, onLogout }: DesktopShellProps) {
               leftNavCollapsed ? "flex flex-col items-center gap-1" : "flex items-center gap-1",
             )}
           >
-            <a
-              href={PLATFORM_BASE_URL}
-              aria-label="Back to Core Grid"
-              title="Back to Core Grid"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/10 text-primary-foreground/80 hover:border-white/45 hover:text-primary-foreground"
-            >
-              <CoreGridIcon className="h-4 w-4" />
-            </a>
-
             <button
               type="button"
               onClick={toggleLeftNav}
@@ -219,6 +210,20 @@ export function DesktopShell({ mainRef, onLogout }: DesktopShellProps) {
             >
               <Menu className="h-5 w-5" />
             </button>
+
+            <a
+              href={PLATFORM_BASE_URL}
+              aria-label="Back to Core Grid"
+              title="Back to Core Grid"
+              // Plain, matching the ☰ button right above it exactly (was a
+              // bordered rounded-full pill, inconsistent with its own
+              // sibling) - part of a cross-site pass removing circular
+              // icon-button styling everywhere (also done in
+              // LandingPage.tsx, training, and simple).
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground"
+            >
+              <CoreGridIcon className="h-4 w-4" />
+            </a>
           </div>
         </div>
 

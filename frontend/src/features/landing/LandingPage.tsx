@@ -1,6 +1,7 @@
-import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { buttonVariants } from "@/components/ui/button-variants";
+import { CoreGridIcon } from "@/components/ui/core-grid-icon";
 import { Tooltip } from "@/components/ui/tooltip";
+import { PLATFORM_BASE_URL } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { Bot, Compass, LineChart, UserCircle, UserPlus, Users } from "lucide-react";
@@ -155,7 +156,6 @@ export function LandingPage() {
 
       <header className="fixed inset-x-0 top-0 z-20 flex items-center justify-between bg-primary px-6 py-4 shadow-card sm:px-10">
         <div className="flex flex-col gap-0.5">
-          <Breadcrumb segments={[{ label: "Career Compass AI" }]} variant="dark" />
           <div className="flex items-center gap-2">
             <Compass className="h-6 w-6" strokeWidth={2} color="url(#rainbow-accent-gradient)" />
             <span className="font-display text-lg font-semibold text-primary-foreground">
@@ -164,6 +164,22 @@ export function LandingPage() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <Tooltip content="Back to Core Grid">
+            <a
+              href={PLATFORM_BASE_URL}
+              aria-label="Back to Core Grid"
+              // Plain, borderless icon-button - matching Sign up/Sign in's
+              // own style exactly (h-9 w-9, no border/background pill) so
+              // the flex gap between all three reads as visually even.
+              // Only the icon glyph itself was h-4 w-4 (CoreGridIcon is a
+              // slightly denser shape than the h-5 w-5 lucide icons beside
+              // it), kept for size parity with the identical icon in the
+              // Left Nav rail.
+              className="flex h-9 w-9 items-center justify-center rounded-md text-primary-foreground transition-opacity hover:opacity-80"
+            >
+              <CoreGridIcon className="h-4 w-4" />
+            </a>
+          </Tooltip>
           <Tooltip content="Sign up">
             <Link
               to="/signup"
