@@ -33,7 +33,7 @@ step() {
     echo "==> $1"
 }
 
-for f in career_compass.dump minio-data.tar.gz firebase-service-account.json backend.env.production infra.env; do
+for f in career_compass.dump minio-data.tar.gz firebase-service-account.json backend.env.production infra.env frontend.env.production; do
     if [ ! -f "$bundle/$f" ]; then
         echo "Missing $bundle/$f - is this the right bundle directory?" >&2
         exit 1
@@ -45,7 +45,13 @@ mkdir -p "$root/backend/secrets"
 cp "$bundle/firebase-service-account.json" "$root/backend/secrets/firebase-service-account.json"
 cp "$bundle/backend.env.production" "$root/backend/.env.production"
 cp "$bundle/infra.env" "$root/infra/.env"
-echo "Placed backend/secrets/firebase-service-account.json, backend/.env.production, infra/.env"
+# Vite bakes VITE_* vars into the built JS bundle at build time - this
+# file must be in place BEFORE oracle-start.sh's `docker compose up
+# --build` runs, or the frontend silently falls back to dev-only
+# localhost defaults baked directly into the deployed bundle (a real
+# bug hit live during the Oracle migration, 2026-09-08).
+cp "$bundle/frontend.env.production" "$root/frontend/.env.production"
+echo "Placed backend/secrets/firebase-service-account.json, backend/.env.production, infra/.env, frontend/.env.production"
 
 step "Starting postgres, redis, minio only (not backend/frontend yet)"
 docker compose "${compose_args[@]}" up -d postgres redis minio

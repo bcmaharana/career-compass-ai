@@ -62,7 +62,14 @@ Write-Step "Copying secrets and env files"
 Copy-Item "$root\backend\secrets\firebase-service-account.json" "$outDir\firebase-service-account.json"
 Copy-Item "$root\backend\.env.production" "$outDir\backend.env.production"
 Copy-Item "$root\infra\.env" "$outDir\infra.env"
-Write-Host "Copied firebase-service-account.json, backend.env.production, infra.env"
+# Also gitignored, and NOT baked in via a Docker ARG - Vite's own
+# `vite build` loads .env.production automatically from the frontend
+# directory. Without it, api/client.ts's `VITE_PLATFORM_BASE_URL` (and
+# any other VITE_* var) falls back to a dev-only default baked directly
+# into the built JS bundle - a real bug hit live during the Oracle
+# migration (2026-09-08), fixed by adding this copy step.
+Copy-Item "$root\frontend\.env.production" "$outDir\frontend.env.production"
+Write-Host "Copied firebase-service-account.json, backend.env.production, infra.env, frontend.env.production"
 
 Write-Step "Done"
 $sizeMb = [math]::Round(((Get-ChildItem $outDir -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB), 1)
