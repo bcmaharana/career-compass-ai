@@ -9,6 +9,14 @@ from pydantic import BaseModel
 # Friendly labels for known model_name values — falls back to the raw
 # string for anything not listed, so a newly-seeded model never renders
 # blank while this map is caught up.
+#
+# The 4 qwen entries below are sunset (status="sunset") everywhere as
+# of 2026-09-08, not selectable in Settings > AI Model — see
+# scripts/seed_platform_defaults.py's LEGACY_OLLAMA_MODELS. Kept here,
+# not removed, since ai_invocations rows logged before that date still
+# reference these model_name values and would otherwise render the raw
+# string instead of a friendly label wherever invocation history is
+# displayed.
 _DISPLAY_NAMES: dict[str, str] = {
     "claude-opus-5": "Claude Opus 5",
     "claude-sonnet-5": "Claude Sonnet 5",

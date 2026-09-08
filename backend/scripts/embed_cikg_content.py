@@ -5,6 +5,17 @@ embedding provider for content that's new or has changed since its last
 embed (compared via source_text_hash), so re-running after this is a
 cheap no-op until seed content actually changes.
 
+NOT PART OF ANY LIVE WORKFLOW as of 2026-09-08 — CIKG semantic search's
+vector-similarity step was removed from SearchService (see that
+module's docstring), since Ollama (the only embedding provider ever
+wired up) can't run on prod's Oracle Cloud Always Free VM (no GPU) and
+there was no feature-parity reason left to keep it in dev either. This
+script itself is unaffected and still works standalone if you install
+Ollama locally and want to experiment with the vector-search behavior
+that search_service.py currently skips — see
+ollama_embedding_provider.py's module docstring for what reactivating
+the feature for real (not just running this script) would take.
+
 Requires Ollama running and reachable (OLLAMA_BASE_URL), with
 Settings.cikg_embedding_model (default "nomic-embed-text") pulled:
 

@@ -3851,6 +3851,91 @@ Known environment gotchas already solved, don't reintroduce:
   `bcmaharana@hotmail.com` account specifically (today's verification
   used a throwaway test account); that real-account migration
   (Phase 2.5 on the platform side) hasn't happened yet.
+- **Local Ollama models fully retired (chat + CIKG semantic search)**
+  (2026-09-08) — done, deployed to both dev and prod. Follow-on from
+  the Oracle Cloud migration (see project memory's
+  `project_scaled_brain_platform_architecture` entry for that work) —
+  prod's Oracle Always Free VM (2 shared ARM cores, no GPU) can never
+  run Ollama, which had already sunset `qwen2.5:7b`/`qwen2.5:3b` in
+  prod only (`RETIRED_MODELS_IN_PRODUCTION`, kept active in dev). Two
+  real gaps surfaced discussing that: (1) `qwen2.5-coder:7b`/`qwen2.5-coder:3b`
+  were never added to that prod-only retirement set at all — they
+  stayed `status="active"` and selectable in prod's Settings > AI
+  Model despite prod never having Ollama installed, meaning picking
+  either there would fail at request time; (2) once local chat models
+  could never work in prod, there was no real feature-parity reason
+  left to keep any of the four selectable in dev either. Decided,
+  given both: drop all four everywhere, and also remove CIKG semantic
+  search's vector-similarity signal (Ollama's `nomic-embed-text` was
+  the *only* embedding provider ever actually wired up — the paid
+  alternative `cikg-semantic-search.md` originally scoped, Voyage AI,
+  was never built — so prod-side search was already graph+full-text
+  only in practice; dev didn't need to keep exercising a path prod
+  could never use).
+
+  **Removed from MODEL_CATALOG entirely** (`scripts/seed_platform_defaults.py`)
+  — replaced the old prod-only `RETIRED_MODELS_IN_PRODUCTION` scheme
+  with `LEGACY_OLLAMA_MODELS`, sunset unconditionally in every
+  environment (not gated on `settings.is_production`) — a one-time
+  step since seeding is additive-only and already-seeded rows don't
+  just disappear when removed from the catalog list. **CIKG search**
+  (`app/application/career_intelligence/search_service.py`): the
+  vector-similarity step (embedding the query, `SearchRepository.vector_search`)
+  removed from `SearchService.search()` entirely — search is now
+  graph traversal + full-text only, permanently, matching what prod
+  already ran in practice. **DI wiring removed**
+  (`app/api/dependencies.py`): `get_ollama_provider`/`get_ollama_embedding_provider`/
+  `get_embedding_indexing_service` deleted (the last was dead code via
+  DI already — only `scripts/embed_cikg_content.py` used
+  `EmbeddingIndexingService`, constructing it directly, not through
+  this module); `get_llm_service`'s `providers` dict lost its
+  `"ollama"` entry; `get_search_service` lost its embedding-model/
+  embedding-provider params to match `SearchService`'s new
+  constructor; `get_embedding_model_repository`/
+  `get_content_embedding_repository` deleted too once nothing else
+  referenced them. **System Status** (Dashboard widget) dropped its
+  Ollama row (`check_ollama` no longer called from
+  `SystemStatusService.check_all()` — it would have permanently shown
+  "down" for a service that will never run again).
+
+  **Per explicit instruction, implementation files were kept, not
+  deleted** — each now carries a "NOT CURRENTLY WIRED INTO THE APP"
+  note explaining why and exactly what reactivating it would take:
+  `app/adapters/ai_providers/ollama_provider.py` (chat),
+  `ollama_embedding_provider.py` (embeddings, plus the Voyage AI
+  paid-provider path if that's ever built instead),
+  `scripts/embed_cikg_content.py` (still works standalone if Ollama is
+  manually reinstalled), `app/core/config.py`'s `ollama_base_url`/
+  `cikg_embedding_model`/`cikg_embedding_dimensions` settings, and
+  `checkers.py`'s `check_ollama()`. `ai_platform/schemas.py`'s
+  `_DISPLAY_NAMES` map also kept its 4 qwen entries (pre-2026-09-08
+  `ai_invocations` rows still reference these model names and would
+  otherwise render the raw string in any invocation-history view).
+
+  **`start-dev.ps1`**: the "Starting Ollama" block (auto-launching
+  `ollama serve` on every dev-stack start) removed entirely, along
+  with the header comment describing it.
+
+  **Tests updated to match**: `test_cikg_search.py`'s
+  `_make_search_service` and `TestSearchServiceFusion` no longer pass/
+  construct an embedding model or provider; the two vector-specific
+  tests (`test_degrades_gracefully_when_embedding_provider_fails`,
+  `test_no_embedding_model_indexed_skips_vector_step_silently`) were
+  deleted outright (the code path they tested no longer exists), and
+  the graph-vs-fulltext-vs-vector fusion test was narrowed to
+  graph-vs-fulltext only. `TestEmbeddingIndexingService` (unrelated —
+  tests `EmbeddingIndexingService` itself, still real/functional code
+  behind `embed_cikg_content.py`) was left untouched.
+  `test_system_status_service.py` dropped every `ollama_check` param/
+  assertion and the dedicated `test_ollama_down_reports_non_docker_fix_command`
+  test.
+
+  This was also a case study in the same class of gap the qwen-coder
+  oversight itself was: a per-environment retirement scheme
+  (`RETIRED_MODELS_IN_PRODUCTION`) is easy to under-populate silently,
+  since nothing fails loudly when a new catalog entry needing the same
+  treatment is added later — worth remembering before reaching for
+  that pattern again versus a real removal.
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in

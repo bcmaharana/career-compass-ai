@@ -9,6 +9,26 @@ its REST API. Ollama's `/api/embed` endpoint (not the older singular
 `/api/embeddings`) takes a batch of inputs and returns one embedding
 per input in the same order — used here rather than looping one call
 per text.
+
+NOT CURRENTLY WIRED INTO THE APP (as of 2026-09-08). This was the
+*only* embedding provider ever actually implemented for CIKG semantic
+search's vector-similarity signal (cikg-semantic-search.md's other
+planned option, Voyage AI, was never built) — search now runs on graph
+traversal + full-text only (see
+app/application/career_intelligence/search_service.py's module
+docstring). Reason: prod's Oracle Cloud Always Free VM (2 shared ARM
+cores, no GPU) can't run Ollama at all, so the vector-similarity signal
+could never work in prod regardless of what dev did — search there was
+always going to degrade to graph/full-text in practice. Once that was
+true, there was no real reason to keep dev exercising the one code path
+prod could never use. This class still implements a real, working
+EmbeddingProviderInterface — reactivating vector search means either
+reinstalling Ollama for local dev/testing, or (more realistically for
+prod) implementing the Voyage AI adapter the original design already
+scoped out and wiring either provider back into
+app/api/dependencies.py's get_search_service (see git history around
+2026-09-08 for the exact removed wiring) and
+scripts/embed_cikg_content.py's own construction of the provider.
 """
 
 from __future__ import annotations

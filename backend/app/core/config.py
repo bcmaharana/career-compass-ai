@@ -114,15 +114,26 @@ class Settings(BaseSettings):
     # as OBJECT_STORAGE_ENDPOINT vs OBJECT_STORAGE_PUBLIC_URL above.
     # Override to http://localhost:11434 if running the backend natively
     # instead of via Docker.
+    #
+    # NOT CURRENTLY READ ANYWHERE as of 2026-09-08 — both consumers
+    # (OllamaProvider for chat, OllamaEmbeddingProvider for CIKG search)
+    # were dropped from app/api/dependencies.py's wiring; see those
+    # classes' own module docstrings for why and how to reactivate.
+    # Left here (not deleted) since the provider classes themselves
+    # still construct off this setting when instantiated directly.
     ollama_base_url: str = Field(default="http://host.docker.internal:11434")
 
     # --- CIKG search (Phase 4.5.1 MVP 2A) ---
-    # Ollama-only for now — no paid embedding provider is wired (see
-    # cikg-mvp-roadmap.md's MVP 2A scope). cikg_embedding_dimensions must
-    # match the actual output size of cikg_embedding_model (nomic-embed-text
-    # is 768-dim); changing the model to one with a different dimensionality
-    # requires a migration to resize the content_embeddings.embedding column,
-    # not just this setting.
+    # NOT CURRENTLY USED as of 2026-09-08 — the vector-similarity search
+    # step that read these was removed (see
+    # app/application/career_intelligence/search_service.py's module
+    # docstring); Ollama was the only embedding provider ever wired up,
+    # and no paid alternative (e.g. Voyage AI, per cikg-semantic-search.md's
+    # original dual-provider design) was ever built. Left here since
+    # scripts/embed_cikg_content.py still reads them if run manually, and
+    # cikg_embedding_dimensions documents the content_embeddings.embedding
+    # column's actual pgvector width regardless of whether anything is
+    # currently writing to it.
     cikg_embedding_model: str = Field(default="nomic-embed-text")
     cikg_embedding_dimensions: int = Field(default=768)
 

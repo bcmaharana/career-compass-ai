@@ -1,10 +1,10 @@
-"""Hybrid search over CIKG content (Phase 4.5.1 MVP 2A) — implements
-cikg-semantic-search.md's 3-signal design (graph traversal, vector
-similarity, full-text) plus a live-computed `knowledge_quality_score`
+"""Hybrid search over CIKG content (Phase 4.5.1 MVP 2A) — graph
+traversal + full-text, plus a live-computed `knowledge_quality_score`
 ranking weight.
 
-Follows the exact algorithm from cikg-semantic-search.md's "Worked
-Example: Find all skills related to Product Strategy":
+Follows the algorithm from cikg-semantic-search.md's "Worked Example:
+Find all skills related to Product Strategy", minus its vector-
+similarity signal (see below):
 1. Resolve the query to a canonical `Skill` (reuses the existing
    `SkillAliasResolutionService` — same resolution ADR-006 §3 already
    uses elsewhere).
@@ -12,34 +12,41 @@ Example: Find all skills related to Product Strategy":
    (reuses the existing `RelatedSkillRepository` from MVP 1) — exact,
    curated, ranks highest.
 3. Full-text (`ts_rank` via `SearchRepository.fulltext_search`).
-4. Vector similarity via `SearchRepository.vector_search` — **degrades
-   gracefully** (skipped, not an error) if no embedding model has been
-   indexed yet or the embedding provider call fails, mirroring
-   `ChatService`'s existing "provider failure degrades, never 500s"
-   precedent.
-5. `category_id`/`role_id` (only meaningful for `skill` results) are
+4. `category_id`/`role_id` (only meaningful for `skill` results) are
    applied as a hard post-filter, not blended into the score.
-6. Every surviving result is weighted by a live-computed
+5. Every surviving result is weighted by a live-computed
    `knowledge_quality_score` — MVP 2A's deliberately simple version
    (`approval_status` is implicit, since only approved content is ever
    searched at all; `relationship_count` only). Source-authorship and
    usage/freshness/conflict factors are explicitly deferred (see
    cikg-semantic-search.md) — the former has no real signal yet, since
    every MVP 1 seed row shares `source_attribution="seed_script"`.
+
+**Vector similarity removed 2026-09-08** (was step 4 of the original
+design: `SearchRepository.vector_search`, gated behind an embedding
+model + `EmbeddingProviderInterface` call, degrading gracefully to
+full-text/graph on failure). Removed along with the local Ollama chat
+models for the same reason: Ollama was the only embedding provider
+ever actually wired up (`OllamaEmbeddingProvider`, nomic-embed-text),
+and prod's Oracle free-tier VM can never run it (no GPU, 2 shared ARM
+cores), which already meant prod-side search only ever ran on graph +
+full-text in practice. Once that was true, there was no real
+feature-parity reason left to keep dev exercising a code path prod
+could never use. See `app/adapters/ai_providers/ollama_embedding_provider.py`'s
+module docstring for the full reasoning and how to bring this back with
+a paid provider (e.g. Voyage AI, per cikg-semantic-search.md's original
+dual-provider design) if that's ever justified.
 """
 
 from __future__ import annotations
 
 from uuid import UUID
 
-from app.ai_platform.embeddings.provider_interface import EmbeddingProviderInterface
 from app.application.career_intelligence.skill_alias_resolution_service import (
     SkillAliasResolutionService,
 )
-from app.core.exceptions import CareerCompassError
 from app.domain.career_intelligence.entities import EmbeddableEntityType, SearchResult
 from app.domain.career_intelligence.repositories import (
-    EmbeddingModelRepository,
     RelatedSkillRepository,
     SearchRepository,
 )
@@ -55,14 +62,10 @@ class SearchService:
         self,
         search_repo: SearchRepository,
         related_skills: RelatedSkillRepository,
-        embedding_models: EmbeddingModelRepository,
-        embedding_provider: EmbeddingProviderInterface,
         alias_resolver: SkillAliasResolutionService,
     ) -> None:
         self._search_repo = search_repo
         self._related_skills = related_skills
-        self._embedding_models = embedding_models
-        self._embedding_provider = embedding_provider
         self._alias_resolver = alias_resolver
 
     async def search(
@@ -97,8 +100,6 @@ class SearchService:
                 et, query, limit=limit * _OVER_FETCH_MULTIPLIER
             ):
                 self._add_or_tag(results, et, entity_id, name, description, rank, "fulltext")
-
-        await self._add_vector_matches(query, types_to_search, limit, results)
 
         if category_id is not None:
             allowed = await self._search_repo.filter_skill_ids_by_category(category_id)
@@ -139,40 +140,6 @@ class SearchService:
             self._add_or_tag(
                 results, "skill", neighbor_id, name, description, _GRAPH_MATCH_SCORE, "graph"
             )
-
-    async def _add_vector_matches(
-        self,
-        query: str,
-        types_to_search: tuple[EmbeddableEntityType, ...],
-        limit: int,
-        results: dict[tuple[EmbeddableEntityType, UUID], SearchResult],
-    ) -> None:
-        embedding_model = await self._embedding_models.get_default()
-        if embedding_model is None:
-            return  # no embeddings indexed yet — full-text/graph only
-        try:
-            vectors = await self._embedding_provider.embed(
-                texts=[query], model_name=embedding_model.model_name
-            )
-        except CareerCompassError:
-            return  # provider unreachable/erroring — degrade, don't fail the search
-        query_vector = vectors[0]
-
-        for et in types_to_search:
-            hits = await self._search_repo.vector_search(
-                et, query_vector, embedding_model.id, limit=limit * _OVER_FETCH_MULTIPLIER
-            )
-            missing_ids = [entity_id for entity_id, _ in hits if (et, entity_id) not in results]
-            names = await self._search_repo.get_names(et, missing_ids) if missing_ids else {}
-            for entity_id, similarity in hits:
-                if (et, entity_id) in results:
-                    self._tag_only(results, et, entity_id, "vector")
-                    continue
-                hit = names.get(entity_id)
-                if hit is None:
-                    continue
-                name, description = hit
-                self._add_or_tag(results, et, entity_id, name, description, similarity, "vector")
 
     async def _quality_multiplier(self, entity_type: EmbeddableEntityType, entity_id: UUID) -> float:
         relationship_count = await self._search_repo.relationship_count(entity_type, entity_id)

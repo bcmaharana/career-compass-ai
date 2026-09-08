@@ -7,6 +7,21 @@ plain httpx call against its REST API, the same "no SDK, use httpx"
 shape as app/adapters/quotes/zen_quotes_provider.py. `num_predict` is
 Ollama's equivalent of `max_tokens`; `prompt_eval_count`/`eval_count`
 are its equivalent of input/output token counts.
+
+NOT CURRENTLY WIRED INTO THE APP (as of 2026-09-08). The four local
+chat models this backed (qwen2.5:7b/3b, qwen2.5-coder:7b/3b) were
+removed from app/api/dependencies.py's get_llm_service and from
+scripts/seed_platform_defaults.py's MODEL_CATALOG. Reason: prod runs on
+an Oracle Cloud Always Free VM (2 shared ARM cores, no GPU) that can
+never run Ollama at real-user-facing speed, and once local chat models
+could never work in prod, there was no real feature-parity reason left
+to keep them selectable in dev either — they'd only ever get exercised
+in a local-only, non-representative environment. This class implements
+a real, working LLMProviderInterface and needs zero changes to be
+reactivated: re-add entries to MODEL_CATALOG, wire
+`get_ollama_provider()`/an "ollama" entry back into get_llm_service's
+providers dict (see git history around 2026-09-08 for the exact
+removed code), and a real Ollama install pulling the desired model.
 """
 
 from __future__ import annotations

@@ -1,15 +1,19 @@
 """Dashboard System Status widget's application service.
 
 Checks every runtime dependency this app has (Postgres, Redis, MinIO,
-Ollama, Anthropic, Groq) and reports live status. Deliberately status-only —
+Anthropic, Groq) and reports live status. Deliberately status-only —
 no server-side restart execution. See
 app/adapters/system_status/checkers.py's module docstring for why:
 actually restarting Postgres/Redis/MinIO/the backend itself would
 require mounting the Docker socket into the backend container
-(effectively root on the host), and Ollama runs on the host outside
-Docker Compose entirely, so the backend has no path to restart it at
-all without a net-new host-side helper component. Both explicit,
-confirmed product decisions, not oversights.
+(effectively root on the host) — a confirmed product decision, not an
+oversight.
+
+Ollama was checked here too until 2026-09-08, when it was dropped from
+the app entirely (both local chat models and CIKG semantic search's
+embedding step — see app/adapters/ai_providers/ollama_provider.py's
+module docstring). check_ollama() still exists in checkers.py for
+future reactivation, just isn't called from check_all() below.
 """
 
 from __future__ import annotations
@@ -25,7 +29,6 @@ from app.adapters.system_status.checkers import (
     check_anthropic,
     check_groq,
     check_minio,
-    check_ollama,
     check_postgres,
     check_redis,
 )
@@ -34,7 +37,6 @@ from app.core.config import Settings
 _POSTGRES_FIX = "docker compose -f infra/docker-compose.yml restart postgres"
 _REDIS_FIX = "docker compose -f infra/docker-compose.yml restart redis"
 _MINIO_FIX = "docker compose -f infra/docker-compose.yml restart minio"
-_OLLAMA_FIX = "ollama serve   (or launch the Ollama app)"
 _ANTHROPIC_FIX = "Set ANTHROPIC_API_KEY in backend/.env, then restart the backend container"
 _GROQ_FIX = "Set GROQ_API_KEY in backend/.env, then restart the backend container"
 
@@ -70,7 +72,6 @@ class SystemStatusService:
         postgres_check: Callable[[], Awaitable[ServiceCheckResult]] = check_postgres,
         redis_check: Callable[[Settings], Awaitable[ServiceCheckResult]] = check_redis,
         minio_check: Callable[[Settings], Awaitable[ServiceCheckResult]] = check_minio,
-        ollama_check: Callable[[Settings], Awaitable[ServiceCheckResult]] = check_ollama,
         anthropic_check: Callable[[Settings], ServiceCheckResult] = check_anthropic,
         groq_check: Callable[[Settings], ServiceCheckResult] = check_groq,
     ) -> None:
@@ -78,16 +79,14 @@ class SystemStatusService:
         self._postgres_check = postgres_check
         self._redis_check = redis_check
         self._minio_check = minio_check
-        self._ollama_check = ollama_check
         self._anthropic_check = anthropic_check
         self._groq_check = groq_check
 
     async def check_all(self) -> SystemStatusResult:
-        postgres_result, redis_result, minio_result, ollama_result = await asyncio.gather(
+        postgres_result, redis_result, minio_result = await asyncio.gather(
             self._postgres_check(),
             self._redis_check(self._settings),
             self._minio_check(self._settings),
-            self._ollama_check(self._settings),
         )
         anthropic_result = self._anthropic_check(self._settings)
         groq_result = self._groq_check(self._settings)
@@ -96,7 +95,6 @@ class SystemStatusService:
             self._to_status("postgres", "PostgreSQL", postgres_result, _POSTGRES_FIX),
             self._to_status("redis", "Redis", redis_result, _REDIS_FIX),
             self._to_status("minio", "MinIO", minio_result, _MINIO_FIX),
-            self._to_status("ollama", "Ollama", ollama_result, _OLLAMA_FIX),
             self._to_status("anthropic", "Anthropic API", anthropic_result, _ANTHROPIC_FIX),
             self._to_status("groq", "Groq API", groq_result, _GROQ_FIX),
         ]

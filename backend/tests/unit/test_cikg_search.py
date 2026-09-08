@@ -354,8 +354,6 @@ def _make_search_service(
     search_repo: FakeSearchRepository,
     *,
     related_skills: FakeRelatedSkillRepository | None = None,
-    embedding_models: FakeEmbeddingModelRepository | None = None,
-    embedding_provider: FakeEmbeddingProvider | None = None,
     aliases: FakeSkillAliasRepository | None = None,
     skills_for_alias: FakeSkillRepository | None = None,
 ) -> SearchService:
@@ -365,19 +363,16 @@ def _make_search_service(
     return SearchService(
         search_repo,
         related_skills or FakeRelatedSkillRepository(),
-        embedding_models or FakeEmbeddingModelRepository(),
-        embedding_provider or FakeEmbeddingProvider(),
         alias_resolver,
     )
 
 
 @pytest.mark.unit
 class TestSearchServiceFusion:
-    async def test_graph_match_ranks_above_fulltext_and_vector_only_matches(self) -> None:
+    async def test_graph_match_ranks_above_fulltext_matches(self) -> None:
         resolved = _skill("Data Analysis")
         graph_neighbor = _skill("Python Programming")
         fulltext_only = _skill("Statistical Modeling")
-        vector_only = _skill("Machine Learning")
 
         skills_for_alias = FakeSkillRepository([resolved])
         aliases = FakeSkillAliasRepository(
@@ -398,26 +393,13 @@ class TestSearchServiceFusion:
             fulltext_results={
                 "skill": [(fulltext_only.id, fulltext_only.name, fulltext_only.description, 0.9)]
             },
-            vector_results={"skill": [(vector_only.id, 0.95)]},
             names={
                 graph_neighbor.id: (graph_neighbor.name, graph_neighbor.description),
-                vector_only.id: (vector_only.name, vector_only.description),
             },
-        )
-        embedding_models = FakeEmbeddingModelRepository(
-            EmbeddingModel(
-                id=uuid.uuid4(),
-                provider="ollama",
-                model_name="nomic-embed-text",
-                dimensions=3,
-                is_default=True,
-                created_at=datetime.now(UTC),
-            )
         )
         service = _make_search_service(
             search_repo,
             related_skills=related_skills,
-            embedding_models=embedding_models,
             aliases=aliases,
             skills_for_alias=skills_for_alias,
         )
@@ -426,51 +408,9 @@ class TestSearchServiceFusion:
 
         assert results[0].entity_id == graph_neighbor.id
         assert results[0].matched_via == ["graph"]
-        # the fulltext-only and vector-only hits still surface, just lower
+        # the fulltext-only hit still surfaces, just lower
         result_ids = [r.entity_id for r in results]
         assert fulltext_only.id in result_ids
-        assert vector_only.id in result_ids
-
-    async def test_degrades_gracefully_when_embedding_provider_fails(self) -> None:
-        fulltext_hit = _skill("Objection Handling")
-        search_repo = FakeSearchRepository(
-            fulltext_results={
-                "skill": [(fulltext_hit.id, fulltext_hit.name, fulltext_hit.description, 0.5)]
-            },
-        )
-        embedding_models = FakeEmbeddingModelRepository(
-            EmbeddingModel(
-                id=uuid.uuid4(),
-                provider="ollama",
-                model_name="nomic-embed-text",
-                dimensions=3,
-                is_default=True,
-                created_at=datetime.now(UTC),
-            )
-        )
-        service = _make_search_service(
-            search_repo,
-            embedding_models=embedding_models,
-            embedding_provider=FakeEmbeddingProvider(should_fail=True),
-        )
-
-        results = await service.search(query="handling customer objections")
-
-        assert len(results) == 1
-        assert results[0].entity_id == fulltext_hit.id
-
-    async def test_no_embedding_model_indexed_skips_vector_step_silently(self) -> None:
-        fulltext_hit = _skill("Objection Handling")
-        search_repo = FakeSearchRepository(
-            fulltext_results={
-                "skill": [(fulltext_hit.id, fulltext_hit.name, fulltext_hit.description, 0.5)]
-            },
-        )
-        service = _make_search_service(search_repo, embedding_models=FakeEmbeddingModelRepository())
-
-        results = await service.search(query="handling customer objections")
-
-        assert len(results) == 1
 
     async def test_category_filter_excludes_non_matching_skills(self) -> None:
         in_category = _skill("Python Programming")

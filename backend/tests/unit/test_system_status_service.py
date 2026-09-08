@@ -41,7 +41,6 @@ class TestSystemStatusService:
             postgres_check=_up,
             redis_check=_up_with_settings,
             minio_check=_up_with_settings,
-            ollama_check=_up_with_settings,
             anthropic_check=_up_sync,
             groq_check=_up_sync,
         )
@@ -52,7 +51,6 @@ class TestSystemStatusService:
             "postgres",
             "redis",
             "minio",
-            "ollama",
             "anthropic",
             "groq",
         }
@@ -68,7 +66,6 @@ class TestSystemStatusService:
             postgres_check=_up,
             redis_check=redis_down,
             minio_check=_up_with_settings,
-            ollama_check=_up_with_settings,
             anthropic_check=_up_sync,
         )
 
@@ -83,29 +80,7 @@ class TestSystemStatusService:
         # Every other service is unaffected.
         assert by_name["postgres"].status == "up"
         assert by_name["minio"].status == "up"
-        assert by_name["ollama"].status == "up"
         assert by_name["anthropic"].status == "up"
-
-    async def test_ollama_down_reports_non_docker_fix_command(self) -> None:
-        async def ollama_down(settings: Settings) -> ServiceCheckResult:
-            return ServiceCheckResult(status="down", detail="All connection attempts failed")
-
-        service = SystemStatusService(
-            _settings(),
-            postgres_check=_up,
-            redis_check=_up_with_settings,
-            minio_check=_up_with_settings,
-            ollama_check=ollama_down,
-            anthropic_check=_up_sync,
-        )
-
-        result = await service.check_all()
-        ollama_status = next(s for s in result.services if s.name == "ollama")
-
-        assert ollama_status.status == "down"
-        # Not a docker command - Ollama runs on the host, outside Compose.
-        assert "docker" not in ollama_status.fix_command
-        assert "ollama serve" in ollama_status.fix_command
 
     async def test_anthropic_not_configured(self) -> None:
         def anthropic_not_configured(settings: Settings) -> ServiceCheckResult:
@@ -116,7 +91,6 @@ class TestSystemStatusService:
             postgres_check=_up,
             redis_check=_up_with_settings,
             minio_check=_up_with_settings,
-            ollama_check=_up_with_settings,
             anthropic_check=anthropic_not_configured,
         )
 
@@ -135,7 +109,6 @@ class TestSystemStatusService:
             postgres_check=_up,
             redis_check=_up_with_settings,
             minio_check=_up_with_settings,
-            ollama_check=_up_with_settings,
             anthropic_check=_up_sync,
             groq_check=groq_not_configured,
         )
@@ -167,7 +140,6 @@ class TestSystemStatusService:
             postgres_check=_up,
             redis_check=_up_with_settings,
             minio_check=_up_with_settings,
-            ollama_check=_up_with_settings,
             anthropic_check=_up_sync,
             groq_check=groq_with_usage,
         )
@@ -188,7 +160,6 @@ class TestSystemStatusService:
             postgres_check=_up,
             redis_check=_up_with_settings,
             minio_check=_up_with_settings,
-            ollama_check=_up_with_settings,
             anthropic_check=_up_sync,
             groq_check=_up_sync,
         )
@@ -204,7 +175,6 @@ class TestSystemStatusService:
             postgres_check=_up,
             redis_check=_up_with_settings,
             minio_check=_up_with_settings,
-            ollama_check=_up_with_settings,
             anthropic_check=_up_sync,
         )
 

@@ -21,8 +21,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.ai_providers.anthropic_provider import AnthropicProvider
 from app.adapters.ai_providers.groq_provider import GroqProvider
-from app.adapters.ai_providers.ollama_embedding_provider import OllamaEmbeddingProvider
-from app.adapters.ai_providers.ollama_provider import OllamaProvider
 from app.adapters.db.account_deletion import SqlAlchemyAccountDeletionRepository
 from app.adapters.db.base import async_session_factory, set_tenant_context
 from app.adapters.db.repositories import (
@@ -101,11 +99,7 @@ from app.adapters.db.repositories.platform_admin import (
     SqlAlchemyPlatformSettingsRepository,
 )
 from app.adapters.db.repositories.resume_intelligence import SqlAlchemyResumeRepository
-from app.adapters.db.repositories.search import (
-    SqlAlchemyContentEmbeddingRepository,
-    SqlAlchemyEmbeddingModelRepository,
-    SqlAlchemySearchRepository,
-)
+from app.adapters.db.repositories.search import SqlAlchemySearchRepository
 from app.adapters.db.repositories.showcase_page import (
     SqlAlchemyPublicShareLinkRepository,
     SqlAlchemyShowcasePageRepository,
@@ -122,7 +116,6 @@ from app.ai_platform.llm_service.service import LLMService
 from app.application.ai_platform.model_preference_service import ModelPreferenceService
 from app.application.career_intelligence.catalog_query_service import CatalogQueryService
 from app.application.career_intelligence.content_revision_service import ContentRevisionService
-from app.application.career_intelligence.embedding_service import EmbeddingIndexingService
 from app.application.career_intelligence.search_service import SearchService
 from app.application.career_intelligence.skill_alias_admin_service import SkillAliasAdminService
 from app.application.career_intelligence.skill_alias_resolution_service import (
@@ -1027,18 +1020,17 @@ def get_anthropic_provider() -> AnthropicProvider:
 
 
 @lru_cache
-def get_ollama_provider() -> OllamaProvider:
-    return OllamaProvider(get_settings())
-
-
-@lru_cache
 def get_groq_provider() -> GroqProvider:
     return GroqProvider(get_settings())
 
 
-@lru_cache
-def get_ollama_embedding_provider() -> OllamaEmbeddingProvider:
-    return OllamaEmbeddingProvider(get_settings())
+# get_ollama_provider / get_ollama_embedding_provider were removed
+# 2026-09-08 along with the local Ollama chat models and the CIKG
+# semantic-search embedding step — see
+# app/adapters/ai_providers/ollama_provider.py's and
+# ollama_embedding_provider.py's module docstrings for the full
+# reasoning. The provider classes themselves are still there if a
+# paid embedding provider ever justifies bringing this back.
 
 
 def get_prompt_registry(
@@ -1061,17 +1053,16 @@ def get_invocation_logger(
 
 def get_llm_service(
     anthropic_provider: AnthropicProvider = Depends(get_anthropic_provider),
-    ollama_provider: OllamaProvider = Depends(get_ollama_provider),
     groq_provider: GroqProvider = Depends(get_groq_provider),
     prompts: SqlAlchemyPromptRegistry = Depends(get_prompt_registry),
     models: SqlAlchemyModelRegistry = Depends(get_model_registry),
     invocations: SqlAlchemyInvocationLogger = Depends(get_invocation_logger),
 ) -> LLMService:
-    # Keyed by ModelVersion.provider — a third provider is one more
-    # entry here plus its own adapter, not a change to LLMService.
+    # Keyed by ModelVersion.provider — a new provider is one more entry
+    # here plus its own adapter, not a change to LLMService. "ollama" was
+    # removed 2026-09-08 (see get_ollama_provider's old location above).
     providers: dict[str, LLMProviderInterface] = {
         "anthropic": anthropic_provider,
-        "ollama": ollama_provider,
         "groq": groq_provider,
     }
     return LLMService(providers=providers, prompts=prompts, models=models, invocations=invocations)
@@ -1757,21 +1748,9 @@ def get_skill_alias_resolution_service(
 
 
 # --- CIKG search wiring (Phase 4.5.1 MVP 2A) ---
-# embedding_models/content_embeddings are global reference data like
-# every other CIKG table (get_db_session, not tenant-scoped).
-
-
-def get_embedding_model_repository(
-    session: AsyncSession = Depends(get_db_session),
-) -> SqlAlchemyEmbeddingModelRepository:
-    return SqlAlchemyEmbeddingModelRepository(session)
-
-
-def get_content_embedding_repository(
-    session: AsyncSession = Depends(get_db_session),
-) -> SqlAlchemyContentEmbeddingRepository:
-    return SqlAlchemyContentEmbeddingRepository(session)
-
+# get_embedding_model_repository/get_content_embedding_repository were
+# removed 2026-09-08 (unused via DI anywhere in the app once the vector
+# search step was dropped — see the note above get_search_service).
 
 def get_search_repository(
     session: AsyncSession = Depends(get_db_session),
@@ -1779,40 +1758,19 @@ def get_search_repository(
     return SqlAlchemySearchRepository(session)
 
 
-def get_embedding_indexing_service(
-    embedding_provider: OllamaEmbeddingProvider = Depends(get_ollama_embedding_provider),
-    embedding_models: SqlAlchemyEmbeddingModelRepository = Depends(get_embedding_model_repository),
-    content_embeddings: SqlAlchemyContentEmbeddingRepository = Depends(
-        get_content_embedding_repository
-    ),
-    skills: SqlAlchemySkillRepository = Depends(get_skill_repository),
-    roles: SqlAlchemyCikgRoleRepository = Depends(get_cikg_role_repository),
-    competencies: SqlAlchemyCompetencyRepository = Depends(get_competency_repository),
-) -> EmbeddingIndexingService:
-    settings = get_settings()
-    return EmbeddingIndexingService(
-        embedding_provider,
-        embedding_models,
-        content_embeddings,
-        skills,
-        roles,
-        competencies,
-        model_name=settings.cikg_embedding_model,
-        provider_name="ollama",
-        dimensions=settings.cikg_embedding_dimensions,
-    )
+# get_embedding_indexing_service was removed 2026-09-08 along with the
+# CIKG semantic-search vector step — nothing in the live app called it
+# through DI (scripts/embed_cikg_content.py constructs EmbeddingIndexingService
+# directly, not through this module). See ollama_embedding_provider.py's
+# module docstring for why the underlying feature was dropped.
 
 
 def get_search_service(
     search_repo: SqlAlchemySearchRepository = Depends(get_search_repository),
     related_skills: SqlAlchemyRelatedSkillRepository = Depends(get_related_skill_repository),
-    embedding_models: SqlAlchemyEmbeddingModelRepository = Depends(get_embedding_model_repository),
-    embedding_provider: OllamaEmbeddingProvider = Depends(get_ollama_embedding_provider),
     alias_resolver: SkillAliasResolutionService = Depends(get_skill_alias_resolution_service),
 ) -> SearchService:
-    return SearchService(
-        search_repo, related_skills, embedding_models, embedding_provider, alias_resolver
-    )
+    return SearchService(search_repo, related_skills, alias_resolver)
 
 
 def get_career_path_service(

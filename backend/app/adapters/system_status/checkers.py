@@ -78,6 +78,10 @@ async def check_minio(settings: Settings) -> ServiceCheckResult:
         return ServiceCheckResult(status="down", detail=str(exc))
 
 
+# Not called from SystemStatusService.check_all() as of 2026-09-08 —
+# Ollama was dropped from the app entirely (see
+# app/adapters/ai_providers/ollama_provider.py's module docstring).
+# Left here, working, for reactivation if that ever changes.
 async def check_ollama(settings: Settings) -> ServiceCheckResult:
     url = f"{settings.ollama_base_url}/api/tags"
     try:

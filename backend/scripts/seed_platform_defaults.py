@@ -506,20 +506,24 @@ every array/object element must be separated by a comma.
 """
 
 # Catalog of selectable models (Settings > AI Model lets a user pick
-# among "active" rows). Adding a non-Anthropic/non-Ollama entry also
-# means registering its provider adapter in app/api/dependencies.py's
-# get_llm_service. Illustrative blended cost_per_1k_tokens figures for
-# the Anthropic rows, not billing-accurate — see the Anthropic pricing
-# page for the authoritative per-model rate. Ollama rows are genuinely
-# $0 — local inference on the user's own hardware, no metered API.
+# among "active" rows). Adding a new entry also means registering its
+# provider adapter in app/api/dependencies.py's get_llm_service.
+# Illustrative blended cost_per_1k_tokens figures for the Anthropic
+# rows, not billing-accurate — see the Anthropic pricing page for the
+# authoritative per-model rate.
+#
+# No Ollama (local) entries as of 2026-09-08 — the four that used to be
+# here (qwen2.5:7b/3b, qwen2.5-coder:7b/3b) were removed entirely, not
+# just hidden per-environment. See LEGACY_OLLAMA_MODELS below and
+# app/adapters/ai_providers/ollama_provider.py's module docstring for
+# the full reasoning (short version: prod's Oracle free-tier VM can't
+# run Ollama at all, and once that was true, keeping local models
+# selectable in dev only added startup overhead/UI options nobody was
+# using for real feature testing).
 MODEL_CATALOG: list[tuple[str, str, float]] = [
     ("anthropic", "claude-opus-5", 0.015),
     ("anthropic", "claude-sonnet-5", 0.006),
     ("anthropic", "claude-haiku-4-5", 0.003),
-    ("ollama", "qwen2.5:7b", 0.0),
-    ("ollama", "qwen2.5:3b", 0.0),
-    ("ollama", "qwen2.5-coder:7b", 0.0),
-    ("ollama", "qwen2.5-coder:3b", 0.0),
     # Groq: hosted, free-tier (rate-limited, not metered/credit-based).
     # The original three model IDs here (llama-3.3-70b-versatile,
     # llama-3.1-8b-instant) were silently removed from Groq's catalog
@@ -542,13 +546,31 @@ MODEL_CATALOG: list[tuple[str, str, float]] = [
     ("groq", "qwen/qwen3.6-27b", 0.0),
 ]
 
-# Models kept selectable in dev/local (Ollama runs fine on this laptop)
-# but sunset in production — hidden from the Settings > AI Model picker,
-# existing preferences silently fall back to the platform default.
-# Ahead of moving prod off this laptop's hardware (Oracle Cloud Always
-# Free migration), since a small free-tier VM can't guarantee Ollama is
-# reachable, let alone fast enough for real users.
-RETIRED_MODELS_IN_PRODUCTION: frozenset[str] = frozenset({"qwen2.5:7b", "qwen2.5:3b"})
+# Fully retired local Ollama chat models, in every environment (2026-09-08)
+# — this superseded the earlier RETIRED_MODELS_IN_PRODUCTION scheme,
+# which only sunset qwen2.5:7b/3b in prod (during the Oracle Cloud
+# migration) and left them active in dev, plus a real oversight: the
+# qwen2.5-coder:7b/3b pair was never added to that prod-only set, so it
+# stayed selectable in prod's Settings > AI Model despite prod never
+# having Ollama installed at all — picking either there would have
+# failed at request time. Removed from MODEL_CATALOG above entirely
+# (not just hidden per-environment) once it was clear dev didn't need
+# them either: prod can never run Ollama (no GPU, 2 shared ARM cores on
+# the Oracle free tier), so there was no real feature-parity reason left
+# to keep them selectable in dev specifically.
+#
+# Since seeding is additive-only (the insert loop below only ever adds
+# rows that don't exist yet), a model already seeded as "active" in an
+# existing database — dev's own qwen2.5:7b/3b/qwen2.5-coder:7b/3b rows,
+# plus prod's already-active qwen2.5-coder:7b/3b — needs this explicit
+# one-time sunset step below; it does not just disappear once removed
+# from the catalog list above. Kept as a plain constant (not deleted
+# outright) so a future re-run of this script against a database that
+# still has one of these rows active (e.g. a stale environment) keeps
+# correcting it.
+LEGACY_OLLAMA_MODELS: frozenset[str] = frozenset(
+    {"qwen2.5:7b", "qwen2.5:3b", "qwen2.5-coder:7b", "qwen2.5-coder:3b"}
+)
 
 PERMISSIONS: list[tuple[str, str]] = [
     ("user:read", "View users within the tenant."),
@@ -723,31 +745,27 @@ async def _seed_ai_platform_defaults(session: AsyncSession) -> None:
     for provider, model_name, cost_per_1k_tokens in MODEL_CATALOG:
         if model_name in existing_by_name:
             continue
-        retired = settings.is_production and model_name in RETIRED_MODELS_IN_PRODUCTION
         session.add(
             ModelVersionModel(
                 id=uuid.uuid4(),
                 provider=provider,
                 model_name=model_name,
                 version="1",
-                status="sunset" if retired else "active",
+                status="active",
                 cost_per_1k_tokens=cost_per_1k_tokens,
                 is_default=(model_name == settings.ai_default_model),
             )
         )
-        logger.info("seeded_model_version", model_name=model_name, status="sunset" if retired else "active")
+        logger.info("seeded_model_version", model_name=model_name, status="active")
 
-    # Existing rows are never mutated by the insert loop above (it only
-    # ever adds what's missing) — so a model retired from production
-    # after already having been seeded there as "active" (this app's own
-    # qwen2.5:7b/3b, seeded back in Phase 4 before this migration) needs
-    # an explicit sunset step here, not just removal from MODEL_CATALOG.
-    if settings.is_production:
-        for model_name in RETIRED_MODELS_IN_PRODUCTION:
-            model = existing_by_name.get(model_name)
-            if model is not None and model.status == "active":
-                model.status = "sunset"
-                logger.info("sunset_model_version", model_name=model_name)
+    # See LEGACY_OLLAMA_MODELS above — sunset unconditionally (every
+    # environment, not just prod) since these were removed from
+    # MODEL_CATALOG entirely, not just hidden in one environment.
+    for model_name in LEGACY_OLLAMA_MODELS:
+        model = existing_by_name.get(model_name)
+        if model is not None and model.status == "active":
+            model.status = "sunset"
+            logger.info("sunset_model_version", model_name=model_name)
     await session.flush()
 
     # If nothing in the catalog matches AI_DEFAULT_MODEL (e.g. it was
