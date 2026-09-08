@@ -157,7 +157,7 @@ export function LandingPage() {
       <header className="fixed inset-x-0 top-0 z-20 flex items-center justify-between bg-primary px-6 py-4 shadow-card sm:px-10">
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
-            <Compass className="h-6 w-6" strokeWidth={2} color="url(#rainbow-accent-gradient)" />
+            <Compass className="mt-[-1pt] h-6 w-6" strokeWidth={2} color="url(#rainbow-accent-gradient)" />
             <span className="font-display text-lg font-semibold text-primary-foreground">
               Career Compass AI
             </span>

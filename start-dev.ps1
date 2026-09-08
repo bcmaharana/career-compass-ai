@@ -184,6 +184,42 @@ function Watch-AndMinimize-DockerDesktop {
     return $foundOnce
 }
 
+# Docker Desktop is supposed to auto-start at login (its own "Start
+# Docker Desktop when you sign in" setting) - but that's a separate,
+# unreliable mechanism this script has no visibility into: it can crash,
+# get closed, or simply not have finished its WSL2 backend init yet
+# whenever this script happens to run. Rather than let `docker compose
+# up` below fail with a confusing pipe-connection error (as happened
+# live 2026-09-08, on the sibling `platform` repo's equivalent script),
+# launch Docker Desktop ourselves if it isn't already running and poll
+# until the daemon actually responds before touching compose at all -
+# this also means the window-minimize pass right after this has an
+# actual window to find rather than racing Docker Desktop's own
+# self-launch.
+Write-Step "Checking Docker Desktop"
+$dockerAlreadyRunning = Get-Process -Name "Docker Desktop" -ErrorAction SilentlyContinue
+if (-not $dockerAlreadyRunning) {
+    Write-Host "Docker Desktop not running - launching it"
+    Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+}
+$dockerMaxWaitSeconds = 180
+$dockerWaited = 0
+$dockerDaemonReady = $false
+while ($dockerWaited -lt $dockerMaxWaitSeconds) {
+    docker info *> $null
+    if ($LASTEXITCODE -eq 0) {
+        $dockerDaemonReady = $true
+        break
+    }
+    Start-Sleep -Seconds 5
+    $dockerWaited += 5
+}
+if ($dockerDaemonReady) {
+    Write-Host "Docker daemon is ready"
+} else {
+    Write-Host "Docker daemon still not responding after ${dockerMaxWaitSeconds}s - continuing anyway, docker compose will likely fail" -ForegroundColor Yellow
+}
+
 Write-Step "Minimizing the Docker Desktop window (initial pass)"
 $dockerMinimized = Watch-AndMinimize-DockerDesktop -MaxIterations 240 -StableIterationsToExit 20  # up to 2 min
 if (-not $dockerMinimized) {
