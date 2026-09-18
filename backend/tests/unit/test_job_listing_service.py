@@ -113,6 +113,7 @@ class FakeJobListingProvider:
         self._listings_by_query = listings_by_query
         self.call_count = 0
         self.calls_what: list[str] = []
+        self.calls_where: list[str | None] = []
 
     async def search(
         self,
@@ -127,6 +128,7 @@ class FakeJobListingProvider:
     ) -> list[JobListing]:
         self.call_count += 1
         self.calls_what.append(what)
+        self.calls_where.append(where)
         if self._fail:
             raise AdzunaJobProviderError("simulated failure")
         if self._listings_by_query is not None:
@@ -186,6 +188,11 @@ class TestGetForTargetRole:
         )
         provider = FakeJobListingProvider(listings=[listing])
         target_role = await target_roles_repo.create(_make_target_role(tenant_id, user_id))
+        # Profile city/state is deliberately NOT used as a location
+        # fallback (see job_listing_service.py's comment on `location`)
+        # - a user with no Job Search Preference location set gets a
+        # genuinely nationwide search, not silently narrowed to their
+        # home town.
         await users_repo.create(_make_user(tenant_id, user_id, city="Seattle", state="WA"))
 
         service = JobListingService(cache, provider, TargetRoleService(target_roles_repo), users_repo)
@@ -195,7 +202,8 @@ class TestGetForTargetRole:
 
         assert result.listings == [listing]
         assert provider.call_count == 1
-        assert cache.entries[("staff engineer", "seattle, wa", 0, 0, "", "")].listings == [listing]
+        assert provider.calls_where == [None]
+        assert cache.entries[("staff engineer", "", 0, 0, "", "")].listings == [listing]
 
     async def test_serves_from_cache_within_ttl(self) -> None:
         tenant_id, user_id = uuid.uuid4(), uuid.uuid4()

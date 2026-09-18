@@ -180,8 +180,8 @@ function JobSearchPreferenceForm({ preference }: { preference: JobSearchPreferen
           placeholder="e.g. Seattle, WA"
         />
         <p className="text-xs text-muted-foreground">
-          Overrides your Career Profile city/state for job searches. Leave blank to use your
-          profile location.
+          Leave blank to search nationwide, with no location restriction. Your Career Profile
+          city/state is not used here unless you type it in yourself.
         </p>
       </div>
 

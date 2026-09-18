@@ -136,14 +136,17 @@ class JobListingService:
         )
         user = await self._users.get_by_id(tenant_id, user_id)
 
-        # Settings > Job Search Preference's location override takes
-        # priority; falling back to profile city/state (the original
-        # behavior before that preference existed) when unset.
-        preferred_location = user.job_search_location if user else None
-        profile_location = (
-            f"{user.city}, {user.state}" if user and user.city and user.state else None
-        )
-        location = preferred_location or profile_location
+        # Settings > Job Search Preference's location is the ONLY
+        # location signal used here. Originally this fell back to
+        # profile city/state when blank, but that made "blank" silently
+        # mean "my home town" rather than "no location preference" -
+        # confirmed live as a real user-facing surprise (a niche role
+        # title + an implicit small-town restriction neither the user
+        # nor the UI's "leave blank" copy made obvious returned zero
+        # results even though the role has hundreds of real listings
+        # nationally). Blank now means a genuinely nationwide search -
+        # no `where` param sent to the provider at all.
+        location = user.job_search_location if user else None
 
         max_days_old = user.job_search_max_days_old if user else None
         distance_miles = user.job_search_distance_miles if user else None
