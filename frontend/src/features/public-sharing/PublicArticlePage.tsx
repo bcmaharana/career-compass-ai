@@ -2,7 +2,7 @@ import { ApiError } from "@/api/client";
 import { usePublicArticle } from "@/api/queries/public-sharing";
 import type { components } from "@/api/schema.gen";
 import { Card, CardContent } from "@/components/ui/card";
-import { RichTextDisplay } from "@/components/ui/rich-text-editor";
+import { RichTextDisplay } from "@bcmaharana/ui-kit";
 import { PublicPageHeader } from "@/features/public-sharing/PublicPageHeader";
 import { useNoIndex } from "@/hooks/useNoIndex";
 import { ExternalLink } from "lucide-react";

@@ -1,4 +1,4 @@
-import { RichTextDisplay } from "@/components/ui/rich-text-editor";
+import { RichTextDisplay } from "@bcmaharana/ui-kit";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";

@@ -30,11 +30,12 @@ indent effect itself).
 from __future__ import annotations
 
 import html as _html
+import re
 
 import bleach
 from bleach.css_sanitizer import CSSSanitizer
 
-_ALLOWED_TAGS = ["b", "strong", "i", "em", "u", "span", "div", "p", "br", "ul", "li", "blockquote", "a"]
+_ALLOWED_TAGS = ["b", "strong", "i", "em", "u", "span", "div", "p", "br", "ul", "ol", "li", "blockquote", "a"]
 #: `style` is allowed on every inline formatting tag, not just span/div/p
 #: — combining two formats on the same selection (e.g. bold + color)
 #: produces a single tag carrying both, like `<b style="color:...">`,
@@ -43,12 +44,12 @@ _ALLOWED_TAGS = ["b", "strong", "i", "em", "u", "span", "div", "p", "br", "ul", 
 #: its color (the `style` attribute on `<b>` was simply stripped,
 #: bold survived, color didn't) — caught live before shipping.
 _ALLOWED_ATTRIBUTES: dict[str, list[str]] = {
-    tag: ["style"] for tag in ("b", "strong", "i", "em", "u", "span", "div", "p", "blockquote")
+    tag: ["style"] for tag in ("b", "strong", "i", "em", "u", "span", "div", "p", "blockquote", "ul", "ol")
 }
 #: A link (2026-08-24: "highlight/select a text string and add a link to
 #: that text string in any box we have text") is built client-side by
 #: directly wrapping the selection's Range in a real `<a>` element
-#: (frontend/src/components/ui/rich-text-editor.tsx's applyLink — same
+#: (@bcmaharana/ui-kit's RichTextEditor.applyLink — same
 #: direct-DOM-manipulation approach the "rainbow" color swatch already
 #: uses, not document.execCommand('createLink'), specifically so
 #: target="_blank"/rel="noreferrer" can be set deterministically rather
@@ -59,21 +60,40 @@ _ALLOWED_ATTRIBUTES: dict[str, list[str]] = {
 #: app's other free-text-URL enforcement point.
 _ALLOWED_ATTRIBUTES["a"] = ["href", "target", "rel", "style"]
 _ALLOWED_PROTOCOLS = ["http", "https", "mailto"]
-#: The "rainbow" text-color swatch (frontend/src/components/ui/rich-text-editor.tsx)
-#: is a genuine CSS gradient on the glyphs, which document.execCommand
-#: can't apply as an inline style (foreColor only accepts a solid
-#: color) — so it's marked with this one fixed attribute+value instead,
-#: and the actual gradient lives in a stylesheet rule
-#: ([data-rainbow="true"] in globals.css), not in anything the client
-#: sends. Allowing this single boolean-ish attribute keeps the CSS
-#: property allowlist above unchanged (still just color/margin) rather
-#: than having to trust an arbitrary client-supplied background/url().
+#: Gradient text-color presets (rainbow/sunset/ocean — RichTextEditor's
+#: GRADIENT_PRESETS) are a genuine CSS gradient on the glyphs, which
+#: document.execCommand can't apply as an inline style (foreColor only
+#: accepts a solid color) — so each is marked with one of these fixed
+#: attribute+value pairs instead, and the actual gradient lives in a
+#: stylesheet rule ([data-rainbow="true"]/[data-gradient="sunset"]/etc.
+#: in globals.css), not in anything the client sends. `data-gradient`'s
+#: VALUE still needs an enum check below (bleach only validates that the
+#: ATTRIBUTE is allowed on the tag, not which value it holds) — an
+#: unrecognized value is stripped by _strip_invalid_data_gradient rather
+#: than trusted, so a client can't smuggle an arbitrary attribute value
+#: through even though the attribute name itself is allowlisted.
 _ALLOWED_ATTRIBUTES["span"].append("data-rainbow")
-_CSS_SANITIZER = CSSSanitizer(allowed_css_properties=["color", "margin"])
+_ALLOWED_ATTRIBUTES["span"].append("data-gradient")
+_ALLOWED_GRADIENT_NAMES = {"rainbow", "sunset", "ocean"}
+#: font-family/background-color/text-align/list-style-type all take
+#: simple keyword/color/string values with no CSS function capable of
+#: fetching a URL (unlike e.g. background-image) — safe to allow by
+#: property name alone, same as the pre-existing color/margin entries.
+_CSS_SANITIZER = CSSSanitizer(
+    allowed_css_properties=["color", "margin", "background-color", "font-family", "text-align", "list-style-type"]
+)
+_DATA_GRADIENT_RE = re.compile(r'data-gradient="([^"]*)"')
+
+
+def _strip_invalid_data_gradient(html: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        return match.group(0) if match.group(1) in _ALLOWED_GRADIENT_NAMES else ""
+
+    return _DATA_GRADIENT_RE.sub(replace, html)
 
 
 def sanitize_rich_text(value: str | None) -> str | None:
-    """Strips everything outside the small bold/italic/color allowlist.
+    """Strips everything outside the rich-text formatting allowlist.
     `None` passes through unchanged (these fields are all optional)."""
     if value is None:
         return None
@@ -85,6 +105,7 @@ def sanitize_rich_text(value: str | None) -> str | None:
         css_sanitizer=_CSS_SANITIZER,
         strip=True,
     )
+    cleaned = _strip_invalid_data_gradient(cleaned)
     stripped = cleaned.strip()
     return stripped or None
 

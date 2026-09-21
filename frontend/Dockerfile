@@ -6,8 +6,14 @@
 # Cloudflare Tunnel.
 FROM node:20-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
+COPY package.json package-lock.json .npmrc ./
+# .npmrc only holds the registry URL + an env-var reference
+# (${GITHUB_PACKAGES_TOKEN}), never a literal token, so it's safe to
+# commit — the real value is supplied per the BuildKit secret mount
+# below (`docker build --secret id=npm_token,env=GITHUB_PACKAGES_TOKEN`
+# or the equivalent `build.secrets` block in docker-compose.prod.yml),
+# never baked into an image layer.
+RUN --mount=type=secret,id=npm_token,env=GITHUB_PACKAGES_TOKEN npm ci
 COPY . .
 RUN npm run build
 

@@ -2,7 +2,7 @@ import { useCareerProfile, useTargetRoles } from "@/api/queries/career-profile";
 import { useGapAnalysis } from "@/api/queries/skill-intelligence";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RichTextDisplay } from "@/components/ui/rich-text-editor";
+import { RichTextDisplay } from "@bcmaharana/ui-kit";
 import { ConversationPanel } from "@/components/layout/ConversationPanel";
 import { buildSuggestedPrompts } from "@/features/coach/suggested-prompts";
 import { getErrorMessage } from "@/lib/errors";

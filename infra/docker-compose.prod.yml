@@ -122,12 +122,24 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
+      secrets:
+        - npm_token
     container_name: compass-frontend-prod
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:80"
     depends_on:
       - backend
+
+# Sourced from the GITHUB_PACKAGES_TOKEN environment variable (set it in
+# infra/.env, same file that already holds this stack's other prod
+# secrets) - a classic PAT with only read:packages scope, used solely to
+# install @bcmaharana/ui-kit from GitHub Packages during the frontend
+# image build. Never written to a layer - see frontend/Dockerfile's own
+# comment on the matching --mount=type=secret.
+secrets:
+  npm_token:
+    environment: GITHUB_PACKAGES_TOKEN
 
 volumes:
   compass_postgres_prod_data:

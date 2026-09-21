@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
+import { RichTextDisplay, RichTextEditor } from "@bcmaharana/ui-kit";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { getErrorMessage } from "@/lib/errors";

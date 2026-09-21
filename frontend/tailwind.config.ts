@@ -9,7 +9,13 @@ import type { Config } from "tailwindcss";
 // now-common Space-Grotesk-for-every-AI-product default).
 export default {
   darkMode: ["class"],
-  content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  // node_modules is excluded from Tailwind's JIT scan by default — the
+  // ui-kit entry is required explicitly, or classes used only inside its
+  // compiled dist/index.js (e.g. RichTextEditor's `[&_ul]:list-disc`
+  // bullet styling, its `empty:before:content-[attr(data-placeholder)]`
+  // placeholder) are silently never generated. Confirmed missing from a
+  // real build before this line was added.
+  content: ["./index.html", "./src/**/*.{ts,tsx}", "./node_modules/@bcmaharana/ui-kit/dist/**/*.{js,cjs}"],
   theme: {
     container: {
       center: true,

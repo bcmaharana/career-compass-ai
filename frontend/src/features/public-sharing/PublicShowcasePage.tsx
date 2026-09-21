@@ -1,7 +1,7 @@
 import { usePublicShowcasePage } from "@/api/queries/public-sharing";
 import type { components } from "@/api/schema.gen";
 import { Card, CardContent } from "@/components/ui/card";
-import { RichTextDisplay } from "@/components/ui/rich-text-editor";
+import { RichTextDisplay } from "@bcmaharana/ui-kit";
 import { Tooltip } from "@/components/ui/tooltip";
 import { PublicPageHeader } from "@/features/public-sharing/PublicPageHeader";
 import { useNoIndex } from "@/hooks/useNoIndex";

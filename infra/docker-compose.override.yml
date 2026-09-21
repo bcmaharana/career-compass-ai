@@ -6,4 +6,12 @@
 # directly.
 services:
   backend:
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    # --reload-dir scopes the watcher to just the code that actually
+    # needs hot-reload, instead of the whole /app bind mount
+    # (alembic/scripts/tests included). Without it, watchfiles'
+    # rust-notify backend can periodically throw on Windows Docker
+    # Desktop's bind-mount filesystem, killing/restarting the server
+    # mid-request — the client sees the request hang forever rather
+    # than an error. Already found and fixed once in the sibling
+    # `platform` repo's docker-compose.override.yml.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "app"]

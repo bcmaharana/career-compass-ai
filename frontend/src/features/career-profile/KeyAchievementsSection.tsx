@@ -15,7 +15,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoveButtons } from "@/components/ui/move-buttons";
-import { RichTextDisplay, RichTextEditor } from "@/components/ui/rich-text-editor";
+import { RichTextDisplay, RichTextEditor } from "@bcmaharana/ui-kit";
 import { Select } from "@/components/ui/select";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { ResumeIncludeToggle } from "@/features/career-profile/ResumeIncludeToggle";

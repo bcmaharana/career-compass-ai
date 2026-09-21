@@ -13,7 +13,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends libpq-dev gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Source is copied *before* `pip install .` deliberately — pyproject.toml
+# Source is copied *before* `pip install -e .` deliberately — pyproject.toml
 # declares the local `app` package via setuptools' package discovery
 # (`include = ["app*"]`), so installing before the source exists means
 # pip resolves and installs every third-party dependency correctly but
@@ -24,12 +24,18 @@ RUN apt-get update \
 # invocation only adds the script's own directory, not the working
 # directory) — caught by actually running the seed script against a
 # fresh container, not by reasoning about the Dockerfile alone.
+#
+# Editable install (`-e`), not a plain `pip install .` — a regular
+# install bakes a FROZEN copy of app/ into site-packages at build time,
+# which silently shadows the bind-mounted live source for any script
+# run as `python scripts/foo.py` (same class of bug already found and
+# fixed in the sibling `platform` repo's Dockerfile).
 COPY pyproject.toml ./
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./
 COPY scripts ./scripts
-RUN pip install --upgrade pip && pip install .
+RUN pip install --upgrade pip && pip install -e .
 
 EXPOSE 8000
 
