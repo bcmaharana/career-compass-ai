@@ -319,43 +319,52 @@
     color: transparent;
     -webkit-text-fill-color: transparent;
   }
+}
 
-  /* Two more RichTextEditor gradient-text presets alongside rainbow
-   * above (@bcmaharana/ui-kit's GRADIENT_PRESETS) — same fixed
-   * attribute+value mechanism, kept in sync with
-   * career-compass-ai/backend/app/core/rich_text.py's
-   * _ALLOWED_GRADIENT_NAMES enum and platform's own index.css copy of
-   * these same two rules. */
-  [data-gradient="sunset"] {
-    background: linear-gradient(90deg, #f97316 0%, #ec4899 50%, #a855f7 100%);
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
-    -webkit-text-fill-color: transparent;
-  }
-  [data-gradient="ocean"] {
-    background: linear-gradient(90deg, #0ea5e9 0%, #14b8a6 50%, #22c55e 100%);
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
-    -webkit-text-fill-color: transparent;
-  }
-
-  /* RichTextEditor's gradient-preset toolbar SWATCH buttons (a small
-   * solid-fill circle previewing the gradient, not text) — separate
-   * from the [data-gradient="..."]/[data-rainbow="true"] rules above,
-   * which style actual gradient-filled TEXT content. Same gradient
-   * literals, applied as a plain background instead of background-clip
-   * text. */
-  .rich-text-gradient-swatch-rainbow {
-    background: linear-gradient(90deg, #a855f7 12.5%, #3b82f6 37.5%, #22c55e 58.33%, #fdba74 75%, #fca5a5 91.67%);
-  }
-  .rich-text-gradient-swatch-sunset {
-    background: linear-gradient(90deg, #f97316 0%, #ec4899 50%, #a855f7 100%);
-  }
-  .rich-text-gradient-swatch-ocean {
-    background: linear-gradient(90deg, #0ea5e9 0%, #14b8a6 50%, #22c55e 100%);
-  }
+/* Two more RichTextEditor gradient-text presets alongside rainbow above
+ * (@bcmaharana/ui-kit's GRADIENT_PRESETS), plus their toolbar SWATCH
+ * previews — same fixed attribute+value mechanism, kept in sync with
+ * career-compass-ai/backend/app/core/rich_text.py's
+ * _ALLOWED_GRADIENT_NAMES enum and platform's own index.css copy of
+ * these same rules.
+ *
+ * Deliberately OUTSIDE any @layer block, unlike data-rainbow/
+ * rainbow-border above — confirmed live these five rules were being
+ * silently dropped entirely from the built CSS when they lived inside
+ * @layer components, while sibling rules in that same layer (data-rainbow,
+ * rainbow-border) survived. The difference: those are referenced via a
+ * complete, static literal string in source (`setAttribute("data-rainbow",
+ * "true")`, `className="rainbow-border"`), while these are referenced
+ * via a dynamically-interpolated template literal
+ * (`` `rich-text-gradient-swatch-${name}` ``) and a runtime-variable
+ * attribute value (`setAttribute("data-gradient", name)`) — Tailwind's
+ * content scanner can only retain @layer rules it can match against a
+ * complete literal token somewhere in scanned source, which a dynamic
+ * interpolation never produces. Plain CSS outside any @layer is never
+ * subject to that scanning at all, sidestepping the issue entirely
+ * rather than needing every dynamic reference rewritten as a static one. */
+[data-gradient="sunset"] {
+  background: linear-gradient(90deg, #f97316 0%, #ec4899 50%, #a855f7 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+[data-gradient="ocean"] {
+  background: linear-gradient(90deg, #0ea5e9 0%, #14b8a6 50%, #22c55e 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.rich-text-gradient-swatch-rainbow {
+  background: linear-gradient(90deg, #a855f7 12.5%, #3b82f6 37.5%, #22c55e 58.33%, #fdba74 75%, #fca5a5 91.67%);
+}
+.rich-text-gradient-swatch-sunset {
+  background: linear-gradient(90deg, #f97316 0%, #ec4899 50%, #a855f7 100%);
+}
+.rich-text-gradient-swatch-ocean {
+  background: linear-gradient(90deg, #0ea5e9 0%, #14b8a6 50%, #22c55e 100%);
 }
 
 /*
