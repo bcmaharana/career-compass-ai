@@ -80,7 +80,15 @@ _ALLOWED_GRADIENT_NAMES = {"rainbow", "sunset", "ocean"}
 #: fetching a URL (unlike e.g. background-image) — safe to allow by
 #: property name alone, same as the pre-existing color/margin entries.
 _CSS_SANITIZER = CSSSanitizer(
-    allowed_css_properties=["color", "margin", "background-color", "font-family", "text-align", "list-style-type"]
+    allowed_css_properties=[
+        "color",
+        "margin",
+        "background-color",
+        "font-family",
+        "font-size",
+        "text-align",
+        "list-style-type",
+    ]
 )
 _DATA_GRADIENT_RE = re.compile(r'data-gradient="([^"]*)"')
 
