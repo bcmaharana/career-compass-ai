@@ -35,7 +35,10 @@ import re
 import bleach
 from bleach.css_sanitizer import CSSSanitizer
 
-_ALLOWED_TAGS = ["b", "strong", "i", "em", "u", "span", "div", "p", "br", "ul", "ol", "li", "blockquote", "a"]
+#: strike is what execCommand('strikeThrough') produces with
+#: styleWithCSS off (same legacy-tag behavior as b/i/u, not a CSS-only
+#: command).
+_ALLOWED_TAGS = ["b", "strong", "i", "em", "u", "strike", "span", "div", "p", "br", "ul", "ol", "li", "blockquote", "a"]
 #: `style` is allowed on every inline formatting tag, not just span/div/p
 #: — combining two formats on the same selection (e.g. bold + color)
 #: produces a single tag carrying both, like `<b style="color:...">`,
@@ -79,6 +82,10 @@ _ALLOWED_GRADIENT_NAMES = {"rainbow", "sunset", "ocean"}
 #: simple keyword/color/string values with no CSS function capable of
 #: fetching a URL (unlike e.g. background-image) — safe to allow by
 #: property name alone, same as the pre-existing color/margin entries.
+#: -webkit-text-fill-color is the same kind of plain color value,
+#: needed so a solid text-color pick can actually override a
+#: data-rainbow/data-gradient ancestor's inherited transparent fill
+#: (see RichTextEditor's clearGradientFillOverride).
 _CSS_SANITIZER = CSSSanitizer(
     allowed_css_properties=[
         "color",
@@ -88,6 +95,7 @@ _CSS_SANITIZER = CSSSanitizer(
         "font-size",
         "text-align",
         "list-style-type",
+        "-webkit-text-fill-color",
     ]
 )
 _DATA_GRADIENT_RE = re.compile(r'data-gradient="([^"]*)"')
