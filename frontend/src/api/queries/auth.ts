@@ -9,10 +9,6 @@ type PhoneLoginRequest = components["schemas"]["PhoneLoginRequest"];
 type LoginResponse = components["schemas"]["LoginResponse"];
 type CurrentUserResponse = components["schemas"]["CurrentUserResponse"];
 type UpdateCurrentUserRequest = components["schemas"]["UpdateCurrentUserRequest"];
-type RequestPasswordResetRequest = components["schemas"]["RequestPasswordResetRequest"];
-type RequestPasswordResetResponse = components["schemas"]["RequestPasswordResetResponse"];
-type ResetPasswordRequest = components["schemas"]["ResetPasswordRequest"];
-type ResetPasswordResponse = components["schemas"]["ResetPasswordResponse"];
 type PersonalSignupRequest = components["schemas"]["PersonalSignupRequest"];
 type OrganizationSignupRequest = components["schemas"]["OrganizationSignupRequest"];
 type SignupRequestResponse = components["schemas"]["SignupRequestResponse"];
@@ -79,36 +75,6 @@ export function usePhoneLogin() {
     mutationFn: (body: PhoneLoginRequest) =>
       apiClient.post<LoginResponse>("/api/v1/identity/login/phone", body),
     onSuccess: (data) => setSession(data.access_token, toAuthenticatedUser(data)),
-  });
-}
-
-/**
- * "Forgot password" request — always resolves successfully regardless
- * of whether the subdomain/email combination is real (see
- * RequestPasswordResetService's docstring on the backend); the page
- * component must not infer anything from the response beyond
- * "the request completed," never from its content.
- */
-export function useRequestPasswordReset() {
-  return useMutation({
-    mutationFn: (body: RequestPasswordResetRequest) =>
-      apiClient.post<RequestPasswordResetResponse>(
-        "/api/v1/identity/password-reset/request",
-        body,
-      ),
-  });
-}
-
-/**
- * Confirms a password reset using the token from the emailed link.
- * Unlike the request step above, this can genuinely fail (invalid,
- * expired, or already-used token) — the page component surfaces
- * `.error` the same way LoginPage does.
- */
-export function useResetPassword() {
-  return useMutation({
-    mutationFn: (body: ResetPasswordRequest) =>
-      apiClient.post<ResetPasswordResponse>("/api/v1/identity/password-reset/confirm", body),
   });
 }
 

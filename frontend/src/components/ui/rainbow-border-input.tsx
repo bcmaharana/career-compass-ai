@@ -11,9 +11,9 @@ import type { ComponentProps } from "react";
  * corners — this nested-box approach doesn't have that problem at any
  * thickness.
  *
- * Extracted here (not left inline in LoginPage.tsx) once a second and
- * third unauthenticated form — ForgotPasswordPage, ResetPasswordPage —
- * needed the exact same input styling.
+ * Extracted here (not left inline in a single form) since more than one
+ * unauthenticated form needed the exact same input styling — see
+ * PhoneLoginForm.tsx's own usage.
  */
 export function RainbowBorderInput({ className, ...props }: ComponentProps<typeof Input>) {
   return (

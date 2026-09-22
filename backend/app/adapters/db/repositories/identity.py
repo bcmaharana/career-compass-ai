@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +20,6 @@ from app.adapters.db.models import (
     AuditEventModel,
     FeatureFlagModel,
     OrganizationModel,
-    PasswordResetTokenModel,
     PendingSignupModel,
     PersonalPhoneLoginModel,
     RoleModel,
@@ -33,7 +32,6 @@ from app.domain.identity.entities import (
     AuditEvent,
     FeatureFlag,
     Organization,
-    PasswordResetToken,
     PendingSignup,
     Role,
     Tenant,
@@ -128,18 +126,6 @@ def _audit_event_to_domain(model: AuditEventModel) -> AuditEvent:
         occurred_at=model.occurred_at,
         metadata=model.event_metadata,
         ip_address=model.ip_address,
-    )
-
-
-def _password_reset_token_to_domain(model: PasswordResetTokenModel) -> PasswordResetToken:
-    return PasswordResetToken(
-        id=model.id,
-        tenant_id=model.tenant_id,
-        user_id=model.user_id,
-        token_hash=model.token_hash,
-        expires_at=model.expires_at,
-        used_at=model.used_at,
-        created_at=model.created_at,
     )
 
 
@@ -429,62 +415,10 @@ class SqlAlchemyFeatureFlagRepository:
         return [_feature_flag_to_domain(model) for model in result.scalars().all()]
 
 
-class SqlAlchemyPasswordResetTokenRepository:
-    """Deliberately never filters by tenant_id in get_by_token_hash() —
-    this table is RLS-exempt (see adapters/db/models/identity.py) and
-    this is the pre-tenant-context lookup a confirm-reset request starts
-    from, the same shape as SqlAlchemyTenantRepository.get_by_subdomain.
-    """
-
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
-
-    async def create(self, token: PasswordResetToken) -> PasswordResetToken:
-        model = PasswordResetTokenModel(
-            id=token.id,
-            tenant_id=token.tenant_id,
-            user_id=token.user_id,
-            token_hash=token.token_hash,
-            expires_at=token.expires_at,
-            used_at=token.used_at,
-        )
-        self._session.add(model)
-        await self._session.flush()
-        await self._session.refresh(model)
-        return _password_reset_token_to_domain(model)
-
-    async def get_by_token_hash(self, token_hash: str) -> PasswordResetToken | None:
-        result = await self._session.execute(
-            select(PasswordResetTokenModel).where(PasswordResetTokenModel.token_hash == token_hash)
-        )
-        model = result.scalar_one_or_none()
-        return _password_reset_token_to_domain(model) if model else None
-
-    async def invalidate_unused_for_user(self, tenant_id: UUID, user_id: UUID) -> None:
-        await self._session.execute(
-            update(PasswordResetTokenModel)
-            .where(
-                PasswordResetTokenModel.tenant_id == tenant_id,
-                PasswordResetTokenModel.user_id == user_id,
-                PasswordResetTokenModel.used_at.is_(None),
-            )
-            .values(used_at=func.now())
-        )
-        await self._session.flush()
-
-    async def mark_used(self, token_id: UUID) -> None:
-        await self._session.execute(
-            update(PasswordResetTokenModel)
-            .where(PasswordResetTokenModel.id == token_id)
-            .values(used_at=func.now())
-        )
-        await self._session.flush()
-
-
 class SqlAlchemyPendingSignupRepository:
     """Deliberately never filters by tenant_id in get_by_token_hash() —
     no tenant exists yet for a pending signup at all, the same
-    RLS-exempt shape as SqlAlchemyPasswordResetTokenRepository.
+    RLS-exempt shape as SqlAlchemyTenantRepository.get_by_subdomain.
     """
 
     def __init__(self, session: AsyncSession) -> None:
@@ -535,7 +469,7 @@ class SqlAlchemyPersonalPhoneLoginRepository:
     """Deliberately never filters by tenant_id — this table is the
     RLS-exempt cross-tenant lookup Personal phone login resolves through
     before any tenant context exists, the same shape as
-    SqlAlchemyPendingSignupRepository/SqlAlchemyPasswordResetTokenRepository.
+    SqlAlchemyPendingSignupRepository.
     """
 
     def __init__(self, session: AsyncSession) -> None:

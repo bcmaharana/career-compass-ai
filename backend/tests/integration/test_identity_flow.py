@@ -32,7 +32,7 @@ from app.adapters.db.repositories import (
 from app.adapters.identity_providers.internal_jwt import InternalJWTProvider
 from app.api.dependencies import get_email_provider, get_firebase_phone_verifier
 from app.core.email_provider_interface import EmailMessage
-from app.core.security import hash_password, verify_password
+from app.core.security import hash_password
 from app.domain.identity.entities import User, UserRoleAssignment
 from app.domain.identity.personal_accounts import derive_personal_subdomain
 from app.main import app
@@ -315,140 +315,6 @@ def phone_verifier() -> Generator[FakePhoneVerifier, None, None]:
         yield fake
     finally:
         del app.dependency_overrides[get_firebase_phone_verifier]
-
-
-class TestPasswordReset:
-    async def test_request_returns_generic_success_for_unknown_email(
-        self, client: AsyncClient, email_provider: FakeEmailProvider
-    ) -> None:
-        subdomain = _unique_subdomain()
-        await _register_tenant(client, subdomain)
-
-        response = await client.post(
-            "/api/v1/identity/password-reset/request",
-            json={"subdomain": subdomain, "email": "nobody@example.com"},
-        )
-
-        assert response.status_code == 200
-        assert email_provider.sent == []
-
-    async def test_request_returns_generic_success_for_unknown_subdomain(
-        self, client: AsyncClient, email_provider: FakeEmailProvider
-    ) -> None:
-        response = await client.post(
-            "/api/v1/identity/password-reset/request",
-            json={"subdomain": "definitely-does-not-exist", "email": "nobody@example.com"},
-        )
-
-        assert response.status_code == 200
-        assert email_provider.sent == []
-
-    async def test_full_reset_flow_changes_the_password(
-        self, client: AsyncClient, email_provider: FakeEmailProvider
-    ) -> None:
-        subdomain = _unique_subdomain()
-        await _register_tenant(client, subdomain)
-        admin_email = f"admin@{subdomain}.com"
-
-        request_response = await client.post(
-            "/api/v1/identity/password-reset/request",
-            json={"subdomain": subdomain, "email": admin_email},
-        )
-        assert request_response.status_code == 200
-        assert len(email_provider.sent) == 1
-        token = _extract_reset_token(email_provider.sent[0])
-
-        confirm_response = await client.post(
-            "/api/v1/identity/password-reset/confirm",
-            json={"token": token, "new_password": "brand-new-password-1"},
-        )
-        assert confirm_response.status_code == 200
-
-        # The one check that would catch a repository update() gap that
-        # unit tests (in-memory fakes) can't reproduce: confirm against
-        # the *real* database that the old password now fails and the
-        # new one works. Used to prove this via two /identity/login
-        # attempts — that endpoint is now permanently disabled (ADR-002),
-        # so this reads the real stored hash directly instead, which
-        # proves the exact same thing: the row was genuinely updated to
-        # a hash of the new password, not the old one.
-        async with async_session_factory() as session:
-            tenant_repo = SqlAlchemyTenantRepository(session)
-            tenant = await tenant_repo.get_by_subdomain(subdomain)
-            assert tenant is not None
-            await set_tenant_context(session, tenant.id)
-            result = await session.execute(
-                text("SELECT hashed_password FROM users WHERE email = :email"),
-                {"email": admin_email},
-            )
-            stored_hash = result.scalar_one()
-
-        assert verify_password("brand-new-password-1", stored_hash)
-        assert not verify_password("correct-horse-battery", stored_hash)
-
-    async def test_token_cannot_be_reused(
-        self, client: AsyncClient, email_provider: FakeEmailProvider
-    ) -> None:
-        subdomain = _unique_subdomain()
-        await _register_tenant(client, subdomain)
-        admin_email = f"admin@{subdomain}.com"
-
-        await client.post(
-            "/api/v1/identity/password-reset/request",
-            json={"subdomain": subdomain, "email": admin_email},
-        )
-        token = _extract_reset_token(email_provider.sent[0])
-
-        first = await client.post(
-            "/api/v1/identity/password-reset/confirm",
-            json={"token": token, "new_password": "brand-new-password-1"},
-        )
-        assert first.status_code == 200
-
-        second = await client.post(
-            "/api/v1/identity/password-reset/confirm",
-            json={"token": token, "new_password": "another-password-2"},
-        )
-        assert second.status_code == 401
-        assert second.json()["error"]["code"] == "INVALID_RESET_TOKEN"
-
-    async def test_expired_token_is_rejected(
-        self, client: AsyncClient, email_provider: FakeEmailProvider
-    ) -> None:
-        subdomain = _unique_subdomain()
-        registration = await _register_tenant(client, subdomain)
-        admin_email = f"admin@{subdomain}.com"
-
-        await client.post(
-            "/api/v1/identity/password-reset/request",
-            json={"subdomain": subdomain, "email": admin_email},
-        )
-
-        # Backdate the token's expiry directly — the API never exposes a
-        # way to do this, and there's no reason to wait 30 real minutes
-        # in a test.
-        async with async_session_factory() as session:
-            await set_tenant_context(session, uuid.UUID(registration["tenant_id"]))
-            await session.execute(
-                text(
-                    "UPDATE password_reset_tokens SET expires_at = :expired "
-                    "WHERE tenant_id = :tenant_id"
-                ),
-                {
-                    "expired": datetime.now(UTC) - timedelta(minutes=1),
-                    "tenant_id": registration["tenant_id"],
-                },
-            )
-            await session.commit()
-
-        token = _extract_reset_token(email_provider.sent[0])
-        response = await client.post(
-            "/api/v1/identity/password-reset/confirm",
-            json={"token": token, "new_password": "brand-new-password-1"},
-        )
-
-        assert response.status_code == 401
-        assert response.json()["error"]["code"] == "INVALID_RESET_TOKEN"
 
 
 def _unique_email() -> str:

@@ -187,33 +187,14 @@ class FeatureFlag:
 
 
 @dataclass(slots=True)
-class PasswordResetToken:
-    """A one-time, short-lived token for the "forgot password" flow.
-
-    Deliberately RLS-exempt (see adapters/db/models/identity.py) — the
-    confirm-reset step must resolve which tenant a token belongs to
-    before any tenant context can be bound, the same chicken-and-egg
-    problem Tenant itself has for pre-login subdomain lookup.
-    """
-
-    id: UUID
-    tenant_id: UUID
-    user_id: UUID
-    token_hash: str
-    expires_at: datetime
-    used_at: datetime | None
-    created_at: datetime
-
-
-@dataclass(slots=True)
 class PendingSignup:
     """An unconfirmed signup — holds everything needed to create a real
     Tenant/Organization/User, but nothing is written to those tables
     until the emailed verification link is clicked.
 
-    Deliberately RLS-exempt, same reasoning as PasswordResetToken: no
-    tenant exists yet at all for a pending signup, so there is nothing
-    to bind tenant context to before this must be resolvable.
+    Deliberately RLS-exempt — no tenant exists yet at all for a pending
+    signup, so there is nothing to bind tenant context to before this
+    must be resolvable.
 
     tenant_name/subdomain/organization_name are None for a "personal"
     signup — those are computed at confirm time (subdomain via

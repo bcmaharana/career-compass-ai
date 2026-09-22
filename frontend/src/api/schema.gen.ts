@@ -144,7 +144,7 @@ export interface paths {
         put?: never;
         /**
          * Platform Account Deleted
-         * @description The Hub calls this, best-effort, right after deleting an account
+         * @description The Core Grid calls this, best-effort, right after deleting an account
          *     that held a career_compass_ai entitlement — see platform's own
          *     DeleteAccountService. Public (no Authorization header): the signed
          *     deletion-assertion token itself is the proof, same shape as
@@ -170,40 +170,6 @@ export interface paths {
         put?: never;
         /** Signup Verify */
         post: operations["signup_verify_api_v1_identity_signup_verify_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity/password-reset/request": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Request Password Reset */
-        post: operations["request_password_reset_api_v1_identity_password_reset_request_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity/password-reset/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Confirm Password Reset */
-        post: operations["confirm_password_reset_api_v1_identity_password_reset_confirm_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4173,24 +4139,6 @@ export interface components {
             /** Review Notes */
             review_notes: string;
         };
-        /** RequestPasswordResetRequest */
-        RequestPasswordResetRequest: {
-            /** Subdomain */
-            subdomain?: string | null;
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-        };
-        /** RequestPasswordResetResponse */
-        RequestPasswordResetResponse: {
-            /**
-             * Message
-             * @default If an account exists for that email, a reset link has been sent.
-             */
-            message: string;
-        };
         /** RequiredSkillResponse */
         RequiredSkillResponse: {
             /**
@@ -4200,21 +4148,6 @@ export interface components {
             skill_id: string;
             /** Requirement Level */
             requirement_level: string;
-        };
-        /** ResetPasswordRequest */
-        ResetPasswordRequest: {
-            /** Token */
-            token: string;
-            /** New Password */
-            new_password: string;
-        };
-        /** ResetPasswordResponse */
-        ResetPasswordResponse: {
-            /**
-             * Message
-             * @default Your password has been reset. You can now sign in.
-             */
-            message: string;
         };
         /**
          * ResolveAliasResponse
@@ -5071,72 +5004,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LoginResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    request_password_reset_api_v1_identity_password_reset_request_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RequestPasswordResetRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RequestPasswordResetResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    confirm_password_reset_api_v1_identity_password_reset_confirm_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResetPasswordRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResetPasswordResponse"];
                 };
             };
             /** @description Validation Error */

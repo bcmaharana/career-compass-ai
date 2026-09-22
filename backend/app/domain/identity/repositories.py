@@ -16,7 +16,6 @@ from app.domain.identity.entities import (
     AuditEvent,
     FeatureFlag,
     Organization,
-    PasswordResetToken,
     PendingSignup,
     Role,
     Tenant,
@@ -84,26 +83,13 @@ class FeatureFlagRepository(Protocol):
     async def list_for_tenant(self, tenant_id: UUID) -> list[FeatureFlag]: ...
 
 
-class PasswordResetTokenRepository(Protocol):
-    async def create(self, token: PasswordResetToken) -> PasswordResetToken: ...
-
-    async def get_by_token_hash(self, token_hash: str) -> PasswordResetToken | None:
-        """Deliberately no tenant_id parameter — this is the RLS-exempt,
-        pre-tenant-context lookup a confirm-reset request starts from,
-        the same shape as TenantRepository.get_by_subdomain."""
-        ...
-
-    async def invalidate_unused_for_user(self, tenant_id: UUID, user_id: UUID) -> None: ...
-    async def mark_used(self, token_id: UUID) -> None: ...
-
-
 class PendingSignupRepository(Protocol):
     async def create(self, signup: PendingSignup) -> PendingSignup: ...
 
     async def get_by_token_hash(self, token_hash: str) -> PendingSignup | None:
         """Deliberately no tenant_id parameter — no tenant exists yet
         for a pending signup at all, the same RLS-exempt shape as
-        PasswordResetTokenRepository.get_by_token_hash."""
+        TenantRepository.get_by_subdomain."""
         ...
 
     async def delete(self, signup_id: UUID) -> None: ...
@@ -112,13 +98,12 @@ class PendingSignupRepository(Protocol):
 
 class PersonalPhoneLoginRepository(Protocol):
     """RLS-exempt cross-tenant lookup for Personal-account phone login —
-    see `personal_phone_logins` (no ENABLE/FORCE ROW LEVEL SECURITY,
-    same reasoning as PasswordResetTokenRepository: must be resolvable
-    before any tenant context is bound). Only Personal-tenant users are
-    ever registered here (see `is_personal_subdomain` in
-    app/domain/identity/personal_accounts.py) — Enterprise phone numbers
-    stay purely tenant-scoped via `UserRepository.get_by_phone_e164`,
-    unaffected by this table.
+    see `personal_phone_logins` (no ENABLE/FORCE ROW LEVEL SECURITY —
+    must be resolvable before any tenant context is bound). Only
+    Personal-tenant users are ever registered here (see
+    `is_personal_subdomain` in app/domain/identity/personal_accounts.py)
+    — Enterprise phone numbers stay purely tenant-scoped via
+    `UserRepository.get_by_phone_e164`, unaffected by this table.
     """
 
     async def upsert(self, *, phone_e164: str, tenant_id: UUID, user_id: UUID) -> None:
@@ -132,11 +117,9 @@ class PersonalPhoneLoginRepository(Protocol):
     async def get_tenant_id(self, phone_e164: str) -> UUID | None: ...
     async def delete_for_user(self, user_id: UUID) -> None:
         """Invalidates any previous unconfirmed signup attempts for this
-        email — mirrors PasswordResetTokenRepository's
-        invalidate_unused_for_user, just via delete since there's no
-        used_at state worth keeping here (unlike a used reset token,
-        an abandoned pending signup has no audit value once superseded).
-        """
+        email, via delete since there's no used_at state worth keeping
+        here — an abandoned pending signup has no audit value once
+        superseded."""
         ...
 
 

@@ -34,7 +34,6 @@ from app.adapters.db.repositories import (
     SqlAlchemyFeatureFlagRepository,
     SqlAlchemyKeyAchievementRepository,
     SqlAlchemyOrganizationRepository,
-    SqlAlchemyPasswordResetTokenRepository,
     SqlAlchemyPeerEndorsementRepository,
     SqlAlchemyPendingSignupRepository,
     SqlAlchemyPersonalPhoneLoginRepository,
@@ -149,9 +148,7 @@ from app.application.identity.register_tenant import RegisterTenantService
 from app.application.identity.request_organization_signup import (
     RequestOrganizationSignupService,
 )
-from app.application.identity.request_password_reset import RequestPasswordResetService
 from app.application.identity.request_personal_signup import RequestPersonalSignupService
-from app.application.identity.reset_password import ResetPasswordService
 from app.application.identity.update_user_profile import UpdateUserProfileService
 from app.application.identity.verify_signup import VerifySignupService
 from app.application.interview_prep.interview_answer_service import InterviewAnswerService
@@ -553,12 +550,6 @@ def get_platform_account_deletion_service(
     )
 
 
-def get_password_reset_token_repository(
-    session: AsyncSession = Depends(get_db_session),
-) -> SqlAlchemyPasswordResetTokenRepository:
-    return SqlAlchemyPasswordResetTokenRepository(session)
-
-
 # Process-wide (lru_cache), not per-request — same rationale as
 # get_anthropic_provider/get_quote_provider (a plain httpx-based
 # adapter, no reason to reconstruct it every request).
@@ -585,45 +576,6 @@ async def get_resend_welcome_from_email(session: AsyncSession = Depends(get_db_s
     """Same as get_resend_from_email, for the "resend_welcome_from_email" key."""
     setting = await SqlAlchemyPlatformSettingsRepository(session).get("resend_welcome_from_email")
     return setting.value if setting else get_settings().resend_welcome_from_email
-
-
-def get_request_password_reset_service(
-    tenants: SqlAlchemyTenantRepository = Depends(get_tenant_repository),
-    users: SqlAlchemyUserRepository = Depends(get_user_repository),
-    reset_tokens: SqlAlchemyPasswordResetTokenRepository = Depends(
-        get_password_reset_token_repository
-    ),
-    tenant_context: SqlAlchemyTenantContextBinder = Depends(get_tenant_context_binder),
-    email_provider: ResendEmailProvider = Depends(get_email_provider),
-    audit: AuditService = Depends(get_plain_audit_service),
-    from_email: str = Depends(get_resend_from_email),
-) -> RequestPasswordResetService:
-    return RequestPasswordResetService(
-        tenants=tenants,
-        users=users,
-        reset_tokens=reset_tokens,
-        tenant_context=tenant_context,
-        email_provider=email_provider,
-        audit=audit,
-        frontend_base_url=get_settings().frontend_base_url,
-        from_email=from_email,
-    )
-
-
-def get_reset_password_service(
-    reset_tokens: SqlAlchemyPasswordResetTokenRepository = Depends(
-        get_password_reset_token_repository
-    ),
-    users: SqlAlchemyUserRepository = Depends(get_user_repository),
-    tenant_context: SqlAlchemyTenantContextBinder = Depends(get_tenant_context_binder),
-    audit: AuditService = Depends(get_plain_audit_service),
-) -> ResetPasswordService:
-    return ResetPasswordService(
-        reset_tokens=reset_tokens,
-        users=users,
-        tenant_context=tenant_context,
-        audit=audit,
-    )
 
 
 def get_pending_signup_repository(

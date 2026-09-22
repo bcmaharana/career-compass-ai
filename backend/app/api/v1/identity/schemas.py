@@ -130,25 +130,6 @@ class LoginResponse(BaseModel):
     roles: list[str]
 
 
-class RequestPasswordResetRequest(BaseModel):
-    #: Same "None means Personal account" convention as LoginRequest.
-    subdomain: str | None = Field(default=None, max_length=63)
-    email: EmailStr
-
-
-class RequestPasswordResetResponse(BaseModel):
-    message: str = "If an account exists for that email, a reset link has been sent."
-
-
-class ResetPasswordRequest(BaseModel):
-    token: str = Field(min_length=1)
-    new_password: str = Field(min_length=8, max_length=128)
-
-
-class ResetPasswordResponse(BaseModel):
-    message: str = "Your password has been reset. You can now sign in."
-
-
 class UpdateCurrentUserRequest(BaseModel):
     salutation: str | None = Field(default=None, max_length=20)
     first_name: str = Field(min_length=1, max_length=150)

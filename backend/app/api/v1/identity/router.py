@@ -11,6 +11,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 
+from app.adapters.identity_providers.platform_deletion_verifier import (
+    verify_platform_deletion_assertion,
+)
 from app.api.dependencies import (
     get_authenticate_user_service,
     get_current_identity,
@@ -22,9 +25,7 @@ from app.api.dependencies import (
     get_platform_handoff_service,
     get_register_tenant_service,
     get_request_organization_signup_service,
-    get_request_password_reset_service,
     get_request_personal_signup_service,
-    get_reset_password_service,
     get_update_user_profile_service,
     get_verify_signup_service,
     require_permission,
@@ -42,10 +43,6 @@ from app.api.v1.identity.schemas import (
     PlatformHandoffRequest,
     RegisterTenantRequest,
     RegisterTenantResponse,
-    RequestPasswordResetRequest,
-    RequestPasswordResetResponse,
-    ResetPasswordRequest,
-    ResetPasswordResponse,
     SignupRequestResponse,
     UpdateCurrentUserRequest,
     VerifySignupRequest,
@@ -56,18 +53,13 @@ from app.application.identity.dto import LoginResult
 from app.application.identity.get_current_user import GetCurrentUserService
 from app.application.identity.list_audit_events import ListAuditEventsService
 from app.application.identity.list_feature_flags import ListFeatureFlagsService
-from app.adapters.identity_providers.platform_deletion_verifier import (
-    verify_platform_deletion_assertion,
-)
 from app.application.identity.platform_account_deletion import PlatformAccountDeletionService
 from app.application.identity.platform_handoff import PlatformHandoffService
 from app.application.identity.register_tenant import RegisterTenantService
 from app.application.identity.request_organization_signup import (
     RequestOrganizationSignupService,
 )
-from app.application.identity.request_password_reset import RequestPasswordResetService
 from app.application.identity.request_personal_signup import RequestPersonalSignupService
-from app.application.identity.reset_password import ResetPasswordService
 from app.application.identity.update_user_profile import UpdateUserProfileService
 from app.application.identity.verify_signup import VerifySignupService
 from app.core.identity_provider_interface import IdentityClaims
@@ -208,24 +200,6 @@ async def signup_verify(
 ) -> LoginResponse:
     result = await service.execute(token=request.token)
     return _login_response(result)
-
-
-@router.post("/password-reset/request", response_model=RequestPasswordResetResponse)
-async def request_password_reset(
-    request: RequestPasswordResetRequest,
-    service: RequestPasswordResetService = Depends(get_request_password_reset_service),
-) -> RequestPasswordResetResponse:
-    await service.execute(subdomain=request.subdomain, email=request.email)
-    return RequestPasswordResetResponse()
-
-
-@router.post("/password-reset/confirm", response_model=ResetPasswordResponse)
-async def confirm_password_reset(
-    request: ResetPasswordRequest,
-    service: ResetPasswordService = Depends(get_reset_password_service),
-) -> ResetPasswordResponse:
-    await service.execute(token=request.token, new_password=request.new_password)
-    return ResetPasswordResponse()
 
 
 @router.get("/me", response_model=CurrentUserResponse)
