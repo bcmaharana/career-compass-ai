@@ -59,6 +59,7 @@ def _article_column_payload(column: ArticleColumn, image_urls: dict[UUID, str]) 
         type=column.type,
         label=column.label,
         html=column.html,
+        diagram_data=column.diagram_data,
         image_url=image_urls.get(column.id),
         video_embed_url=column.video_embed_url,
         article_topic_id=column.article_topic_id,
@@ -72,6 +73,7 @@ def _article_column_from_payload(column: ArticleColumnPayload) -> ArticleColumn:
         type=column.type,
         label=column.label,
         html=column.html,
+        diagram_data=column.diagram_data.model_dump(mode="json") if column.diagram_data else None,
         image_url=None,
         image_key=None,  # never set by the client — only the image-upload endpoint sets this
         video_embed_url=column.video_embed_url,

@@ -61,6 +61,7 @@ async def get_public_showcase_page(
                         type=column.type,
                         label=column.label,
                         html=column.html,
+                        diagram_data=column.diagram_data,
                         image_url=column.image_url,
                         video_embed_url=column.video_embed_url,
                         article_share_key=(
@@ -100,6 +101,7 @@ async def get_public_article(
                         type=column.type,
                         label=column.label,
                         html=column.html,
+                        diagram_data=column.diagram_data,
                         image_url=view.image_urls.get(column.id),
                         video_embed_url=column.video_embed_url,
                         article_share_key=(

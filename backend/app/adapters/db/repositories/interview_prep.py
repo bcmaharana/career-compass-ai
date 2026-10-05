@@ -49,6 +49,7 @@ def _article_column_to_json(column: ArticleColumn) -> dict[str, Any]:
         "type": column.type,
         "label": column.label,
         "html": column.html,
+        "diagram_data": column.diagram_data,
         "image_url": column.image_url,
         "image_key": column.image_key,
         "video_embed_url": column.video_embed_url,
@@ -63,6 +64,7 @@ def _article_column_from_json(item: dict[str, Any]) -> ArticleColumn:
         type=item["type"],
         label=item["label"],
         html=item.get("html"),
+        diagram_data=item.get("diagram_data"),
         # image_url is deliberately never read back from storage — Article
         # image columns are private-bucket, so the only real persisted
         # value is image_key; image_url is populated transiently at

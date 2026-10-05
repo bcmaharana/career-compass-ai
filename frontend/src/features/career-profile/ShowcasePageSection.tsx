@@ -25,6 +25,8 @@ import { Switch } from "@/components/ui/switch";
 import { getErrorMessage } from "@/lib/errors";
 import { publicShowcasePageUrl } from "@/lib/public-sharing-url";
 import { cn } from "@/lib/utils";
+import { DiagramCanvas } from "@/features/diagram/LazyDiagramCanvas";
+import { EMPTY_DIAGRAM } from "@/features/diagram/diagram-types";
 import {
   ChevronDown,
   ChevronRight,
@@ -49,6 +51,7 @@ const COLUMN_TYPE_LABELS: Record<ShowcaseColumnType, string> = {
   video_embed: "Video",
   article_link: "Article link",
   external_link: "External link",
+  diagram: "Diagram",
 };
 
 function newColumn(type: ShowcaseColumnType): ShowcaseColumn {
@@ -56,7 +59,8 @@ function newColumn(type: ShowcaseColumnType): ShowcaseColumn {
     id: crypto.randomUUID(),
     type,
     label: COLUMN_TYPE_LABELS[type],
-    html: type === "rich_text" ? "" : null,
+    html: type === "rich_text" || type === "diagram" ? "" : null,
+    diagram_data: type === "diagram" ? EMPTY_DIAGRAM : null,
     image_url: null,
     video_embed_url: null,
     article_topic_id: null,
@@ -988,6 +992,11 @@ function ShowcaseColumnCard({
               />
             )}
 
+            {draft.type === "diagram" && <>
+              <RichTextEditor defaultValue={draft.html} onChange={(html) => setDraft({ ...draft, html })} placeholder="Add a paragraph to introduce this diagram..." />
+              <DiagramCanvas value={draft.diagram_data} onChange={(diagram_data) => setDraft({ ...draft, diagram_data })} />
+            </>}
+
             {draft.type === "video_embed" && (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`column-video-${column.id}`}>Embed URL</Label>
@@ -1115,6 +1124,8 @@ function ColumnPreview({ column }: { column: ShowcaseColumn }) {
       ) : (
         <p className="text-sm text-muted-foreground">No content yet — click Edit to add some.</p>
       );
+    case "diagram":
+      return <div className="flex flex-col gap-3">{column.html && <RichTextDisplay html={column.html} />}<DiagramCanvas value={column.diagram_data} readOnly /></div>;
     case "video_embed":
       return column.video_embed_url ? (
         <p className="truncate text-sm text-muted-foreground">{column.video_embed_url}</p>

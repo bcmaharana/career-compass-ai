@@ -31,6 +31,7 @@ def _column_to_json(column: ShowcaseColumn) -> dict[str, Any]:
         "type": column.type,
         "label": column.label,
         "html": column.html,
+        "diagram_data": column.diagram_data,
         "image_url": column.image_url,
         "video_embed_url": column.video_embed_url,
         "article_topic_id": str(column.article_topic_id) if column.article_topic_id else None,
@@ -44,6 +45,7 @@ def _column_from_json(item: dict[str, Any]) -> ShowcaseColumn:
         type=item["type"],
         label=item["label"],
         html=item.get("html"),
+        diagram_data=item.get("diagram_data"),
         image_url=item.get("image_url"),
         video_embed_url=item.get("video_embed_url"),
         article_topic_id=(

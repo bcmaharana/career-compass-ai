@@ -23,6 +23,8 @@ import { Select } from "@/components/ui/select";
 import { DeleteScopeChoiceDialog } from "@/features/interview-prep/DeleteScopeChoiceDialog";
 import { ScopeTagSelector, type ScopeOption } from "@/features/interview-prep/ScopeTagSelector";
 import { TopicVisibilityToggle } from "@/features/interview-prep/TopicVisibilityToggle";
+import { DiagramCanvas } from "@/features/diagram/LazyDiagramCanvas";
+import { EMPTY_DIAGRAM } from "@/features/diagram/diagram-types";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { groupInterviewTopicsBySection } from "@/lib/group-interview-topics-by-section";
 import { getErrorMessage } from "@/lib/errors";
@@ -53,6 +55,7 @@ const COLUMN_TYPE_LABELS: Record<ArticleColumnType, string> = {
   video_embed: "Video",
   article_link: "Article link",
   external_link: "External link",
+  diagram: "Diagram",
 };
 
 function newColumn(type: ArticleColumnType): ArticleColumn {
@@ -60,7 +63,8 @@ function newColumn(type: ArticleColumnType): ArticleColumn {
     id: crypto.randomUUID(),
     type,
     label: COLUMN_TYPE_LABELS[type],
-    html: type === "rich_text" ? "" : null,
+    html: type === "rich_text" || type === "diagram" ? "" : null,
+    diagram_data: type === "diagram" ? EMPTY_DIAGRAM : null,
     image_url: null,
     video_embed_url: null,
     article_topic_id: null,
@@ -958,6 +962,11 @@ function ArticleColumnCard({
               />
             )}
 
+            {draft.type === "diagram" && <>
+              <RichTextEditor defaultValue={draft.html} onChange={(html) => setDraft({ ...draft, html })} placeholder="Add a paragraph to introduce this diagram..." />
+              <DiagramCanvas value={draft.diagram_data} onChange={(diagram_data) => setDraft({ ...draft, diagram_data })} />
+            </>}
+
             {draft.type === "video_embed" && (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`article-column-video-${column.id}`}>Embed URL</Label>
@@ -1096,6 +1105,8 @@ function ArticleColumnPreview({ column }: { column: ArticleColumn }) {
       ) : (
         <p className="text-sm text-muted-foreground">No content yet — click Edit to add some.</p>
       );
+    case "diagram":
+      return <div className="flex flex-col gap-3">{column.html && <RichTextDisplay html={column.html} />}<DiagramCanvas value={column.diagram_data} readOnly /></div>;
     case "video_embed":
       return column.video_embed_url ? (
         <p className="truncate text-sm text-muted-foreground">{column.video_embed_url}</p>

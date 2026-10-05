@@ -36,7 +36,9 @@ from uuid import UUID
 #: Kept intentionally small — enough to build a cover-letter-style page
 #: (prose, a photo, a video walkthrough, links out to public Articles or
 #: anywhere else) without becoming a general-purpose page builder.
-ContentColumnType = Literal["rich_text", "image", "video_embed", "article_link", "external_link"]
+ContentColumnType = Literal[
+    "rich_text", "image", "video_embed", "article_link", "external_link", "diagram"
+]
 
 
 @dataclass(slots=True)
@@ -56,6 +58,8 @@ class ContentColumn:
     type: ContentColumnType
     label: str
     html: str | None = None
+    #: A small, versioned node/connector scene (never executable HTML).
+    diagram_data: dict[str, object] | None = None
     #: A bare, non-expiring public URL for a public-bucket domain
     #: (ShowcasePage) — persisted as-is. For a private-bucket domain
     #: (Article/InterviewTopic), this field is never persisted at all;

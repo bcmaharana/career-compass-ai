@@ -60,7 +60,7 @@ def _sanitize_blocks(blocks: list[ArticleBlock]) -> list[ArticleBlock]:
             block,
             columns=[
                 replace(column, html=sanitize_rich_text(column.html))
-                if column.type == "rich_text"
+                if column.type in ("rich_text", "diagram")
                 else column
                 for column in block.columns
             ],

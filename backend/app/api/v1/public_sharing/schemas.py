@@ -14,12 +14,15 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.api.v1.diagram_schemas import DiagramDataPayload
+
 
 class PublicShowcaseColumn(BaseModel):
     id: UUID
-    type: Literal["rich_text", "image", "video_embed", "article_link", "external_link"]
+    type: Literal["rich_text", "image", "video_embed", "article_link", "external_link", "diagram"]
     label: str
     html: str | None = None
+    diagram_data: DiagramDataPayload | None = None
     image_url: str | None = None
     video_embed_url: str | None = None
     #: The linked Article's OWN share_key — never the raw internal
@@ -70,9 +73,10 @@ class PublicShowcasePageResponse(BaseModel):
 
 class PublicArticleColumn(BaseModel):
     id: UUID
-    type: Literal["rich_text", "image", "video_embed", "article_link", "external_link"]
+    type: Literal["rich_text", "image", "video_embed", "article_link", "external_link", "diagram"]
     label: str
     html: str | None = None
+    diagram_data: DiagramDataPayload | None = None
     image_url: str | None = None
     video_embed_url: str | None = None
     #: Another Article's OWN share_key (an Article can link to another

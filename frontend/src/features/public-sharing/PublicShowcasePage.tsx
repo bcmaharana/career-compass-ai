@@ -2,6 +2,7 @@ import { usePublicShowcasePage } from "@/api/queries/public-sharing";
 import type { components } from "@/api/schema.gen";
 import { Card, CardContent } from "@/components/ui/card";
 import { RichTextDisplay } from "@bcmaharana/ui-kit";
+import { DiagramCanvas } from "@/features/diagram/LazyDiagramCanvas";
 import { Tooltip } from "@/components/ui/tooltip";
 import { PublicPageHeader } from "@/features/public-sharing/PublicPageHeader";
 import { useNoIndex } from "@/hooks/useNoIndex";
@@ -296,6 +297,8 @@ function ShowcaseColumnContent({
   switch (column.type) {
     case "rich_text":
       return column.html ? <RichTextDisplay html={column.html} /> : null;
+    case "diagram":
+      return <div className="flex flex-col gap-3">{column.html && <RichTextDisplay html={column.html} />}<DiagramCanvas value={column.diagram_data} readOnly /></div>;
     case "image":
       return column.image_url ? (
         <img

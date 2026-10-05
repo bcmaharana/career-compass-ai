@@ -2311,11 +2311,12 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link";
+            type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link" | "diagram";
             /** Label */
             label: string;
             /** Html */
             html?: string | null;
+            diagram_data?: components["schemas"]["DiagramDataPayload"] | null;
             /** Image Url */
             image_url?: string | null;
             /** Video Embed Url */
@@ -2812,6 +2813,118 @@ export interface components {
         DeleteMessageResponse: {
             /** Deleted Message Ids */
             deleted_message_ids: string[];
+        };
+        /** DiagramConnectorPayload */
+        DiagramConnectorPayload: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+            /**
+             * Color
+             * @default #475569
+             */
+            color: string;
+            /**
+             * Stroke Width
+             * @default 2
+             */
+            stroke_width: number;
+            /**
+             * Arrow
+             * @default true
+             */
+            arrow: boolean;
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+        };
+        /**
+         * DiagramDataPayload
+         * @description Versioned application-owned scene data; never raw SVG/HTML.
+         */
+        DiagramDataPayload: {
+            /**
+             * Version
+             * @default 1
+             * @constant
+             */
+            version: 1;
+            /** Shapes */
+            shapes?: components["schemas"]["DiagramShapePayload"][];
+            /** Connectors */
+            connectors?: components["schemas"]["DiagramConnectorPayload"][];
+        };
+        /** DiagramShapePayload */
+        DiagramShapePayload: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "rectangle" | "ellipse" | "triangle" | "diamond";
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            /**
+             * Rotation
+             * @default 0
+             */
+            rotation: number;
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+            /** Font Size */
+            font_size: number;
+            /** Text Color */
+            text_color: string;
+            /** Bold */
+            bold: boolean;
+            /** Italic */
+            italic: boolean;
+            /** Text Align */
+            text_align: "left" | "center" | "right";
+            /** Text Vertical Align */
+            text_vertical_align: "top" | "middle" | "bottom";
+            /**
+             * Fill
+             * @default #ffffff
+             */
+            fill: string;
+            /**
+             * Stroke
+             * @default #334155
+             */
+            stroke: string;
+            /**
+             * Stroke Width
+             * @default 2
+             */
+            stroke_width: number;
         };
         /** EducationRequest */
         EducationRequest: {
@@ -3913,11 +4026,12 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link";
+            type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link" | "diagram";
             /** Label */
             label: string;
             /** Html */
             html?: string | null;
+            diagram_data?: components["schemas"]["DiagramDataPayload"] | null;
             /** Image Url */
             image_url?: string | null;
             /** Video Embed Url */
@@ -3959,11 +4073,12 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link";
+            type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link" | "diagram";
             /** Label */
             label: string;
             /** Html */
             html?: string | null;
+            diagram_data?: components["schemas"]["DiagramDataPayload"] | null;
             /** Image Url */
             image_url?: string | null;
             /** Video Embed Url */
@@ -4350,11 +4465,12 @@ export interface components {
              * Type
              * @enum {string}
              */
-            type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link";
+            type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link" | "diagram";
             /** Label */
             label: string;
             /** Html */
             html?: string | null;
+            diagram_data?: components["schemas"]["DiagramDataPayload"] | null;
             /** Image Url */
             image_url?: string | null;
             /** Video Embed Url */

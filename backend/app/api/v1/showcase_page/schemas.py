@@ -6,10 +6,12 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
+
+from app.api.v1.diagram_schemas import DiagramDataPayload
 
 ShowcaseBlockTypePayload = Literal[
-    "rich_text", "image", "video_embed", "article_link", "external_link"
+    "rich_text", "image", "video_embed", "article_link", "external_link", "diagram"
 ]
 
 
@@ -18,10 +20,19 @@ class ShowcaseColumnPayload(BaseModel):
     type: ShowcaseBlockTypePayload
     label: str
     html: str | None = None
+    diagram_data: DiagramDataPayload | None = None
     image_url: str | None = None
     video_embed_url: str | None = None
     article_topic_id: UUID | None = None
     external_url: str | None = None
+
+    @model_validator(mode="after")
+    def validate_diagram_payload(self) -> ShowcaseColumnPayload:
+        if (self.type == "diagram") != (self.diagram_data is not None):
+            raise ValueError(
+                "Diagram blocks require diagram_data; other block types cannot include it."
+            )
+        return self
 
 
 class ShowcaseBlockPayload(BaseModel):

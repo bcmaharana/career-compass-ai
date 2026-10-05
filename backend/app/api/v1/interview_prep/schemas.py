@@ -6,7 +6,9 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
+
+from app.api.v1.diagram_schemas import DiagramDataPayload
 
 
 class ReferenceLinkPayload(BaseModel):
@@ -15,7 +17,7 @@ class ReferenceLinkPayload(BaseModel):
 
 
 ArticleColumnTypePayload = Literal[
-    "rich_text", "image", "video_embed", "article_link", "external_link"
+    "rich_text", "image", "video_embed", "article_link", "external_link", "diagram"
 ]
 
 
@@ -36,10 +38,19 @@ class ArticleColumnPayload(BaseModel):
     type: ArticleColumnTypePayload
     label: str
     html: str | None = None
+    diagram_data: DiagramDataPayload | None = None
     image_url: str | None = None
     video_embed_url: str | None = None
     article_topic_id: UUID | None = None
     external_url: str | None = None
+
+    @model_validator(mode="after")
+    def validate_diagram_payload(self) -> ArticleColumnPayload:
+        if (self.type == "diagram") != (self.diagram_data is not None):
+            raise ValueError(
+                "Diagram blocks require diagram_data; other block types cannot include it."
+            )
+        return self
 
 
 class ArticleBlockPayload(BaseModel):
@@ -127,7 +138,7 @@ class InterviewQuestionResponse(BaseModel):
     #: Always empty on a follow-up's own response (single level only).
     #: Populated on a top-level question's response by
     #: InterviewQuestionRepository.list_for_scope()/update().
-    follow_ups: list["InterviewQuestionResponse"] = []
+    follow_ups: list[InterviewQuestionResponse] = []
     created_at: datetime
 
 
