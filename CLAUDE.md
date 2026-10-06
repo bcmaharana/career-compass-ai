@@ -3951,6 +3951,24 @@ Known environment gotchas already solved, don't reintroduce:
   HTTP 200. The Oracle checkout had pre-existing executable-bit-only
   changes to four scripts; they were left untouched. Frontend build
   still prints the existing large-chunk advisory.
+- **Public video embeds and diagram snap-cue follow-up** (2026-10-05)
+  — committed as `a8f08d7`, pushed, and deployed to the Oracle
+  production stack. Added a shared public `VideoEmbed` renderer used by
+  public article and showcase pages; it converts standard YouTube watch,
+  short/share, and embed links (plus Vimeo page/embed links) to provider
+  iframe URLs, forces HTTPS, and falls back to a safe external link or an
+  invalid-link message for malformed inputs. Editor labels now request
+  a normal video URL rather than only an embed URL. The diagram snap
+  marker is now updated only while the line tool is active and hidden in
+  read-only diagrams, fixing the hover circle appearing on the shared
+  article. Frontend build/lint passed; Oracle deploy script completed,
+  frontend accepted connections, and all five production containers are
+  running at `a8f08d7`. **The linked article itself was not inspected**:
+  browser access was explicitly declined by Browser Use, so the exact
+  stored video URL/provider and rendered error remain unconfirmed. If
+  the video still fails after refresh, obtain its provider URL and a
+  screenshot of the displayed error; embedding-disabled videos or other
+  providers may need provider-specific handling.
 - **Workspace Markdown documentation audit** (2026-10-05) — scanned
   all 86 `.md` and 14 `.mdx` files under `enterprise` (including hidden
   directories, excluding Git internals and generated dependency/build
