@@ -3967,6 +3967,36 @@ Known environment gotchas already solved, don't reintroduce:
 ## Working conventions this user expects
 
 - Complete, real code — no pseudo-code, no placeholders.
+- **Persist every change for future sessions**: update this `CLAUDE.md`
+  in the same work item with what changed, the relevant implementation
+  locations/design details, verification performed, commit/push state,
+  production deployment status, and any known caveats. Do not rely on
+  chat history as the only record. Keep the most recent product-change
+  notes near the end of the build history, and update an earlier note
+  if follow-up work changes its outcome.
+- **Career Compass AI production deploys use the Oracle VM**, not the
+  old Windows laptop prod stack. The production app is
+  `https://career.scaledbrain.com`. The VM is `ubuntu@129.80.178.33`;
+  from this Windows workstation SSH with
+  `-i "$env:USERPROFILE\.ssh\oracle-career-compass-private.key"`.
+  The VM checkout is `~/career-compass-ai`, on `main`. Standard deploy
+  sequence: verify local changes/build as appropriate; commit and push
+  `main` to `origin`; SSH to the VM; from that checkout run
+  `git pull --ff-only origin main && ./infra/oracle-start.sh`. That
+  script uses both `infra/docker-compose.prod.yml` and
+  `infra/docker-compose.oracle.yml`, rebuilds/recreates backend and
+  frontend, waits for Postgres, applies Alembic migrations, runs the
+  idempotent platform seed, and waits for frontend port 8080. Verify
+  with `docker compose -f infra/docker-compose.prod.yml -f
+  infra/docker-compose.oracle.yml ps` on the VM and an HTTP 200 from
+  `https://career.scaledbrain.com`. Do not use `start-prod.ps1` for
+  this target; it controls the legacy laptop stack. The Oracle checkout
+  has had pre-existing mode-only modifications (100644→100755) on
+  `infra/oracle-start.sh`, `infra/oracle-stop.sh`,
+  `infra/setup-cloudflared-oracle.sh`, and
+  `migration/import-prod-data.sh`; preserve them and never discard or
+  reset them as part of a deploy. A documentation-only memory update
+  does not require rebuilding/restarting production.
 - Claims of "this works" should be backed by actually running it
   (migrations against a real DB, live HTTP calls, real test runs) —
   this user has caught multiple real bugs specifically *because*
