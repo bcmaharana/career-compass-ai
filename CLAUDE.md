@@ -4044,9 +4044,10 @@ Known environment gotchas already solved, don't reintroduce:
   but cropped the canvas on mobile. Follow-up: scale inline pixel/point
   font sizes in sanitized shape HTML by the same scene factor; otherwise
   selected rich-text spans retain desktop sizes and can clip inside
-  mobile-sized shapes. Frontend build/lint and deployment outcome for the
-  follow-up will be recorded after verification. The original fit-to-width
-  deploy is commit `b2f078c` and returned HTTP 200.
+  mobile-sized shapes. Long rich-text words can also wrap inside the shape.
+  Frontend build/lint passed. Follow-up commit `7c81c8f` was deployed with
+  `./infra/oracle-start.sh`; all five containers are up and public HTTPS
+  returned HTTP 200. The original fit-to-width deploy was `b2f078c`.
 - **Public page side gutters** (2026-10-06) — Public article and
   showcase pages now use near-full mobile width with 8px outer gutters,
   and 90% viewport width on desktop. Public cards reduce their horizontal
