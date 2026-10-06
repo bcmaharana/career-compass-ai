@@ -4040,8 +4040,10 @@ Known environment gotchas already solved, don't reintroduce:
   page width, shrinking 16px labels to only a few pixels. Read-only
   diagrams now render at a minimum 1200px width in a horizontally
   scrollable viewport, with a swipe hint on narrow screens. The editor
-  canvas sizing is unchanged. Build/lint and Oracle deployment outcome
-  will be recorded after verification.
+  canvas sizing is unchanged. Frontend build/lint passed. Commit `40a5a18`
+  was pushed and deployed through `./infra/oracle-start.sh`; all five
+  containers are up, and both local frontend and public site requests
+  returned HTTP 200. The four Oracle mode-only changes remain intact.
 - **Diagram canvas border visibility** (2026-10-06) — In
   `frontend/src/features/diagram/DiagramCanvas.tsx`, the canvas border is
   conditional on edit mode; read-only article and showcase diagrams have
