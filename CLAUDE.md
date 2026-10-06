@@ -4045,9 +4045,14 @@ Known environment gotchas already solved, don't reintroduce:
   removes the whole mixed selection and detaches remaining line endpoints
   from deleted shapes. Architecture behavior is recorded in
   `docs/architecture/frontend-architecture.md`. Frontend production build
-  and lint passed before the final intersection refinement; final
-  verification and Oracle deployment status will be recorded here after
-  the commit/deploy.
+  and lint passed; the build retains the existing large-main-chunk advisory.
+  Feature commit `a705288` was pushed and deployed with
+  `./infra/oracle-start.sh`. All five production containers are up; both
+  the Oracle VM's local frontend and public `https://career.scaledbrain.com`
+  returned HTTP 200. The workstation's first public request had a DNS
+  resolution failure, so the public check was repeated successfully from
+  the Oracle VM. The four pre-existing Oracle mode-only changes remain
+  intact.
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in
