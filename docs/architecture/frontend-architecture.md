@@ -63,10 +63,15 @@ inside the clipped canvas. It stays positioned by the edited shape and
 repositions on scroll and viewport resize, moving above the shape when
 there is not enough room below it.
 
-In the diagram editor, Shift-click adds/removes shapes from a multi-
-selection. The selected shapes move and transform together; Copy/Paste
-duplicates the group with its relative positions preserved, and Delete
-removes the selected shapes and their attached connections.
+In the diagram editor, dragging on empty canvas space draws a marquee
+that selects shapes, manual lines/arrows, and attached connectors whose
+rendered bounds cross the selection. Shift-click adds/removes individual
+objects from the selection. Shape members move and transform together;
+Copy/Paste duplicates mixed selections with their relative positions
+preserved and reconnects copied lines/edges to copied shapes. Delete
+removes all selected objects and detaches any remaining line endpoints
+from deleted shapes. Lines and connectors have wide transparent hit
+strokes so their visible strokes and arrowheads are easier to select.
 
 ## Design System
 

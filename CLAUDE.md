@@ -4035,6 +4035,19 @@ Known environment gotchas already solved, don't reintroduce:
   containers are running, and `https://career.scaledbrain.com` returned
   HTTP 200. The four pre-existing executable-bit-only changes on the
   Oracle checkout remain preserved.
+- **Diagram marquee and mixed-object selection** (2026-10-06) —
+  `frontend/src/features/diagram/DiagramCanvas.tsx` now starts a drag
+  selection when the user drags on empty canvas space. It selects rotated
+  shape bounds plus manual line/arrow and connector paths; Shift-click
+  continues to add/remove individual objects. Arrow/line hit strokes were
+  widened. Copy/Paste now duplicates selected shapes, lines, and
+  connectors together, remapping connections to copied shapes; Delete
+  removes the whole mixed selection and detaches remaining line endpoints
+  from deleted shapes. Architecture behavior is recorded in
+  `docs/architecture/frontend-architecture.md`. Frontend production build
+  and lint passed before the final intersection refinement; final
+  verification and Oracle deployment status will be recorded here after
+  the commit/deploy.
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in
