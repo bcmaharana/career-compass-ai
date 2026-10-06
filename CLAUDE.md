@@ -4011,16 +4011,18 @@ Known environment gotchas already solved, don't reintroduce:
   four known remote mode-only script changes remain preserved. UI
   interactions were not browser-verified in this deployment; the user
   should check the six requested behaviors in the editor.
-- **Shape text editor overlay** (2026-10-06) — follow-up implementation
-  complete; production deployment pending. Moved the shape rich-text
+- **Shape text editor overlay** (2026-10-06) — committed/pushed as
+  `a4c90fc` and deployed to Oracle production. Moved the shape rich-text
   editor from the canvas's `overflow-hidden` container into a fixed
   document-level portal with high stacking order. The overlay measures
   its rendered size and stays next to the edited shape, repositioning on
   scroll/resize and moving above a low shape when there is insufficient
   room beneath it. This fixes clipping of the toolbar, action buttons,
   and editable text near the bottom of the canvas. Frontend lint/build
-  pass; commit/push and Oracle deploy remain to be completed. Preserve the
-  same four existing Oracle checkout mode-only changes.
+  passed; the deployment script completed, frontend accepted connections,
+  all five production containers are up, and `https://career.scaledbrain.com`
+  returned HTTP 200. Preserve the same four existing Oracle checkout
+  mode-only changes.
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in
