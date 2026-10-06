@@ -4048,8 +4048,10 @@ Known environment gotchas already solved, don't reintroduce:
   showcase pages now use near-full mobile width with 8px outer gutters,
   and 90% viewport width on desktop. Public cards reduce their horizontal
   padding to 12px on phones and 16px at wider widths, so page and card
-  insets do not compound. Frontend build/lint and production outcome will
-  be added after verification.
+  insets do not compound. Frontend build/lint passed. Commit `99da3c9`
+  was pushed and deployed using `./infra/oracle-start.sh`; all five
+  containers are up, and the public site returned HTTP 200. The four
+  existing Oracle mode-only changes remain intact.
 - **Diagram canvas border visibility** (2026-10-06) — In
   `frontend/src/features/diagram/DiagramCanvas.tsx`, the canvas border is
   conditional on edit mode; read-only article and showcase diagrams have
