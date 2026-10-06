@@ -47,7 +47,7 @@ _ALLOWED_TAGS = ["b", "strong", "i", "em", "u", "strike", "span", "div", "p", "b
 #: its color (the `style` attribute on `<b>` was simply stripped,
 #: bold survived, color didn't) — caught live before shipping.
 _ALLOWED_ATTRIBUTES: dict[str, list[str]] = {
-    tag: ["style"] for tag in ("b", "strong", "i", "em", "u", "span", "div", "p", "blockquote", "ul", "ol")
+    tag: ["style"] for tag in ("b", "strong", "i", "em", "u", "span", "div", "p", "blockquote", "ul", "ol", "li")
 }
 #: A link (2026-08-24: "highlight/select a text string and add a link to
 #: that text string in any box we have text") is built client-side by

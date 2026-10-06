@@ -44,7 +44,19 @@ into Interview Prep, Career Profile showcase editing, and public
 read-only sharing views. Manual line endpoints can snap to a shape
 outline and persist an anchor, so attached endpoints follow a shape when
 it moves, resizes, or rotates. Backend payload validation for this data
-lives in `backend/app/api/v1/diagram_schemas.py`.
+lives in `backend/app/api/v1/diagram_schemas.py`. The scene uses a wider
+1600-unit coordinate space, scales to the available viewport, and derives
+height from its contents. Manually drawn lines become orthogonal when
+their endpoints sit at different vertical positions. Shape labels retain
+plain text for accessibility plus sanitized rich-text HTML for inline
+formatting; the server applies the shared rich-text sanitizer before it
+accepts the diagram payload.
+
+The shared `@bcmaharana/ui-kit` rich-text toolbar supports removing an
+active list and stores per-item bullet marker styles on `<li>` elements.
+Career Compass AI's server sanitizer must allow the `style` attribute on
+`li` as well as on the list container, or square and hollow-circle markers
+are lost when the content is saved.
 
 ## Design System
 

@@ -2933,8 +2933,12 @@ export interface components {
              * @default
              */
             text: string;
+            /** Text Html */
+            text_html?: string | null;
             /** Font Size */
             font_size: number;
+            /** Font Family */
+            font_family?: string;
             /** Text Color */
             text_color: string;
             /** Bold */

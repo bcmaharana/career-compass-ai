@@ -9,7 +9,9 @@ export interface DiagramShape {
   height: number;
   rotation: number;
   text: string;
+  text_html?: string | null;
   font_size: number;
+  font_family?: string;
   text_color: string;
   bold: boolean;
   italic: boolean;

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 HexColor = str
 _COLOR_PATTERN = r"^#[0-9a-fA-F]{6}$"
@@ -16,13 +16,15 @@ class DiagramShapePayload(BaseModel):
 
     id: UUID
     kind: Literal["rectangle", "ellipse", "circle", "triangle", "diamond", "pentagon", "hexagon"]
-    x: float = Field(ge=0, le=900)
+    x: float = Field(ge=0, le=1600)
     y: float = Field(ge=0, le=10000)
     width: float = Field(ge=40, le=500)
     height: float = Field(ge=40, le=400)
     rotation: float = Field(default=0, ge=-180, le=180)
     text: str = Field(default="", max_length=180)
+    text_html: str | None = Field(default=None, max_length=4000)
     font_size: int = Field(default=16, ge=8, le=48)
+    font_family: str = Field(default="Arial, Helvetica, sans-serif", max_length=200)
     text_color: HexColor = Field(default="#0f172a", pattern=_COLOR_PATTERN)
     bold: bool = False
     italic: bool = False
@@ -31,6 +33,15 @@ class DiagramShapePayload(BaseModel):
     fill: HexColor = Field(default="#ffffff", pattern=_COLOR_PATTERN)
     stroke: HexColor = Field(default="#334155", pattern=_COLOR_PATTERN)
     stroke_width: float = Field(default=2, ge=1, le=10)
+
+    @field_validator("text_html")
+    @classmethod
+    def sanitize_text_html(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        from app.core.rich_text import sanitize_rich_text
+
+        return sanitize_rich_text(value)
 
 
 class DiagramConnectorPayload(BaseModel):
@@ -51,9 +62,9 @@ class DiagramLinePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: UUID
-    x1: float = Field(ge=0, le=900)
+    x1: float = Field(ge=0, le=1600)
     y1: float = Field(ge=0, le=10000)
-    x2: float = Field(ge=0, le=900)
+    x2: float = Field(ge=0, le=1600)
     y2: float = Field(ge=0, le=10000)
     color: HexColor = Field(default="#475569", pattern=_COLOR_PATTERN)
     stroke_width: float = Field(default=2, ge=1, le=10)
