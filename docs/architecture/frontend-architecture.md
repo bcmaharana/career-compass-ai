@@ -58,6 +58,11 @@ Career Compass AI's server sanitizer must allow the `style` attribute on
 `li` as well as on the list container, or square and hollow-circle markers
 are lost when the content is saved.
 
+The shape text editor opens in a fixed page-level overlay rather than
+inside the clipped canvas. It stays positioned by the edited shape and
+repositions on scroll and viewport resize, moving above the shape when
+there is not enough room below it.
+
 ## Design System
 
 | Token | Value | Use |

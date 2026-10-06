@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Arrow, Circle, Ellipse, Group, Layer, Line, Rect, Shape, Stage, Text, Transformer } from "react-konva";
+import { createPortal } from "react-dom";
 import type Konva from "konva";
 import { RichTextEditor, RICH_TEXT_CONTENT_CLASSES } from "@bcmaharana/ui-kit";
 import type { DiagramConnector, DiagramDocument, DiagramDocumentInput, DiagramLine, DiagramShape, DiagramShapeKind } from "./diagram-types";
@@ -267,7 +268,9 @@ export function DiagramCanvas({
   const [viewportWidth, setViewportWidth] = useState(CANVAS_WIDTH);
   const [editingShapeId, setEditingShapeId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+  const [editorPosition, setEditorPosition] = useState({ left: 8, top: 8 });
   const canvasRef = useRef<HTMLDivElement>(null);
+  const editorPanelRef = useRef<HTMLDivElement>(null);
   const cancelTextEditRef = useRef(false);
   const transformerRef = useRef<Konva.Transformer>(null);
   const shapeRefs = useRef(new Map<string, Konva.Group>());
@@ -311,6 +314,34 @@ export function DiagramCanvas({
     transformer.nodes(target ? [target] : []);
     transformer.getLayer()?.batchDraw();
   }, [selected, document.shapes]);
+
+  useLayoutEffect(() => {
+    if (!editingShapeId) return;
+    const positionEditor = () => {
+      const canvas = canvasRef.current;
+      const panel = editorPanelRef.current;
+      const shape = documentRef.current.shapes.find((item) => item.id === editingShapeId);
+      if (!canvas || !panel || !shape) return;
+      const canvasRect = canvas.getBoundingClientRect();
+      const scale = canvasRect.width / CANVAS_WIDTH;
+      const panelWidth = panel.offsetWidth;
+      const panelHeight = panel.offsetHeight;
+      const left = Math.max(8, Math.min(window.innerWidth - panelWidth - 8, canvasRect.left + (shape.x + shape.width / 2) * scale - panelWidth / 2));
+      const shapeTop = canvasRect.top + shape.y * scale;
+      const below = shapeTop + (shape.height + 12) * scale;
+      const top = below + panelHeight <= window.innerHeight - 8
+        ? below
+        : Math.max(8, shapeTop - panelHeight - 8);
+      setEditorPosition({ left, top });
+    };
+    positionEditor();
+    window.addEventListener("resize", positionEditor);
+    window.addEventListener("scroll", positionEditor, true);
+    return () => {
+      window.removeEventListener("resize", positionEditor);
+      window.removeEventListener("scroll", positionEditor, true);
+    };
+  }, [editingShapeId, viewportWidth, document.shapes]);
 
   function setLive(next: DiagramDocument, notify = true) {
     documentRef.current = next;
@@ -519,6 +550,7 @@ export function DiagramCanvas({
   }
 
   const selectedShape = selected?.kind === "shape" ? document.shapes.find((shape) => shape.id === selected.id) : undefined;
+  const editingShape = editingShapeId ? document.shapes.find((shape) => shape.id === editingShapeId) : undefined;
   const selectedConnector = selected?.kind === "connector" ? document.connectors.find((edge) => edge.id === selected.id) : undefined;
   const selectedLine = selected?.kind === "line" ? document.lines.find((line) => line.id === selected.id) : undefined;
   const targetById = new Map(document.shapes.map((shape) => [shape.id, shape]));
@@ -718,16 +750,11 @@ export function DiagramCanvas({
           const scale = viewportWidth / CANVAS_WIDTH;
           return <div key={`rich-${shape.id}`} aria-label={shape.text || "Shape text"} className="pointer-events-none absolute flex overflow-hidden p-1 text-sm" style={{ left: (shape.x + shape.width / 2) * scale, top: (shape.y + shape.height / 2) * scale, width: Math.max(24, (shape.width - 20) * scale), height: Math.max(24, (shape.height - 20) * scale), transform: `translate(-50%, -50%) rotate(${shape.rotation}deg)`, alignItems: shape.text_vertical_align === "top" ? "flex-start" : shape.text_vertical_align === "bottom" ? "flex-end" : "center", justifyContent: shape.text_align === "left" ? "flex-start" : shape.text_align === "right" ? "flex-end" : "center", color: shape.text_color, fontFamily: shape.font_family, fontSize: `${shape.font_size * scale}px`, fontWeight: shape.bold ? "bold" : undefined, fontStyle: shape.italic ? "italic" : undefined, textAlign: shape.text_align, lineHeight: 1.2 }}><div className={`max-w-full ${RICH_TEXT_CONTENT_CLASSES}`} dangerouslySetInnerHTML={{ __html: sanitizeShapeHtml(shape.text_html!) }} /></div>;
         })}
-        {editingShapeId && (() => {
-          const shape = document.shapes.find((item) => item.id === editingShapeId);
-          if (!shape) return null;
-          const scale = viewportWidth / CANVAS_WIDTH;
-          return <div className="absolute z-20 w-[min(760px,95%)] rounded-md border border-accent bg-white p-2 shadow-xl" style={{ left: Math.min((shape.x + shape.width / 2) * scale, Math.max(0, viewportWidth - 780)), top: Math.max(4, shape.y * scale) }}>
-            <RichTextEditor key={shape.id} defaultValue={editingText} onChange={setEditingText} placeholder="Type inside this shape…" autoFocus />
-            <div className="mt-2 flex justify-end gap-2"><button type="button" className="rounded border px-3 py-1 text-sm" onClick={() => { cancelTextEditRef.current = true; setEditingShapeId(null); }}>Cancel</button><button type="button" className="rounded bg-accent px-3 py-1 text-sm text-white" onClick={finishShapeText}>Save text</button></div>
-          </div>;
-        })()}
       </div> : !readOnly && <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">Add a shape to start a diagram. The canvas will grow with your drawing.</div>}
+      {editingShape && createPortal(<div ref={editorPanelRef} role="dialog" aria-label="Edit shape text" className="fixed z-[10000] w-[min(760px,calc(100vw-16px))] rounded-md border border-accent bg-white p-2 shadow-2xl" style={editorPosition}>
+        <RichTextEditor key={editingShape.id} defaultValue={editingText} onChange={setEditingText} placeholder="Type inside this shape…" autoFocus />
+        <div className="mt-2 flex justify-end gap-2"><button type="button" className="rounded border px-3 py-1 text-sm" onClick={() => { cancelTextEditRef.current = true; setEditingShapeId(null); }}>Cancel</button><button type="button" className="rounded bg-accent px-3 py-1 text-sm text-white" onClick={finishShapeText}>Save text</button></div>
+      </div>, globalThis.document.body)}
       <ul className="sr-only" aria-label="Diagram contents">
         {document.shapes.map((shape) => <li key={shape.id}>{shape.kind}: {shape.text || "no text"}</li>)}
         {document.connectors.map((edge) => {
