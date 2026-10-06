@@ -4041,8 +4041,10 @@ Known environment gotchas already solved, don't reintroduce:
   scrolling. Added 50%–200% zoom controls for inspecting small labels;
   zoomed content scrolls inside the viewport. This replaces the previous
   1200px minimum-width behavior from `40a5a18`, which improved text size
-  but cropped the canvas on mobile. Frontend build/lint and deployment
-  outcome will be recorded after verification.
+  but cropped the canvas on mobile. Frontend build/lint passed. Commit
+  `b2f078c` was pushed and deployed with `./infra/oracle-start.sh`; all
+  five containers are up and the public site returned HTTP 200. The four
+  existing Oracle mode-only changes remain intact.
 - **Public page side gutters** (2026-10-06) — Public article and
   showcase pages now use near-full mobile width with 8px outer gutters,
   and 90% viewport width on desktop. Public cards reduce their horizontal
