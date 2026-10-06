@@ -63,6 +63,9 @@ inside the clipped canvas. It stays positioned by the edited shape and
 repositions on scroll and viewport resize, moving above the shape when
 there is not enough room below it.
 
+The diagram canvas frame is shown only in edit mode. Read-only article and
+showcase views render the diagram without an editor border.
+
 In the diagram editor, dragging on empty canvas space draws a marquee
 that selects shapes, manual lines/arrows, and attached connectors whose
 rendered bounds cross the selection. Shift-click adds/removes individual

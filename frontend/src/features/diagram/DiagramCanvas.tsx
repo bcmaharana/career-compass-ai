@@ -754,7 +754,7 @@ export function DiagramCanvas({
         role="group"
         aria-label={readOnly ? `Diagram with ${document.shapes.length} shapes, ${document.lines.length} lines, and ${document.connectors.length} attached connections` : "Diagram editor canvas"}
         ref={canvasRef}
-        className="relative w-full overflow-hidden rounded-md border border-border bg-white"
+        className={`relative w-full overflow-hidden rounded-md bg-white ${readOnly ? "" : "border border-border"}`}
         style={{ aspectRatio: `${CANVAS_WIDTH} / ${Math.max(contentHeight, lineTool ? 120 : 1)}` }}
       >
         <Stage

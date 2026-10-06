@@ -4035,6 +4035,12 @@ Known environment gotchas already solved, don't reintroduce:
   containers are running, and `https://career.scaledbrain.com` returned
   HTTP 200. The four pre-existing executable-bit-only changes on the
   Oracle checkout remain preserved.
+- **Diagram canvas border visibility** (2026-10-06) — In
+  `frontend/src/features/diagram/DiagramCanvas.tsx`, the canvas border is
+  conditional on edit mode; read-only article and showcase diagrams have
+  no editor frame. Updated `docs/architecture/frontend-architecture.md`.
+  Frontend build/lint and Oracle deployment status will be recorded after
+  verification.
 - **Diagram marquee and mixed-object selection** (2026-10-06) —
   `frontend/src/features/diagram/DiagramCanvas.tsx` now starts a drag
   selection when the user drags on empty canvas space. It selects rotated
