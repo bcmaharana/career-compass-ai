@@ -15,9 +15,9 @@ class DiagramShapePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: UUID
-    kind: Literal["rectangle", "ellipse", "triangle", "diamond"]
+    kind: Literal["rectangle", "ellipse", "circle", "triangle", "diamond", "pentagon", "hexagon"]
     x: float = Field(ge=0, le=900)
-    y: float = Field(ge=0, le=500)
+    y: float = Field(ge=0, le=10000)
     width: float = Field(ge=40, le=500)
     height: float = Field(ge=40, le=400)
     rotation: float = Field(default=0, ge=-180, le=180)
@@ -45,6 +45,38 @@ class DiagramConnectorPayload(BaseModel):
     label: str = Field(default="", max_length=120)
 
 
+class DiagramLinePayload(BaseModel):
+    """A manually drawn line whose endpoints may stay attached to shape outlines."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    x1: float = Field(ge=0, le=900)
+    y1: float = Field(ge=0, le=10000)
+    x2: float = Field(ge=0, le=900)
+    y2: float = Field(ge=0, le=10000)
+    color: HexColor = Field(default="#475569", pattern=_COLOR_PATTERN)
+    stroke_width: float = Field(default=2, ge=1, le=10)
+    arrow_start: bool = False
+    arrow_end: bool = False
+    start_shape_id: UUID | None = None
+    start_anchor_x: float | None = Field(default=None, ge=-1, le=1)
+    start_anchor_y: float | None = Field(default=None, ge=-1, le=1)
+    end_shape_id: UUID | None = None
+    end_anchor_x: float | None = Field(default=None, ge=-1, le=1)
+    end_anchor_y: float | None = Field(default=None, ge=-1, le=1)
+
+    @model_validator(mode="after")
+    def validate_anchors(self) -> DiagramLinePayload:
+        for shape_id, anchor_x, anchor_y in (
+            (self.start_shape_id, self.start_anchor_x, self.start_anchor_y),
+            (self.end_shape_id, self.end_anchor_x, self.end_anchor_y),
+        ):
+            if (shape_id is None) != (anchor_x is None or anchor_y is None):
+                raise ValueError("A snapped line endpoint requires its shape ID and both anchor coordinates.")
+        return self
+
+
 class DiagramDataPayload(BaseModel):
     """Versioned application-owned scene data; never raw SVG/HTML."""
 
@@ -53,16 +85,24 @@ class DiagramDataPayload(BaseModel):
     version: Literal[1] = 1
     shapes: list[DiagramShapePayload] = Field(default_factory=list, max_length=100)
     connectors: list[DiagramConnectorPayload] = Field(default_factory=list, max_length=150)
+    lines: list[DiagramLinePayload] = Field(default_factory=list, max_length=150)
 
     @model_validator(mode="after")
     def validate_references(self) -> DiagramDataPayload:
         shape_ids = [shape.id for shape in self.shapes]
         connector_ids = [connector.id for connector in self.connectors]
+        line_ids = [line.id for line in self.lines]
         if len(set(shape_ids)) != len(shape_ids):
             raise ValueError("Diagram shape IDs must be unique.")
         if len(set(connector_ids)) != len(connector_ids):
             raise ValueError("Diagram connector IDs must be unique.")
+        if len(set(line_ids)) != len(line_ids):
+            raise ValueError("Diagram line IDs must be unique.")
         known = set(shape_ids)
+        for line in self.lines:
+            for shape_id in (line.start_shape_id, line.end_shape_id):
+                if shape_id is not None and shape_id not in known:
+                    raise ValueError("Snapped line endpoints must reference shapes in the same diagram.")
         for connector in self.connectors:
             if connector.source_id == connector.target_id:
                 raise ValueError("A diagram connector must connect two different shapes.")

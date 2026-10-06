@@ -2867,6 +2867,41 @@ export interface components {
             shapes?: components["schemas"]["DiagramShapePayload"][];
             /** Connectors */
             connectors?: components["schemas"]["DiagramConnectorPayload"][];
+            /** Lines */
+            lines?: components["schemas"]["DiagramLinePayload"][];
+        };
+        /** DiagramLinePayload */
+        DiagramLinePayload: {
+            /** Id */
+            id: string;
+            /** X1 */
+            x1: number;
+            /** Y1 */
+            y1: number;
+            /** X2 */
+            x2: number;
+            /** Y2 */
+            y2: number;
+            /** Color */
+            color: string;
+            /** Stroke Width */
+            stroke_width: number;
+            /** Arrow Start */
+            arrow_start: boolean;
+            /** Arrow End */
+            arrow_end: boolean;
+            /** Start Shape Id */
+            start_shape_id?: string | null;
+            /** Start Anchor X */
+            start_anchor_x?: number | null;
+            /** Start Anchor Y */
+            start_anchor_y?: number | null;
+            /** End Shape Id */
+            end_shape_id?: string | null;
+            /** End Anchor X */
+            end_anchor_x?: number | null;
+            /** End Anchor Y */
+            end_anchor_y?: number | null;
         };
         /** DiagramShapePayload */
         DiagramShapePayload: {
@@ -2879,7 +2914,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "rectangle" | "ellipse" | "triangle" | "diamond";
+            kind: "rectangle" | "ellipse" | "circle" | "triangle" | "diamond" | "pentagon" | "hexagon";
             /** X */
             x: number;
             /** Y */

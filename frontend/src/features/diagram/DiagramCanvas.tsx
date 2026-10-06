@@ -1,14 +1,90 @@
 import { useEffect, useRef, useState } from "react";
-import { Arrow, Ellipse, Group, Layer, Line, Rect, Shape, Stage, Text, Transformer } from "react-konva";
+import { Arrow, Circle, Ellipse, Group, Layer, Line, Rect, Shape, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
-import type { DiagramConnector, DiagramDocument, DiagramDocumentInput, DiagramShape, DiagramShapeKind } from "./diagram-types";
+import type { DiagramConnector, DiagramDocument, DiagramDocumentInput, DiagramLine, DiagramShape, DiagramShapeKind } from "./diagram-types";
 
 const CANVAS_WIDTH = 900;
-const CANVAS_HEIGHT = 500;
-type SelectedItem = { kind: "shape" | "connector"; id: string } | null;
+const MIN_CANVAS_HEIGHT = 500;
+const MAX_CANVAS_HEIGHT = 10000;
+type LineTool = "line" | "start-arrow" | "end-arrow" | "both-arrows";
+type SelectedItem = { kind: "shape" | "connector" | "line"; id: string } | null;
+type EndpointSnap = { x: number; y: number; shapeId: string; anchorX: number; anchorY: number; distance: number };
+type LinePreview = Pick<DiagramLine, "x1" | "y1" | "x2" | "y2" | "start_shape_id" | "start_anchor_x" | "start_anchor_y" | "end_shape_id" | "end_anchor_x" | "end_anchor_y">;
 
 function copyDocument(document: DiagramDocument): DiagramDocument {
   return structuredClone(document);
+}
+
+function orderLineEndpoints<T extends LinePreview>(line: T): T {
+  return line.x1 <= line.x2 ? line : {
+    ...line,
+    x1: line.x2, y1: line.y2, x2: line.x1, y2: line.y1,
+    start_shape_id: line.end_shape_id, start_anchor_x: line.end_anchor_x, start_anchor_y: line.end_anchor_y,
+    end_shape_id: line.start_shape_id, end_anchor_x: line.start_anchor_x, end_anchor_y: line.start_anchor_y,
+  };
+}
+
+function shapeOutline(shape: DiagramShape): [number, number][] {
+  if (shape.kind === "rectangle") return [[0, 0], [shape.width, 0], [shape.width, shape.height], [0, shape.height]];
+  if (shape.kind === "ellipse" || shape.kind === "circle") {
+    return Array.from({ length: 64 }, (_, index) => {
+      const angle = (index * 2 * Math.PI) / 64;
+      return [shape.width / 2 + Math.cos(angle) * shape.width / 2, shape.height / 2 + Math.sin(angle) * shape.height / 2];
+    });
+  }
+  const sides = shape.kind === "triangle" ? 3 : shape.kind === "diamond" ? 4 : shape.kind === "pentagon" ? 5 : 6;
+  return Array.from({ length: sides }, (_, index) => {
+    const angle = -Math.PI / 2 + (index * 2 * Math.PI) / sides;
+    const radiusX = shape.kind === "diamond" ? shape.width / 2 : shape.width / 2 - 2;
+    const radiusY = shape.kind === "diamond" ? shape.height / 2 : shape.height / 2 - 2;
+    return [shape.width / 2 + Math.cos(angle) * radiusX, shape.height / 2 + Math.sin(angle) * radiusY];
+  });
+}
+
+function shapeLocalToWorld(shape: DiagramShape, point: [number, number]): [number, number] {
+  const [rx, ry] = rotatePoint(point[0] - shape.width / 2, point[1] - shape.height / 2, shape.rotation);
+  return [shape.x + shape.width / 2 + rx, shape.y + shape.height / 2 + ry];
+}
+
+function pointOnShapeAnchor(shape: DiagramShape, anchorX: number, anchorY: number): [number, number] {
+  const approximate = shapeLocalToWorld(shape, [shape.width / 2 + anchorX * shape.width / 2, shape.height / 2 + anchorY * shape.height / 2]);
+  const snapped = closestShapeAnchor(shape, approximate[0], approximate[1]);
+  return [snapped.x, snapped.y];
+}
+
+function closestShapeAnchor(shape: DiagramShape, x: number, y: number): EndpointSnap {
+  const outline = shapeOutline(shape).map((point) => shapeLocalToWorld(shape, point));
+  let closest: [number, number] = outline[0]!;
+  let distanceSquared = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < outline.length; index++) {
+    const a = outline[index]!;
+    const b = outline[(index + 1) % outline.length]!;
+    const dx = b[0] - a[0]; const dy = b[1] - a[1];
+    const lengthSquared = dx * dx + dy * dy;
+    const t = lengthSquared ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / lengthSquared)) : 0;
+    const point: [number, number] = [a[0] + t * dx, a[1] + t * dy];
+    const candidateDistance = (x - point[0]) ** 2 + (y - point[1]) ** 2;
+    if (candidateDistance < distanceSquared) { closest = point; distanceSquared = candidateDistance; }
+  }
+  const [localX, localY] = rotatePoint(closest[0] - shape.x - shape.width / 2, closest[1] - shape.y - shape.height / 2, -shape.rotation);
+  const anchorX = Math.max(-1, Math.min(1, localX / (shape.width / 2)));
+  const anchorY = Math.max(-1, Math.min(1, localY / (shape.height / 2)));
+  return { x: closest[0], y: closest[1], shapeId: shape.id, anchorX, anchorY, distance: Math.sqrt(distanceSquared) };
+}
+
+function syncAttachedLines(lines: DiagramLine[], shape: DiagramShape): DiagramLine[] {
+  return lines.map((line) => {
+    let next = line;
+    if (line.start_shape_id === shape.id && line.start_anchor_x != null && line.start_anchor_y != null) {
+      const [x1, y1] = pointOnShapeAnchor(shape, line.start_anchor_x, line.start_anchor_y);
+      next = { ...next, x1, y1 };
+    }
+    if (line.end_shape_id === shape.id && line.end_anchor_x != null && line.end_anchor_y != null) {
+      const [x2, y2] = pointOnShapeAnchor(shape, line.end_anchor_x, line.end_anchor_y);
+      next = { ...next, x2, y2 };
+    }
+    return next;
+  });
 }
 
 function normalizeDocument(document: DiagramDocumentInput): DiagramDocument {
@@ -24,17 +100,26 @@ function normalizeDocument(document: DiagramDocumentInput): DiagramDocument {
       text_vertical_align: shape.text_vertical_align ?? "middle",
     })),
     connectors: structuredClone(document.connectors ?? []),
+    lines: structuredClone(document.lines ?? []),
   };
+}
+
+function canvasHeight(document: DiagramDocument): number {
+  const shapeBottom = Math.max(0, ...document.shapes.map((shape) => shape.y + shape.height));
+  const lineBottom = Math.max(0, ...document.lines.map((line) => Math.max(line.y1, line.y2)));
+  return Math.min(MAX_CANVAS_HEIGHT, Math.max(MIN_CANVAS_HEIGHT, Math.ceil((Math.max(shapeBottom, lineBottom) + 60) / 50) * 50));
 }
 
 function makeShape(kind: DiagramShapeKind, index: number): DiagramShape {
   const sizes: Record<DiagramShapeKind, [number, number]> = {
-    rectangle: [180, 88], ellipse: [150, 92], triangle: [130, 112], diamond: [140, 110],
+    rectangle: [180, 88], ellipse: [150, 92], circle: [110, 110], triangle: [130, 112],
+    diamond: [140, 110], pentagon: [130, 120], hexagon: [140, 112],
   };
   const [width, height] = sizes[kind];
-  const offset = Math.min(index, 5) * 18;
+  const column = index % 4;
+  const row = Math.floor(index / 4);
   return {
-    id: crypto.randomUUID(), kind, x: Math.max(0, (CANVAS_WIDTH - width) / 2 + offset), y: Math.max(0, (CANVAS_HEIGHT - height) / 2 + offset),
+    id: crypto.randomUUID(), kind, x: Math.max(0, 36 + column * 210), y: 36 + row * 160,
     width, height, rotation: 0, text: kind === "rectangle" ? "Text" : "",
     font_size: 16, text_color: "#0f172a", bold: false, italic: false, text_align: "center", text_vertical_align: "middle", fill: "#ffffff",
     stroke: "#334155", stroke_width: 2,
@@ -67,12 +152,17 @@ function boundaryPoint(shape: DiagramShape, toward: DiagramShape): [number, numb
   const hw = shape.width / 2;
   const hh = shape.height / 2;
   let distance: number;
-  if (shape.kind === "ellipse") {
+  if (shape.kind === "ellipse" || shape.kind === "circle") {
     distance = 1 / Math.sqrt((dx * dx) / (hw * hw) + (dy * dy) / (hh * hh));
   } else if (shape.kind === "diamond") {
     distance = 1 / (Math.abs(dx) / hw + Math.abs(dy) / hh);
-  } else if (shape.kind === "triangle") {
-    const vertices: [number, number][] = [[0, -hh], [hw, hh], [-hw, hh]];
+  } else if (shape.kind !== "rectangle") {
+    const vertices: [number, number][] = shape.kind === "triangle"
+      ? [[0, -hh], [hw, hh], [-hw, hh]]
+      : Array.from({ length: shape.kind === "pentagon" ? 5 : 6 }, (_, index) => {
+            const angle = -Math.PI / 2 + (index * 2 * Math.PI) / (shape.kind === "pentagon" ? 5 : 6);
+            return [Math.cos(angle) * hw, Math.sin(angle) * hh] as [number, number];
+          });
     const intersections = vertices.map((point, index) => raySegmentDistance(dx, dy, point, vertices[(index + 1) % vertices.length]!)).filter((n): n is number => n !== null);
     distance = intersections.length ? Math.min(...intersections) : 0;
   } else {
@@ -87,7 +177,7 @@ function boundaryPoint(shape: DiagramShape, toward: DiagramShape): [number, numb
 function ShapeDrawing({ shape }: { shape: DiagramShape }) {
   const common = { fill: shape.fill, stroke: shape.stroke, strokeWidth: shape.stroke_width, lineJoin: "round" as const };
   if (shape.kind === "rectangle") return <Rect width={shape.width} height={shape.height} cornerRadius={5} {...common} />;
-  if (shape.kind === "ellipse") return <Ellipse x={shape.width / 2} y={shape.height / 2} radiusX={shape.width / 2} radiusY={shape.height / 2} {...common} />;
+  if (shape.kind === "ellipse" || shape.kind === "circle") return <Ellipse x={shape.width / 2} y={shape.height / 2} radiusX={shape.width / 2} radiusY={shape.height / 2} {...common} />;
   return (
     <Shape
       width={shape.width}
@@ -95,12 +185,10 @@ function ShapeDrawing({ shape }: { shape: DiagramShape }) {
       {...common}
       sceneFunc={(context, canvasShape) => {
         context.beginPath();
-        if (shape.kind === "triangle") {
-          context.moveTo(shape.width / 2, 2); context.lineTo(shape.width - 2, shape.height - 2); context.lineTo(2, shape.height - 2);
-        } else {
-          context.moveTo(shape.width / 2, 2); context.lineTo(shape.width - 2, shape.height / 2);
-          context.lineTo(shape.width / 2, shape.height - 2); context.lineTo(2, shape.height / 2);
-        }
+        const outline = shapeOutline(shape);
+        outline.forEach(([x, y], index) => {
+          if (index === 0) context.moveTo(x, y); else context.lineTo(x, y);
+        });
         context.closePath(); context.fillStrokeShape(canvasShape);
       }}
     />
@@ -116,13 +204,15 @@ export function DiagramCanvas({
   onChange?: (document: DiagramDocument) => void;
   readOnly?: boolean;
 }) {
-  const initial = value ?? { version: 1 as const, shapes: [], connectors: [] };
+  const initial = value ?? { version: 1 as const, shapes: [], connectors: [], lines: [] };
   const [document, setDocument] = useState<DiagramDocument>(() => normalizeDocument(initial));
   const incomingDocument = normalizeDocument(initial);
   const incomingSignature = JSON.stringify(incomingDocument);
   const [selected, setSelected] = useState<SelectedItem>(null);
-  const [connectMode, setConnectMode] = useState(false);
-  const [connectFrom, setConnectFrom] = useState<string | null>(null);
+  const [lineTool, setLineTool] = useState<LineTool | null>(null);
+  const [linePreview, setLinePreview] = useState<LinePreview | null>(null);
+  const [snapPreview, setSnapPreview] = useState<{ x: number; y: number } | null>(null);
+  const [hasCopiedShape, setHasCopiedShape] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(CANVAS_WIDTH);
   const [editingShapeId, setEditingShapeId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
@@ -136,6 +226,8 @@ export function DiagramCanvas({
   const undoRef = useRef<DiagramDocument[]>([]);
   const redoRef = useRef<DiagramDocument[]>([]);
   const lastIncomingSignatureRef = useRef(incomingSignature);
+  const copiedShapeRef = useRef<DiagramShape | null>(null);
+  const pasteCountRef = useRef(0);
 
   // The editor calls onChange as it changes, while the preview may stay
   // mounted as the server response replaces its initially empty value.
@@ -191,11 +283,87 @@ export function DiagramCanvas({
     const shape = makeShape(kind, documentRef.current.shapes.length);
     commit({ ...documentRef.current, shapes: [...documentRef.current.shapes, shape] });
     setSelected({ kind: "shape", id: shape.id });
-    setConnectMode(false); setConnectFrom(null);
+    setLineTool(null);
+  }
+
+  function copySelectedShape() {
+    if (selected?.kind !== "shape") return;
+    const shape = documentRef.current.shapes.find((item) => item.id === selected.id);
+    if (!shape) return;
+    copiedShapeRef.current = structuredClone(shape);
+    pasteCountRef.current = 0;
+    setHasCopiedShape(true);
+  }
+
+  function pasteShape() {
+    const source = copiedShapeRef.current;
+    if (!source) return;
+    pasteCountRef.current += 1;
+    const offset = 24 * pasteCountRef.current;
+    const nextShape = {
+      ...structuredClone(source), id: crypto.randomUUID(),
+      x: Math.min(CANVAS_WIDTH - source.width, source.x + offset),
+      y: Math.min(MAX_CANVAS_HEIGHT - source.height, source.y + offset),
+    };
+    commit({ ...documentRef.current, shapes: [...documentRef.current.shapes, nextShape] });
+    setSelected({ kind: "shape", id: nextShape.id });
+  }
+
+  function nearestSnapPoint(x: number, y: number): EndpointSnap | null {
+    let nearest: EndpointSnap | null = null;
+    for (const shape of documentRef.current.shapes) {
+      const candidate = closestShapeAnchor(shape, x, y);
+      if ((!nearest || candidate.distance < nearest.distance) && candidate.distance <= 28) nearest = candidate;
+    }
+    return nearest;
+  }
+
+  function endpointPatch(which: "start" | "end", x: number, y: number): Partial<DiagramLine> {
+    const snap = nearestSnapPoint(x, y);
+    return which === "start"
+      ? { x1: snap?.x ?? x, y1: snap?.y ?? y, start_shape_id: snap?.shapeId ?? null, start_anchor_x: snap?.anchorX ?? null, start_anchor_y: snap?.anchorY ?? null }
+      : { x2: snap?.x ?? x, y2: snap?.y ?? y, end_shape_id: snap?.shapeId ?? null, end_anchor_x: snap?.anchorX ?? null, end_anchor_y: snap?.anchorY ?? null };
+  }
+
+  function beginLineDraw(position: { x: number; y: number }) {
+    if (!lineTool) return;
+    const x = Math.max(0, Math.min(CANVAS_WIDTH, position.x));
+    const y = Math.max(0, Math.min(MAX_CANVAS_HEIGHT, position.y));
+    const snap = nearestSnapPoint(x, y);
+    const start = snap ? { x1: snap.x, y1: snap.y, start_shape_id: snap.shapeId, start_anchor_x: snap.anchorX, start_anchor_y: snap.anchorY } : { x1: x, y1: y, start_shape_id: null, start_anchor_x: null, start_anchor_y: null };
+    setLinePreview({ ...start, x2: start.x1, y2: start.y1, end_shape_id: null, end_anchor_x: null, end_anchor_y: null });
+    setSnapPreview(snap ? { x: snap.x, y: snap.y } : null);
+  }
+
+  function finishLineDraw() {
+    const preview = linePreview;
+    if (!lineTool || !preview) return;
+    setLinePreview(null);
+    setSnapPreview(null);
+    if (Math.hypot(preview.x2 - preview.x1, preview.y2 - preview.y1) < 8) return;
+    const line: DiagramLine = {
+      id: crypto.randomUUID(), ...orderLineEndpoints(preview), color: "#475569", stroke_width: 2,
+      arrow_start: lineTool === "start-arrow" || lineTool === "both-arrows",
+      arrow_end: lineTool === "end-arrow" || lineTool === "both-arrows",
+    };
+    commit({ ...documentRef.current, lines: [...documentRef.current.lines, line] });
+    setSelected({ kind: "line", id: line.id });
+    setLineTool(null);
+  }
+
+  function updateLinePreview(event: { target: Konva.Node }) {
+    const position = event.target.getStage()?.getPointerPosition();
+    if (!position) return;
+    const x = Math.max(0, Math.min(CANVAS_WIDTH, position.x / stageScale));
+    const y = Math.max(0, Math.min(MAX_CANVAS_HEIGHT, position.y / stageScale));
+    const end = endpointPatch("end", x, y);
+    setLinePreview((current) => current ? { ...current, ...end } : current);
+    const snap = nearestSnapPoint(x, y);
+    setSnapPreview(snap ? { x: snap.x, y: snap.y } : null);
   }
 
   function editShapeText(shape: DiagramShape) {
-    if (readOnly || connectMode) return;
+    if (readOnly || lineTool) return;
     setEditingText(shape.text);
     setEditingShapeId(shape.id);
   }
@@ -208,7 +376,10 @@ export function DiagramCanvas({
   }
 
   function updateShape(id: string, patch: Partial<DiagramShape>) {
-    const next = { ...documentRef.current, shapes: documentRef.current.shapes.map((shape) => shape.id === id ? { ...shape, ...patch } : shape) };
+    const shapes = documentRef.current.shapes.map((shape) => shape.id === id ? { ...shape, ...patch } : shape);
+    const updatedShape = shapes.find((shape) => shape.id === id);
+    const lines = updatedShape ? syncAttachedLines(documentRef.current.lines, updatedShape) : documentRef.current.lines;
+    const next = { ...documentRef.current, shapes, lines };
     commit(next);
   }
 
@@ -217,16 +388,29 @@ export function DiagramCanvas({
     commit(next);
   }
 
+  function updateLine(id: string, patch: Partial<DiagramLine>) {
+    const next = { ...documentRef.current, lines: documentRef.current.lines.map((line) => line.id === id ? { ...line, ...patch } : line) };
+    commit(next);
+  }
+
   function removeSelected() {
     if (!selected) return;
     if (selected.kind === "shape") {
+      const lines = documentRef.current.lines.map((line) => ({
+        ...line,
+        ...(line.start_shape_id === selected.id ? { start_shape_id: null, start_anchor_x: null, start_anchor_y: null } : {}),
+        ...(line.end_shape_id === selected.id ? { end_shape_id: null, end_anchor_x: null, end_anchor_y: null } : {}),
+      }));
       commit({
         ...documentRef.current,
         shapes: documentRef.current.shapes.filter((shape) => shape.id !== selected.id),
         connectors: documentRef.current.connectors.filter((edge) => edge.source_id !== selected.id && edge.target_id !== selected.id),
+        lines,
       });
-    } else {
+    } else if (selected.kind === "connector") {
       commit({ ...documentRef.current, connectors: documentRef.current.connectors.filter((edge) => edge.id !== selected.id) });
+    } else {
+      commit({ ...documentRef.current, lines: documentRef.current.lines.filter((line) => line.id !== selected.id) });
     }
     setSelected(null);
   }
@@ -260,7 +444,11 @@ export function DiagramCanvas({
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       if (target?.matches("input, textarea, select, [contenteditable=true]")) return;
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c" && selected?.kind === "shape") {
+        event.preventDefault(); copySelectedShape();
+      } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v" && copiedShapeRef.current) {
+        event.preventDefault(); pasteShape();
+      } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
         event.preventDefault(); event.shiftKey ? redo() : undo();
       } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
         event.preventDefault(); redo();
@@ -270,30 +458,21 @@ export function DiagramCanvas({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-    // The handlers read the latest document through refs; `selected` is
-    // the only state captured by the listener and is included below.
+    // Document and clipboard data are read through refs; selected is the
+    // only state captured by the listener and is included below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readOnly, selected]);
 
   function onShapeClick(id: string) {
-    if (connectMode) {
-      if (!connectFrom) { setConnectFrom(id); return; }
-      if (connectFrom === id) { setConnectFrom(null); return; }
-      commit({
-        ...documentRef.current,
-        connectors: [...documentRef.current.connectors, {
-          id: crypto.randomUUID(), source_id: connectFrom, target_id: id,
-          color: "#475569", stroke_width: 2, arrow: true, label: "",
-        }],
-      });
-      setConnectFrom(null); setConnectMode(false); setSelected(null); return;
-    }
     setSelected({ kind: "shape", id });
   }
 
   const selectedShape = selected?.kind === "shape" ? document.shapes.find((shape) => shape.id === selected.id) : undefined;
   const selectedConnector = selected?.kind === "connector" ? document.connectors.find((edge) => edge.id === selected.id) : undefined;
+  const selectedLine = selected?.kind === "line" ? document.lines.find((line) => line.id === selected.id) : undefined;
   const targetById = new Map(document.shapes.map((shape) => [shape.id, shape]));
+  const stageScale = viewportWidth / CANVAS_WIDTH;
+  const contentHeight = canvasHeight(document);
 
   return (
     <div className="flex flex-col gap-2">
@@ -301,14 +480,20 @@ export function DiagramCanvas({
         <>
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="mr-1 text-xs font-medium text-muted-foreground">Add shape:</span>
-            {(["rectangle", "ellipse", "triangle", "diamond"] as const).map((kind) => (
+            {(["rectangle", "ellipse", "circle", "triangle", "diamond", "pentagon", "hexagon"] as const).map((kind) => (
               <button key={kind} type="button" onClick={() => addShape(kind)} className="rounded border border-border px-2 py-1 text-xs capitalize hover:bg-muted">
                 {kind === "ellipse" ? "Oval" : kind}
               </button>
             ))}
-            <button type="button" onClick={() => { setConnectMode((mode) => !mode); setConnectFrom(null); setSelected(null); }} className={`rounded border px-2 py-1 text-xs ${connectMode ? "border-accent bg-accent/10 text-accent" : "border-border hover:bg-muted"}`}>
-              {connectMode ? (connectFrom ? "Choose target…" : "Choose source…") : "Connect shapes"}
-            </button>
+            {([
+              ["line", "Line"], ["start-arrow", "Left arrow"], ["end-arrow", "Right arrow"], ["both-arrows", "Both arrows"],
+            ] as const).map(([tool, label]) => (
+              <button key={tool} type="button" onClick={() => { setLineTool((current) => current === tool ? null : tool); setSelected(null); }} aria-pressed={lineTool === tool} className={`rounded border px-2 py-1 text-xs ${lineTool === tool ? "border-accent bg-accent/10 text-accent" : "border-border hover:bg-muted"}`}>
+                {label}
+              </button>
+            ))}
+            <button type="button" onClick={copySelectedShape} disabled={selected?.kind !== "shape"} className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40">Copy</button>
+            <button type="button" onClick={pasteShape} disabled={!hasCopiedShape} className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40">Paste</button>
             <button type="button" onClick={undo} disabled={!undoRef.current.length} className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40">Undo</button>
             <button type="button" onClick={redo} disabled={!redoRef.current.length} className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40">Redo</button>
             {selected && <button type="button" onClick={removeSelected} className="ml-auto rounded border border-border px-2 py-1 text-xs text-destructive">Delete selected</button>}
@@ -317,7 +502,7 @@ export function DiagramCanvas({
               <button type="button" onClick={() => moveSelectedLayer("forward")} disabled={document.shapes.at(-1)?.id === selectedShape.id} className="rounded border border-border px-2 py-1 text-xs disabled:opacity-40">Bring forward</button>
             </>}
           </div>
-          {connectMode && <p className="text-xs text-muted-foreground">Click a source shape, then a target shape. The arrow stays attached when either shape moves.</p>}
+          {lineTool && <p className="text-xs text-muted-foreground">Drag on the canvas to draw a line. Endpoints snap to nearby shape outlines; drag an endpoint away to detach it.</p>}
           {selectedShape && (
             <div className="flex flex-wrap items-center gap-2 rounded border border-border bg-muted/40 p-2">
               <button type="button" onClick={() => editShapeText(selectedShape)} className="rounded border border-border px-2 py-1 text-xs hover:bg-muted">Edit text</button>
@@ -341,24 +526,48 @@ export function DiagramCanvas({
               <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={selectedConnector.arrow} onChange={(event) => updateConnector(selectedConnector.id, { arrow: event.target.checked })} /> Arrowhead</label>
             </div>
           )}
+          {selectedLine && (
+            <div className="flex flex-wrap items-center gap-2 rounded border border-border bg-muted/40 p-2">
+              <label className="flex items-center gap-1 text-xs">Line <input aria-label="Line color" type="color" value={selectedLine.color} onChange={(event) => updateLine(selectedLine.id, { color: event.target.value })} /></label>
+              <label className="flex items-center gap-1 text-xs">Width <input aria-label="Line width" type="number" min={1} max={10} value={selectedLine.stroke_width} onChange={(event) => updateLine(selectedLine.id, { stroke_width: Math.max(1, Math.min(10, Number(event.target.value) || 1)) })} className="h-7 w-14 rounded border border-border bg-background px-1" /></label>
+              <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={selectedLine.arrow_start} onChange={(event) => updateLine(selectedLine.id, { arrow_start: event.target.checked })} /> Left arrow</label>
+              <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={selectedLine.arrow_end} onChange={(event) => updateLine(selectedLine.id, { arrow_end: event.target.checked })} /> Right arrow</label>
+            </div>
+          )}
         </>
       )}
       <div
         role="group"
-        aria-label={readOnly ? `Diagram with ${document.shapes.length} shapes and ${document.connectors.length} connections` : "Diagram editor canvas"}
+        aria-label={readOnly ? `Diagram with ${document.shapes.length} shapes, ${document.lines.length} lines, and ${document.connectors.length} attached connections` : "Diagram editor canvas"}
         ref={canvasRef}
         className="relative w-full overflow-hidden rounded-md border border-border bg-white"
-        style={{ aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}` }}
+        style={{ aspectRatio: `${CANVAS_WIDTH} / ${contentHeight}` }}
       >
         <Stage
-          width={viewportWidth} height={viewportWidth * CANVAS_HEIGHT / CANVAS_WIDTH}
-          scaleX={viewportWidth / CANVAS_WIDTH} scaleY={viewportWidth / CANVAS_WIDTH}
+          width={viewportWidth} height={viewportWidth * contentHeight / CANVAS_WIDTH}
+          scaleX={stageScale} scaleY={stageScale}
           style={{ width: "100%", height: "100%" }} listening={!readOnly}
-          onMouseDown={(event) => { if (event.target === event.target.getStage() && !connectMode) setSelected(null); }}
+          onMouseDown={(event) => {
+            if (lineTool) {
+              event.evt.preventDefault();
+              const position = event.target.getStage()?.getPointerPosition();
+              if (position) beginLineDraw({ x: position.x / stageScale, y: position.y / stageScale });
+            } else if (event.target === event.target.getStage()) setSelected(null);
+          }}
+          onMouseMove={updateLinePreview}
+          onMouseUp={finishLineDraw}
+          onTouchStart={(event) => {
+            if (!lineTool) return;
+            event.evt.preventDefault();
+            const position = event.target.getStage()?.getPointerPosition();
+            if (position) beginLineDraw({ x: position.x / stageScale, y: position.y / stageScale });
+          }}
+          onTouchMove={updateLinePreview}
+          onTouchEnd={finishLineDraw}
         >
           <Layer>
-            {!readOnly && Array.from({ length: 19 }, (_, index) => <Line key={`v${index}`} points={[index * 50, 0, index * 50, CANVAS_HEIGHT]} stroke="#e2e8f0" strokeWidth={0.5} listening={false} />)}
-            {!readOnly && Array.from({ length: 11 }, (_, index) => <Line key={`h${index}`} points={[0, index * 50, CANVAS_WIDTH, index * 50]} stroke="#e2e8f0" strokeWidth={0.5} listening={false} />)}
+            {!readOnly && Array.from({ length: 19 }, (_, index) => <Line key={`v${index}`} points={[index * 50, 0, index * 50, contentHeight]} stroke="#e2e8f0" strokeWidth={0.5} listening={false} />)}
+            {!readOnly && Array.from({ length: Math.ceil(contentHeight / 50) + 1 }, (_, index) => <Line key={`h${index}`} points={[0, index * 50, CANVAS_WIDTH, index * 50]} stroke="#e2e8f0" strokeWidth={0.5} listening={false} />)}
             {document.connectors.map((connector) => {
               const source = targetById.get(connector.source_id); const target = targetById.get(connector.target_id);
               if (!source || !target) return null;
@@ -378,12 +587,17 @@ export function DiagramCanvas({
                 key={shape.id} ref={(node) => { if (node) shapeRefs.current.set(shape.id, node); else shapeRefs.current.delete(shape.id); }}
                 x={shape.x + shape.width / 2} y={shape.y + shape.height / 2}
                 offsetX={shape.width / 2} offsetY={shape.height / 2} rotation={shape.rotation}
-                draggable={!readOnly && !connectMode}
+                draggable={!readOnly && !lineTool}
                 onClick={() => !readOnly && onShapeClick(shape.id)} onTap={() => !readOnly && onShapeClick(shape.id)}
                 onDblClick={() => editShapeText(shape)} onDblTap={() => editShapeText(shape)}
                 onDragStart={() => { dragBeforeRef.current = copyDocument(documentRef.current); }}
                 onDragMove={(event) => {
-                  const next = { ...documentRef.current, shapes: documentRef.current.shapes.map((item) => item.id === shape.id ? { ...item, x: event.target.x() - item.width / 2, y: event.target.y() - item.height / 2 } : item) };
+                  const x = Math.max(shape.width / 2, Math.min(CANVAS_WIDTH - shape.width / 2, event.target.x()));
+                  const y = Math.max(shape.height / 2, Math.min(MAX_CANVAS_HEIGHT - shape.height / 2, event.target.y()));
+                  event.target.position({ x, y });
+                  const movedShape = { ...shape, x: event.target.x() - shape.width / 2, y: event.target.y() - shape.height / 2 };
+                  const shapes = documentRef.current.shapes.map((item) => item.id === shape.id ? movedShape : item);
+                  const next = { ...documentRef.current, shapes, lines: syncAttachedLines(documentRef.current.lines, movedShape) };
                   setLive(next, false);
                 }}
                 onDragEnd={() => { if (dragBeforeRef.current) { undoRef.current.push(dragBeforeRef.current); redoRef.current = []; dragBeforeRef.current = null; onChange?.(documentRef.current); } }}
@@ -394,10 +608,58 @@ export function DiagramCanvas({
                 }}
               >
                 <ShapeDrawing shape={shape} />
-            <Text x={10} y={10} width={shape.width - 20} height={shape.height - 20} text={shape.text} align={shape.text_align} verticalAlign={shape.text_vertical_align} fontSize={shape.font_size} fontStyle={`${shape.bold ? "bold" : ""}${shape.italic ? " italic" : ""}`.trim() || "normal"} lineHeight={1.2} fill={shape.text_color} wrap="word" listening={false} />
+                <Text x={10} y={10} width={shape.width - 20} height={shape.height - 20} text={shape.text} align={shape.text_align} verticalAlign={shape.text_vertical_align} fontSize={shape.font_size} fontStyle={`${shape.bold ? "bold" : ""}${shape.italic ? " italic" : ""}`.trim() || "normal"} lineHeight={1.2} fill={shape.text_color} wrap="word" listening={false} />
               </Group>
             ))}
-            {!readOnly && <Transformer ref={transformerRef} rotateEnabled flipEnabled={false} keepRatio={false} boundBoxFunc={(oldBox, newBox) => newBox.width < 40 || newBox.height < 40 ? oldBox : newBox} />}
+            {document.lines.map((line) => {
+              const selectLine = () => !readOnly && setSelected({ kind: "line", id: line.id });
+              const finishMove = (event: { target: Konva.Node }) => {
+                const dx = Math.max(-Math.min(line.x1, line.x2), Math.min(CANVAS_WIDTH - Math.max(line.x1, line.x2), event.target.x()));
+                const dy = Math.max(-Math.min(line.y1, line.y2), Math.min(MAX_CANVAS_HEIGHT - Math.max(line.y1, line.y2), event.target.y()));
+                if (dx || dy) updateLine(line.id, {
+                  ...endpointPatch("start", line.x1 + dx, line.y1 + dy),
+                  ...endpointPatch("end", line.x2 + dx, line.y2 + dy),
+                });
+                event.target.position({ x: 0, y: 0 });
+              };
+              const handleEndpointMove = (which: "start" | "end", event: { target: Konva.Node }) => {
+                const x = Math.max(0, Math.min(CANVAS_WIDTH, event.target.x()));
+                const y = Math.max(0, Math.min(MAX_CANVAS_HEIGHT, event.target.y()));
+                updateLine(line.id, endpointPatch(which, x, y));
+                setSnapPreview(null);
+              };
+              const previewEndpointSnap = (event: { target: Konva.Node }) => {
+                const snap = nearestSnapPoint(event.target.x(), event.target.y());
+                if (snap) event.target.position({ x: snap.x, y: snap.y });
+                setSnapPreview(snap ? { x: snap.x, y: snap.y } : null);
+              };
+              const commonProps = {
+                points: [line.x1, line.y1, line.x2, line.y2], stroke: line.color,
+                strokeWidth: line.stroke_width, hitStrokeWidth: 16, listening: !readOnly,
+                draggable: !readOnly && !lineTool, onClick: selectLine, onTap: selectLine,
+                onDragEnd: finishMove,
+              };
+              const isSelected = selected?.kind === "line" && selected.id === line.id;
+              return <Group key={line.id}>
+                {line.arrow_start || line.arrow_end
+                  ? <Arrow {...commonProps} fill={line.color} pointerLength={10} pointerWidth={10} pointerAtBeginning={line.arrow_start} pointerAtEnding={line.arrow_end} />
+                  : <Line {...commonProps} />}
+                {isSelected && !readOnly && <>
+                  <Circle x={line.x1} y={line.y1} radius={6} fill="#ffffff" stroke={line.color} strokeWidth={2} draggable={!lineTool} onDragMove={previewEndpointSnap} onDragEnd={(event) => handleEndpointMove("start", event)} />
+                  <Circle x={line.x2} y={line.y2} radius={6} fill="#ffffff" stroke={line.color} strokeWidth={2} draggable={!lineTool} onDragMove={previewEndpointSnap} onDragEnd={(event) => handleEndpointMove("end", event)} />
+                </>}
+              </Group>;
+            })}
+            {linePreview && lineTool && (() => {
+              const orderedPreview = orderLineEndpoints(linePreview);
+              const points = [orderedPreview.x1, orderedPreview.y1, orderedPreview.x2, orderedPreview.y2];
+              const arrows = lineTool !== "line";
+              return arrows
+                ? <Arrow points={points} stroke="#475569" fill="#475569" strokeWidth={2} pointerLength={10} pointerWidth={10} pointerAtBeginning={lineTool === "start-arrow" || lineTool === "both-arrows"} pointerAtEnding={lineTool === "end-arrow" || lineTool === "both-arrows"} listening={false} />
+                : <Line points={points} stroke="#475569" strokeWidth={2} listening={false} />;
+            })()}
+            {snapPreview && <Circle x={snapPreview.x} y={snapPreview.y} radius={8} fill="#ffffff" stroke="#2563eb" strokeWidth={3} listening={false} />}
+            {!readOnly && <Transformer ref={transformerRef} rotateEnabled flipEnabled={false} keepRatio={selectedShape?.kind === "circle"} boundBoxFunc={(oldBox, newBox) => newBox.width < 40 || newBox.height < 40 ? oldBox : newBox} />}
           </Layer>
         </Stage>
         {editingShapeId && (() => {
@@ -427,6 +689,7 @@ export function DiagramCanvas({
           const target = targetById.get(edge.target_id)?.text || "shape";
           return <li key={edge.id}>{source} connects to {target}{edge.label ? `: ${edge.label}` : ""}</li>;
         })}
+        {document.lines.map((line) => <li key={line.id}>Line from ({Math.round(line.x1)}, {Math.round(line.y1)}) to ({Math.round(line.x2)}, {Math.round(line.y2)})</li>)}
       </ul>
       {!readOnly && <p className="text-[11px] text-muted-foreground">Drag shapes to move; select one to resize, style, or rotate it. Use Ctrl/⌘+Z to undo.</p>}
     </div>

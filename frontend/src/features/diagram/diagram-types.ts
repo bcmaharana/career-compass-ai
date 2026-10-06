@@ -1,4 +1,4 @@
-export type DiagramShapeKind = "rectangle" | "ellipse" | "triangle" | "diamond";
+export type DiagramShapeKind = "rectangle" | "ellipse" | "circle" | "triangle" | "diamond" | "pentagon" | "hexagon";
 
 export interface DiagramShape {
   id: string;
@@ -30,16 +30,36 @@ export interface DiagramConnector {
   label: string;
 }
 
+export interface DiagramLine {
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  color: string;
+  stroke_width: number;
+  arrow_start: boolean;
+  arrow_end: boolean;
+  start_shape_id?: string | null;
+  start_anchor_x?: number | null;
+  start_anchor_y?: number | null;
+  end_shape_id?: string | null;
+  end_anchor_x?: number | null;
+  end_anchor_y?: number | null;
+}
+
 export interface DiagramDocument {
   version: 1;
   shapes: DiagramShape[];
   connectors: DiagramConnector[];
+  lines: DiagramLine[];
 }
 
 export type DiagramDocumentInput = {
   version: 1;
   shapes?: DiagramShape[];
   connectors?: DiagramConnector[];
+  lines?: DiagramLine[];
 };
 
-export const EMPTY_DIAGRAM: DiagramDocument = { version: 1, shapes: [], connectors: [] };
+export const EMPTY_DIAGRAM: DiagramDocument = { version: 1, shapes: [], connectors: [], lines: [] };
