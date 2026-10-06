@@ -63,6 +63,11 @@ inside the clipped canvas. It stays positioned by the edited shape and
 repositions on scroll and viewport resize, moving above the shape when
 there is not enough room below it.
 
+In the diagram editor, Shift-click adds/removes shapes from a multi-
+selection. The selected shapes move and transform together; Copy/Paste
+duplicates the group with its relative positions preserved, and Delete
+removes the selected shapes and their attached connections.
+
 ## Design System
 
 | Token | Value | Use |
