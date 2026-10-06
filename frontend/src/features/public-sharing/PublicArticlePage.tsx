@@ -33,10 +33,9 @@ export function PublicArticlePage() {
   return (
     <div className="min-h-screen bg-[hsl(218,25%,93%)]">
       <PublicPageHeader />
-      {/* Same width treatment as PublicShowcasePage.tsx — see that file's
-          comment for the full "why" (mobile unchanged, genuine 80% width
-          from `md` up). */}
-      <main className="mx-auto max-w-2xl px-6 py-10 sm:px-10 md:w-4/5 md:max-w-none">
+      {/* Public reading pages use narrow gutters on phones and 90% width
+          on desktop so the content area is not squeezed by nested padding. */}
+      <main className="mx-auto w-full max-w-none px-2 py-6 sm:px-4 md:w-[90%] md:px-4 md:py-10">
         {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
         {isError && (
           <Card>
@@ -77,7 +76,7 @@ function ArticleRowView({ row, ownerHandle }: { row: PublicArticleRow; ownerHand
     <div className="flex flex-col gap-4 md:flex-row">
       {row.columns.map((column) => (
         <Card key={column.id} className="min-w-0 flex-1 basis-0">
-          <CardContent className="flex flex-col gap-2 py-4">
+          <CardContent className="flex flex-col gap-2 px-3 py-4 sm:px-4 md:px-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {column.label}
             </p>

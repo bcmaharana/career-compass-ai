@@ -4044,6 +4044,12 @@ Known environment gotchas already solved, don't reintroduce:
   was pushed and deployed through `./infra/oracle-start.sh`; all five
   containers are up, and both local frontend and public site requests
   returned HTTP 200. The four Oracle mode-only changes remain intact.
+- **Public page side gutters** (2026-10-06) — Public article and
+  showcase pages now use near-full mobile width with 8px outer gutters,
+  and 90% viewport width on desktop. Public cards reduce their horizontal
+  padding to 12px on phones and 16px at wider widths, so page and card
+  insets do not compound. Frontend build/lint and production outcome will
+  be added after verification.
 - **Diagram canvas border visibility** (2026-10-06) — In
   `frontend/src/features/diagram/DiagramCanvas.tsx`, the canvas border is
   conditional on edit mode; read-only article and showcase diagrams have

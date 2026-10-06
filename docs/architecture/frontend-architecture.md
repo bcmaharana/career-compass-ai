@@ -69,6 +69,12 @@ Read-only diagrams use a 1200px minimum canvas width inside a horizontally
 scrollable viewport. This keeps shape labels legible on phones instead of
 shrinking the 1600-unit scene and its text to the narrow device width.
 
+Public article and showcase pages use the available mobile width with 8px
+outer gutters; on desktop, their main content is centered at 90% viewport
+width. Public content cards reduce their default 24px horizontal inset to
+12px on phones and 16px at wider breakpoints, preventing page and card
+padding from compounding into a narrow reading area.
+
 In the diagram editor, dragging on empty canvas space draws a marquee
 that selects shapes, manual lines/arrows, and attached connectors whose
 rendered bounds cross the selection. Shift-click adds/removes individual

@@ -84,14 +84,9 @@ export function PublicShowcasePage() {
   return (
     <div className="min-h-screen bg-[hsl(218,25%,93%)]">
       <PublicPageHeader>{page && <ShowcaseBrandTitle page={page} />}</PublicPageHeader>
-      {/* Mobile stays a comfortable reading column (max-w-2xl, effectively
-          full-width minus padding on any real phone anyway). From `md` up
-          — this app's own mobile/desktop split, see globals.css — widens
-          to a genuine 80% of the viewport (direct 2026-08-24 report: the
-          page read as unnecessarily narrow for a recruiter viewing it on
-          a real monitor). `md:max-w-none` cancels the mobile max-w-2xl
-          cap, which would otherwise still win over w-4/5 above 672px. */}
-      <main className="mx-auto max-w-2xl px-6 py-10 sm:px-10 md:w-4/5 md:max-w-none">
+      {/* Public pages keep narrow gutters on phones and use 90% of desktop
+          width, avoiding stacked page and card padding that wastes space. */}
+      <main className="mx-auto w-full max-w-none px-2 py-6 sm:px-4 md:w-[90%] md:px-4 md:py-10">
         {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
         {isError && (
           <Card>
@@ -116,7 +111,7 @@ export function PublicShowcasePage() {
                 summary beside the profile photo, unchanged. */}
             {page.background_image_url && page.summary && (
               <Card>
-                <CardContent className="py-4">
+                <CardContent className="px-3 py-4 sm:px-4 md:px-4">
                   <RichTextDisplay html={page.summary} className="text-sm" />
                 </CardContent>
               </Card>
@@ -247,7 +242,7 @@ function ShowcaseResumeLink({ page }: { page: PublicShowcasePageData }) {
   const firstName = fullName.trim().split(/\s+/)[0] || fullName;
   return (
     <Card>
-      <CardContent className="flex items-center gap-2 py-4">
+      <CardContent className="flex items-center gap-2 px-3 py-4 sm:px-4 md:px-4">
         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
         <p className="text-sm">
           {firstName}'s Resume can be{" "}
@@ -276,7 +271,7 @@ function ShowcaseRowView({ row, ownerHandle }: { row: PublicShowcaseRow; ownerHa
     <div className="flex flex-col gap-4 md:flex-row">
       {row.columns.map((column) => (
         <Card key={column.id} className="min-w-0 flex-1 basis-0">
-          <CardContent className="flex flex-col gap-2 py-4">
+          <CardContent className="flex flex-col gap-2 px-3 py-4 sm:px-4 md:px-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {column.label}
             </p>
