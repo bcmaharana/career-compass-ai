@@ -3936,6 +3936,24 @@ Known environment gotchas already solved, don't reintroduce:
   since nothing fails loudly when a new catalog entry needing the same
   treatment is added later — worth remembering before reaching for
   that pattern again versus a real removal.
+- **Diagram editor: manually drawn lines snap to shapes** (2026-10-05)
+  — done, committed as `805a059`, pushed to `origin/main`, and deployed
+  to production on the Oracle VM. Manual line and arrow endpoints snap
+  to the nearest shape outline within 28 canvas units, show a blue snap
+  cue while dragging, and persist a shape reference plus normalized
+  anchor coordinates. Attached endpoints follow shapes as they move,
+  resize, and rotate; moving an endpoint away or deleting its shape
+  detaches it while retaining the endpoint's current position. The
+  feature works both while drawing a line and when editing an existing
+  line endpoint. Backend diagram validation accepts the attachment
+  metadata only when its shape and both anchor coordinates are present
+  and references a shape in the same diagram. Frontend production build
+  and ESLint pass; production images rebuilt with
+  `./infra/oracle-start.sh`, migrations/seed completed, all five stack
+  containers are running, and `https://career.scaledbrain.com` returned
+  HTTP 200. The Oracle checkout had pre-existing executable-bit-only
+  changes to four scripts; they were left untouched. Frontend build
+  still prints the existing large-chunk advisory.
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in
