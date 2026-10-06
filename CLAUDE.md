@@ -3959,9 +3959,10 @@ Known environment gotchas already solved, don't reintroduce:
   iframe URLs, forces HTTPS, and falls back to a safe external link or an
   invalid-link message for malformed inputs. Editor labels now request
   a normal video URL rather than only an embed URL. The diagram snap
-  marker is now updated only while the line tool is active and hidden in
-  read-only diagrams, fixing the hover circle appearing on the shared
-  article. Frontend build/lint passed; Oracle deploy script completed,
+  marker no longer updates on ordinary pointer movement; it appears only
+  while drawing or dragging a line endpoint and is hidden in read-only
+  diagrams, fixing the hover circle appearing on the shared article.
+  Frontend build/lint passed; Oracle deploy script completed,
   frontend accepted connections, and all five production containers are
   running at `a8f08d7`. **The linked article itself was not inspected**:
   browser access was explicitly declined by Browser Use, so the exact
