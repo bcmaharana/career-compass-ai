@@ -59,6 +59,19 @@ function sanitizeShapeHtml(html: string): string {
   return cleanChildren(parsed.body);
 }
 
+function scaleShapeHtmlFontSizes(html: string, scale: number): string {
+  if (Math.abs(scale - 1) < 0.001) return html;
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  for (const element of Array.from(parsed.body.querySelectorAll<HTMLElement>("[style]"))) {
+    const fontSize = element.style.fontSize;
+    const match = fontSize.match(/^([\d.]+)(px|pt)$/i);
+    if (!match) continue;
+    const pixels = Number(match[1]) * (match[2]!.toLowerCase() === "pt" ? 4 / 3 : 1) * scale;
+    element.style.fontSize = `${Math.max(0.5, pixels)}px`;
+  }
+  return parsed.body.innerHTML;
+}
+
 function orderLineEndpoints<T extends LinePreview>(line: T): T {
   return line.x1 <= line.x2 ? line : {
     ...line,
@@ -905,7 +918,8 @@ export function DiagramCanvas({
         </Stage>
         {document.shapes.filter((shape) => shape.text_html).map((shape) => {
           const scale = stageScale;
-          return <div key={`rich-${shape.id}`} aria-label={shape.text || "Shape text"} className="pointer-events-none absolute flex overflow-hidden p-1 text-sm" style={{ left: (shape.x + shape.width / 2) * scale, top: (shape.y + shape.height / 2) * scale, width: Math.max(24, (shape.width - 20) * scale), height: Math.max(24, (shape.height - 20) * scale), transform: `translate(-50%, -50%) rotate(${shape.rotation}deg)`, alignItems: shape.text_vertical_align === "top" ? "flex-start" : shape.text_vertical_align === "bottom" ? "flex-end" : "center", justifyContent: shape.text_align === "left" ? "flex-start" : shape.text_align === "right" ? "flex-end" : "center", color: shape.text_color, fontFamily: shape.font_family, fontSize: `${shape.font_size * scale}px`, fontWeight: shape.bold ? "bold" : undefined, fontStyle: shape.italic ? "italic" : undefined, textAlign: shape.text_align, lineHeight: 1.2 }}><div className={`max-w-full ${RICH_TEXT_CONTENT_CLASSES}`} dangerouslySetInnerHTML={{ __html: sanitizeShapeHtml(shape.text_html!) }} /></div>;
+          const safeHtml = scaleShapeHtmlFontSizes(sanitizeShapeHtml(shape.text_html!), scale);
+          return <div key={`rich-${shape.id}`} aria-label={shape.text || "Shape text"} className="pointer-events-none absolute flex overflow-hidden p-1 text-sm" style={{ left: (shape.x + shape.width / 2) * scale, top: (shape.y + shape.height / 2) * scale, width: Math.max(24, (shape.width - 20) * scale), height: Math.max(24, (shape.height - 20) * scale), transform: `translate(-50%, -50%) rotate(${shape.rotation}deg)`, alignItems: shape.text_vertical_align === "top" ? "flex-start" : shape.text_vertical_align === "bottom" ? "flex-end" : "center", justifyContent: shape.text_align === "left" ? "flex-start" : shape.text_align === "right" ? "flex-end" : "center", color: shape.text_color, fontFamily: shape.font_family, fontSize: `${shape.font_size * scale}px`, fontWeight: shape.bold ? "bold" : undefined, fontStyle: shape.italic ? "italic" : undefined, textAlign: shape.text_align, lineHeight: 1.2 }}><div className={`w-full min-w-0 [overflow-wrap:anywhere] ${RICH_TEXT_CONTENT_CLASSES}`} dangerouslySetInnerHTML={{ __html: safeHtml }} /></div>;
         })}
       </div> : !readOnly && <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">Add a shape to start a diagram. The canvas will grow with your drawing.</div>}
       </div>

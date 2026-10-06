@@ -71,6 +71,9 @@ horizontal scrolling at the default zoom. Zoom controls provide 50%–200%
 scaling for inspecting labels and details; zoomed scenes scroll horizontally
 inside the viewport. Mobile users see the whole diagram first and can zoom
 when they need more text detail.
+Inline pixel/point font sizes in shape rich text are scaled with the scene
+too, so formatted words do not remain at desktop size and get clipped inside
+their smaller mobile shapes.
 
 Public article and showcase pages use the available mobile width with 8px
 outer gutters; on desktop, their main content is centered at 90% viewport
