@@ -4035,15 +4035,14 @@ Known environment gotchas already solved, don't reintroduce:
   containers are running, and `https://career.scaledbrain.com` returned
   HTTP 200. The four pre-existing executable-bit-only changes on the
   Oracle checkout remain preserved.
-- **Mobile diagram text readability** (2026-10-06) — The 1600-unit
-  diagram scene previously scaled all shape and font sizes to the mobile
-  page width, shrinking 16px labels to only a few pixels. Read-only
-  diagrams now render at a minimum 1200px width in a horizontally
-  scrollable viewport, with a swipe hint on narrow screens. The editor
-  canvas sizing is unchanged. Frontend build/lint passed. Commit `40a5a18`
-  was pushed and deployed through `./infra/oracle-start.sh`; all five
-  containers are up, and both local frontend and public site requests
-  returned HTTP 200. The four Oracle mode-only changes remain intact.
+- **Mobile diagram fit-to-width and zoom** (2026-10-06) — Read-only
+  diagrams now fit the available viewport width at default zoom and retain
+  their aspect ratio, so the full canvas is visible without horizontal
+  scrolling. Added 50%–200% zoom controls for inspecting small labels;
+  zoomed content scrolls inside the viewport. This replaces the previous
+  1200px minimum-width behavior from `40a5a18`, which improved text size
+  but cropped the canvas on mobile. Frontend build/lint and deployment
+  outcome will be recorded after verification.
 - **Public page side gutters** (2026-10-06) — Public article and
   showcase pages now use near-full mobile width with 8px outer gutters,
   and 90% viewport width on desktop. Public cards reduce their horizontal

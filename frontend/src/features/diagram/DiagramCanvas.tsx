@@ -294,10 +294,12 @@ export function DiagramCanvas({
   const [snapPreview, setSnapPreview] = useState<{ x: number; y: number } | null>(null);
   const [hasCopiedShape, setHasCopiedShape] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(CANVAS_WIDTH);
+  const [readOnlyZoom, setReadOnlyZoom] = useState(1);
   const [editingShapeId, setEditingShapeId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [editorPosition, setEditorPosition] = useState({ left: 8, top: 8 });
   const canvasRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const editorPanelRef = useRef<HTMLDivElement>(null);
   const cancelTextEditRef = useRef(false);
   const transformerRef = useRef<Konva.Transformer>(null);
@@ -329,7 +331,7 @@ export function DiagramCanvas({
   }, [incomingDocument, incomingSignature]);
 
   useEffect(() => {
-    const element = canvasRef.current;
+    const element = viewportRef.current;
     if (!element) return;
     const observer = new ResizeObserver(([entry]) => {
       if (entry) setViewportWidth(Math.max(1, entry.contentRect.width));
@@ -683,7 +685,8 @@ export function DiagramCanvas({
   const selectedConnector = selected?.kind === "connector" ? document.connectors.find((edge) => edge.id === selected.id) : undefined;
   const selectedLine = selected?.kind === "line" ? document.lines.find((line) => line.id === selected.id) : undefined;
   const targetById = new Map(document.shapes.map((shape) => [shape.id, shape]));
-  const stageScale = viewportWidth / CANVAS_WIDTH;
+  const sceneWidth = viewportWidth * (readOnly ? readOnlyZoom : 1);
+  const stageScale = sceneWidth / CANVAS_WIDTH;
   const contentHeight = canvasHeight(document);
 
   return (
@@ -750,17 +753,22 @@ export function DiagramCanvas({
           )}
         </>
       )}
-      <div className={readOnly ? "w-full overflow-x-auto" : "w-full"}>
-      {readOnly && contentHeight > 0 && <p className="mb-1 text-[11px] text-muted-foreground md:hidden">Swipe horizontally to view the full diagram.</p>}
+      <div ref={viewportRef} className={readOnly ? "w-full overflow-x-auto" : "w-full"}>
+      {readOnly && contentHeight > 0 && <div className="mb-1 flex items-center justify-end gap-2" aria-label="Diagram zoom controls">
+        <span className="text-xs text-muted-foreground">Zoom {Math.round(readOnlyZoom * 100)}%</span>
+        <button type="button" aria-label="Zoom out diagram" title="Zoom out" onClick={() => setReadOnlyZoom((zoom) => Math.max(0.5, Math.round((zoom - 0.25) * 100) / 100))} disabled={readOnlyZoom <= 0.5} className="h-7 w-7 rounded border border-border text-sm disabled:opacity-40">−</button>
+        <button type="button" onClick={() => setReadOnlyZoom(1)} className="h-7 rounded border border-border px-2 text-xs">Fit</button>
+        <button type="button" aria-label="Zoom in diagram" title="Zoom in" onClick={() => setReadOnlyZoom((zoom) => Math.min(2, Math.round((zoom + 0.25) * 100) / 100))} disabled={readOnlyZoom >= 2} className="h-7 w-7 rounded border border-border text-sm disabled:opacity-40">+</button>
+      </div>}
       {contentHeight > 0 || lineTool ? <div
         role="group"
         aria-label={readOnly ? `Diagram with ${document.shapes.length} shapes, ${document.lines.length} lines, and ${document.connectors.length} attached connections` : "Diagram editor canvas"}
         ref={canvasRef}
         className={`relative w-full overflow-hidden rounded-md bg-white ${readOnly ? "" : "border border-border"}`}
-        style={{ width: readOnly ? "max(100%, 1200px)" : "100%", minWidth: readOnly ? 1200 : undefined, aspectRatio: `${CANVAS_WIDTH} / ${Math.max(contentHeight, lineTool ? 120 : 1)}` }}
+        style={{ width: `${(readOnly ? readOnlyZoom : 1) * 100}%`, aspectRatio: `${CANVAS_WIDTH} / ${Math.max(contentHeight, lineTool ? 120 : 1)}` }}
       >
         <Stage
-          width={viewportWidth} height={viewportWidth * Math.max(contentHeight, lineTool ? 120 : 1) / CANVAS_WIDTH}
+          width={sceneWidth} height={sceneWidth * Math.max(contentHeight, lineTool ? 120 : 1) / CANVAS_WIDTH}
           scaleX={stageScale} scaleY={stageScale}
           style={{ width: "100%", height: "100%" }} listening={!readOnly}
           onMouseDown={(event) => {
@@ -896,7 +904,7 @@ export function DiagramCanvas({
           </Layer>
         </Stage>
         {document.shapes.filter((shape) => shape.text_html).map((shape) => {
-          const scale = viewportWidth / CANVAS_WIDTH;
+          const scale = stageScale;
           return <div key={`rich-${shape.id}`} aria-label={shape.text || "Shape text"} className="pointer-events-none absolute flex overflow-hidden p-1 text-sm" style={{ left: (shape.x + shape.width / 2) * scale, top: (shape.y + shape.height / 2) * scale, width: Math.max(24, (shape.width - 20) * scale), height: Math.max(24, (shape.height - 20) * scale), transform: `translate(-50%, -50%) rotate(${shape.rotation}deg)`, alignItems: shape.text_vertical_align === "top" ? "flex-start" : shape.text_vertical_align === "bottom" ? "flex-end" : "center", justifyContent: shape.text_align === "left" ? "flex-start" : shape.text_align === "right" ? "flex-end" : "center", color: shape.text_color, fontFamily: shape.font_family, fontSize: `${shape.font_size * scale}px`, fontWeight: shape.bold ? "bold" : undefined, fontStyle: shape.italic ? "italic" : undefined, textAlign: shape.text_align, lineHeight: 1.2 }}><div className={`max-w-full ${RICH_TEXT_CONTENT_CLASSES}`} dangerouslySetInnerHTML={{ __html: sanitizeShapeHtml(shape.text_html!) }} /></div>;
         })}
       </div> : !readOnly && <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">Add a shape to start a diagram. The canvas will grow with your drawing.</div>}

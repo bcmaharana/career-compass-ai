@@ -65,9 +65,12 @@ there is not enough room below it.
 
 The diagram canvas frame is shown only in edit mode. Read-only article and
 showcase views render the diagram without an editor border.
-Read-only diagrams use a 1200px minimum canvas width inside a horizontally
-scrollable viewport. This keeps shape labels legible on phones instead of
-shrinking the 1600-unit scene and its text to the narrow device width.
+Read-only diagrams fit the available viewport width by default and keep the
+1600-unit scene's aspect ratio, so the complete drawing is visible without
+horizontal scrolling at the default zoom. Zoom controls provide 50%–200%
+scaling for inspecting labels and details; zoomed scenes scroll horizontally
+inside the viewport. Mobile users see the whole diagram first and can zoom
+when they need more text detail.
 
 Public article and showcase pages use the available mobile width with 8px
 outer gutters; on desktop, their main content is centered at 90% viewport
