@@ -4024,13 +4024,17 @@ Known environment gotchas already solved, don't reintroduce:
   returned HTTP 200. Preserve the same four existing Oracle checkout
   mode-only changes.
 - **Diagram multi-shape selection and clipboard** (2026-10-06) —
-  implementation complete; production deployment pending. Shift-click
+  committed/pushed as `e88de9f` and deployed to Oracle production.
+  Shift-click
   toggles shapes into/out of a selection, whose members move and transform
   together. Copy/Paste duplicates all selected shapes with their relative
   positions intact; Delete removes all selected shapes and detaches their
   manual line endpoints while removing connected graph edges. Toolbar
   formatting remains applied to the active shape and the UI says so.
-  Frontend build/lint passed. Commit/push and Oracle deploy remain.
+  Frontend build/lint passed; Oracle deployment completed, all five
+  containers are running, and `https://career.scaledbrain.com` returned
+  HTTP 200. The four pre-existing executable-bit-only changes on the
+  Oracle checkout remain preserved.
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in
