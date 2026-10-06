@@ -3985,7 +3985,8 @@ Known environment gotchas already solved, don't reintroduce:
   diagrams or unrelated projects; past deploy notes in this history
   remain accurate for their dates and were not rewritten.
 - **Diagram canvas and rich-text bullet enhancements** (2026-10-06) —
-  implementation complete; production deployment pending. Expanded the
+  committed/pushed as `a2720f4` and deployed to Oracle production.
+  Expanded the
   diagram scene from 900 to 1600 logical units and made the stage scale to
   its full container width. Empty diagrams no longer reserve the old
   500-unit canvas, and occupied canvases now keep only 20 units below
@@ -3993,8 +3994,8 @@ Known environment gotchas already solved, don't reintroduce:
   their endpoints have different vertical positions. Shape text now has
   font-family options and is edited through the shared rich-text editor;
   diagrams keep plain text for accessibility plus sanitized HTML for
-  selection-level formatting. The UI renders an allowlisted subset while
-  the backend sanitizes `text_html` on save.
+  selection-level formatting. The UI renders a client-side allowlisted
+  subset while the backend sanitizes `text_html` on save.
 
   Fixed shared list-style persistence by allowing the existing
   `list-style-type` style on `<li>` in the backend rich-text sanitizer,
@@ -4003,8 +4004,13 @@ Known environment gotchas already solved, don't reintroduce:
   commit `95cbe3a`; Career Compass AI's package manifest and lockfile now
   use that exact package release. UI-kit typecheck/build passed;
   Career Compass AI frontend lint/build and backend Python compilation
-  passed. Oracle deployment has not yet been run; preserve the four known
-  remote mode-only script changes during the rollout.
+  passed. The Oracle deployment script rebuilt both app images, applied
+  migrations (none pending), completed the idempotent seed, and reported
+  the frontend accepting connections. All five production containers are
+  running and `https://career.scaledbrain.com` returned HTTP 200. The
+  four known remote mode-only script changes remain preserved. UI
+  interactions were not browser-verified in this deployment; the user
+  should check the six requested behaviors in the editor.
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in
