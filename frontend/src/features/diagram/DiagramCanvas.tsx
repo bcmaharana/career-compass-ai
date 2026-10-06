@@ -352,6 +352,7 @@ export function DiagramCanvas({
   }
 
   function updateLinePreview(event: { target: Konva.Node }) {
+    if (!lineTool || readOnly) return;
     const position = event.target.getStage()?.getPointerPosition();
     if (!position) return;
     const x = Math.max(0, Math.min(CANVAS_WIDTH, position.x / stageScale));
@@ -658,7 +659,7 @@ export function DiagramCanvas({
                 ? <Arrow points={points} stroke="#475569" fill="#475569" strokeWidth={2} pointerLength={10} pointerWidth={10} pointerAtBeginning={lineTool === "start-arrow" || lineTool === "both-arrows"} pointerAtEnding={lineTool === "end-arrow" || lineTool === "both-arrows"} listening={false} />
                 : <Line points={points} stroke="#475569" strokeWidth={2} listening={false} />;
             })()}
-            {snapPreview && <Circle x={snapPreview.x} y={snapPreview.y} radius={8} fill="#ffffff" stroke="#2563eb" strokeWidth={3} listening={false} />}
+            {!readOnly && snapPreview && <Circle x={snapPreview.x} y={snapPreview.y} radius={8} fill="#ffffff" stroke="#2563eb" strokeWidth={3} listening={false} />}
             {!readOnly && <Transformer ref={transformerRef} rotateEnabled flipEnabled={false} keepRatio={selectedShape?.kind === "circle"} boundBoxFunc={(oldBox, newBox) => newBox.width < 40 || newBox.height < 40 ? oldBox : newBox} />}
           </Layer>
         </Stage>

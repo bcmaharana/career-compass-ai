@@ -5,6 +5,7 @@ import { RichTextDisplay } from "@bcmaharana/ui-kit";
 import { DiagramCanvas } from "@/features/diagram/LazyDiagramCanvas";
 import { Tooltip } from "@/components/ui/tooltip";
 import { PublicPageHeader } from "@/features/public-sharing/PublicPageHeader";
+import { VideoEmbed } from "@/features/public-sharing/VideoEmbed";
 import { useNoIndex } from "@/hooks/useNoIndex";
 import { ApiError } from "@/api/client";
 import { stripHtml } from "@/lib/strip-html";
@@ -308,16 +309,7 @@ function ShowcaseColumnContent({
         />
       ) : null;
     case "video_embed":
-      return column.video_embed_url ? (
-        <div className="aspect-video w-full overflow-hidden rounded-md border border-border">
-          <iframe
-            src={column.video_embed_url}
-            title={column.label}
-            className="h-full w-full"
-            allowFullScreen
-          />
-        </div>
-      ) : null;
+      return column.video_embed_url ? <VideoEmbed url={column.video_embed_url} title={column.label} /> : null;
     case "external_link":
       return column.external_url ? (
         <a

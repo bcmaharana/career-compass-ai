@@ -999,11 +999,11 @@ function ShowcaseColumnCard({
 
             {draft.type === "video_embed" && (
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor={`column-video-${column.id}`}>Embed URL</Label>
+                <Label htmlFor={`column-video-${column.id}`}>Video URL</Label>
                 <Input
                   id={`column-video-${column.id}`}
                   type="url"
-                  placeholder="https://www.youtube.com/embed/..."
+                  placeholder="YouTube or Vimeo video link"
                   value={draft.video_embed_url ?? ""}
                   onChange={(e) => setDraft({ ...draft, video_embed_url: e.target.value })}
                 />
