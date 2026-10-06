@@ -3964,12 +3964,12 @@ Known environment gotchas already solved, don't reintroduce:
   diagrams, fixing the hover circle appearing on the shared article.
   Frontend build/lint passed; Oracle deploy script completed,
   frontend accepted connections, and all five production containers are
-  running at `a8f08d7`. **The linked article itself was not inspected**:
-  browser access was explicitly declined by Browser Use, so the exact
-  stored video URL/provider and rendered error remain unconfirmed. If
-  the video still fails after refresh, obtain its provider URL and a
-  screenshot of the displayed error; embedding-disabled videos or other
-  providers may need provider-specific handling.
+  running at `a8f08d7`. Browser Use could not inspect the linked article
+  before deployment, but the user checked the same page after deployment
+  and confirmed that both the video and read-only diagram cursor issues
+  are fixed. The exact stored video URL/provider was not recorded;
+  provider-specific handling may be needed for unsupported providers or
+  videos that disallow embedding.
 - **Workspace Markdown documentation audit** (2026-10-05) — scanned
   all 86 `.md` and 14 `.mdx` files under `enterprise` (including hidden
   directories, excluding Git internals and generated dependency/build
