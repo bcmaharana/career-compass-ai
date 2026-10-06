@@ -173,38 +173,35 @@ scripts at the repo root handle the common flows:
   restart that doesn't involve a full reboot).
 - **`stop-dev.ps1`** — the reverse: `docker compose down` on the dev
   stack (named volumes, so data survives), kills the frontend dev
-  server on port 5173, and stops the host Ollama process — but only if
-  `compass-backend-prod` isn't currently running, since prod's backend
-  also reaches Ollama via this same host
-  (`OLLAMA_BASE_URL=http://host.docker.internal:11434`) and killing it
-  out from under a live prod would break local-model AI chat there.
-- **`start-prod.ps1`** / **`stop-prod.ps1`** — the same start/stop
-  pair for the production stack (`docker-compose.prod.yml`:
-  `compass-*-prod`, reachable via the Cloudflare Tunnel). `start-prod.ps1`
-  is **also** auto-run on login the same way (`CareerCompassProdStart`
-  scheduled task, same ~2 minute post-logon delay) — combined with
-  prod's containers already carrying `restart: unless-stopped` and the
-  separately-scheduled `CloudflaredTunnel` task (see the lid-close/sleep
-  entry further down), a full machine reboot is expected to bring prod
-  back up on its own with no manual step. `stop-prod.ps1`
-  requires typed `yes` confirmation (or `-Force` to skip it) since it
-  takes the live app offline for real users — `down` still preserves
-  the named prod volumes, so real data survives the cycle. Both
-  verified live end-to-end, including a real round trip against the
-  public `scaledbrain.com` URL (2026-08-11).
-  **Both scheduled tasks hardcode this repo's absolute path** in their
-  Action (script path + working directory) — if this repo is ever moved
-  again, those two tasks need updating too
-  (`Set-ScheduledTask -TaskName "CareerCompassDevStart"/"CareerCompassProdStart" -Action ...`),
-  or they'll silently keep pointing at the old location. Moved once
-  already: 2026-08-24, from `C:\Users\bcmah\workspace\career-compass-ai`
-  to `C:\Users\bcmah\workspace\enterprise\career-compass-ai` (see the
-  sibling `enterprise\platform` repo for why — this repo is now one
-  product among several under a shared platform identity design). Both
-  tasks were updated as part of that move; creating a **new** scheduled
-  task (as opposed to editing an existing one) needs an elevated/admin
-  PowerShell session — a non-elevated session can modify tasks it
-  already owns but gets "Access is denied" trying to register a new one.
+  server on port 5173, and still contains legacy Ollama shutdown logic.
+  Ollama chat/embedding support was retired on 2026-09-08, so no current
+  Career Compass feature needs this host process. Its guard for
+  `compass-backend-prod` only protects the old laptop production stack;
+  Oracle production does not use this host's Ollama service.
+- **Legacy laptop production stack (`start-prod.ps1` / `stop-prod.ps1`)**
+  — these still control the laptop's `compass-*-prod` Docker Compose
+  stack and its named data volumes. They were the production controls
+  before the Career Compass AI cutover to Oracle Cloud. As of
+  2026-10-05, the live Career Compass AI production app is on the Oracle
+  VM at `career.scaledbrain.com`; do not use `start-prod.ps1` for routine
+  production deploys. Keep the old stack only for any explicitly needed
+  cold-rollback operation. The scheduled task, restart, confirmation,
+  and volume-preservation details below describe that legacy laptop
+  stack, not the current production deployment. The Oracle deployment
+  procedure is in `docs/runbooks/oracle-migration.md` under "Ongoing
+  application deployments".
+The `CareerCompassDevStart` and legacy `CareerCompassProdStart`
+scheduled tasks hardcode this repo's absolute path in their Action
+(script path + working directory); if the repo moves, update both via
+`Set-ScheduledTask -TaskName "CareerCompassDevStart"` and
+`Set-ScheduledTask -TaskName "CareerCompassProdStart"`. They were
+updated when the repo moved on 2026-08-24 from
+`C:\Users\bcmah\workspace\career-compass-ai` to
+`C:\Users\bcmah\workspace\enterprise\career-compass-ai`. Creating a
+new scheduled task (rather than editing an existing one) needs an
+elevated/admin PowerShell session; a non-elevated session can modify
+tasks it already owns but receives "Access is denied" when registering
+a new one.
 - **`sync-dependencies.ps1`** — run whenever `pyproject.toml` or
   `package.json` gains a new dependency. Rebuilds the backend Docker
   image, syncs the native venv (for editor/ruff/mypy support), runs
@@ -3954,6 +3951,20 @@ Known environment gotchas already solved, don't reintroduce:
   HTTP 200. The Oracle checkout had pre-existing executable-bit-only
   changes to four scripts; they were left untouched. Frontend build
   still prints the existing large-chunk advisory.
+- **Workspace Markdown documentation audit** (2026-10-05) — scanned
+  all 86 `.md` and 14 `.mdx` files under `enterprise` (including hidden
+  directories, excluding Git internals and generated dependency/build
+  trees) for diagram/editor and production-deploy references. Updated
+  `docs/architecture/frontend-architecture.md` to replace its obsolete
+  Phase 0.2 placeholder-app description and document the diagram editor's
+  current product-specific integrations and snapping behavior. Updated
+  `docs/runbooks/oracle-migration.md` with the repeatable post-migration
+  deployment and verification process. Clarified this file's old
+  `start-prod.ps1` details as laptop-stack history/rollback only and
+  removed the now-stale assertion that production depends on local
+  Ollama. Other `diagram` references found were conceptual architecture
+  diagrams or unrelated projects; past deploy notes in this history
+  remain accurate for their dates and were not rewritten.
 - **Not yet started**: Phase 8 onward through Phase 9 (Phase 4.5.2+ —
   CIKG MVP 3/4/5 — also not started; see
   `docs/architecture/cikg-mvp-roadmap.md`). Domain list in
@@ -3995,8 +4006,10 @@ Known environment gotchas already solved, don't reintroduce:
   `infra/oracle-start.sh`, `infra/oracle-stop.sh`,
   `infra/setup-cloudflared-oracle.sh`, and
   `migration/import-prod-data.sh`; preserve them and never discard or
-  reset them as part of a deploy. A documentation-only memory update
-  does not require rebuilding/restarting production.
+  reset them as part of a deploy. The full repeatable human runbook is
+  `docs/runbooks/oracle-migration.md` under "Ongoing application
+  deployments". A documentation-only memory update does not require
+  rebuilding/restarting production.
 - Claims of "this works" should be backed by actually running it
   (migrations against a real DB, live HTTP calls, real test runs) —
   this user has caught multiple real bugs specifically *because*

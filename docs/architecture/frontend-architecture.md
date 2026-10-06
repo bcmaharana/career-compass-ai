@@ -1,6 +1,6 @@
 # Frontend Architecture — Career Compass AI
 
-> Phase 0.2 status: scaffold implemented — see `frontend/` for the real, buildable project. Feature routes/pages beyond the placeholder dashboard and login screen arrive with their owning phases (Phase 1 auth, Phase 2 career profile, etc.).
+> Current status: the React application is implemented as feature modules under `frontend/src/features/`, with authenticated editing flows and public read-only pages. The initial Phase 0.2 scaffold description is obsolete.
 
 ## Stack
 
@@ -19,15 +19,32 @@ frontend/src/
 ├── components/     # design-system primitives (Button, Card, Input, etc. — shadcn-based)
 ├── features/       # one folder per business domain, mirrors backend modules
 │   ├── career-profile/
+│   ├── interview-prep/
+│   ├── diagram/
+│   ├── public-sharing/
 │   ├── skill-intelligence/
 │   ├── opportunity-intelligence/
 │   ├── learning-intelligence/
-│   └── ai-coach/
+│   └── coach/
 ├── routes/         # route definitions, layout shells
 ├── stores/         # Zustand stores
 ├── api/            # generated client from backend OpenAPI schema + TanStack Query hooks
 └── styles/         # Tailwind config, design tokens
 ```
+
+## Rich-text and diagram content
+
+Career Compass AI's diagram editor lives in
+`features/diagram/DiagramCanvas.tsx` and is lazy-loaded through
+`LazyDiagramCanvas.tsx`. It is a product feature, not currently part of
+the separately published `@bcmaharana/ui-kit`. The editor represents a
+diagram as structured versioned data (shapes, manual lines, and
+connectors), rather than storing generated SVG or HTML. It is integrated
+into Interview Prep, Career Profile showcase editing, and public
+read-only sharing views. Manual line endpoints can snap to a shape
+outline and persist an anchor, so attached endpoints follow a shape when
+it moves, resizes, or rotates. Backend payload validation for this data
+lives in `backend/app/api/v1/diagram_schemas.py`.
 
 ## Design System
 

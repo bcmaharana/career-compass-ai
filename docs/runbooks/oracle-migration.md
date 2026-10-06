@@ -156,6 +156,45 @@ it'll be slow on 2 shared ARM cores with no GPU.
   `CareerCompassProdStart` scheduled task — `CareerCompassDevStart` and
   `CloudflaredTunnel` (still needed for `scaledbrain.com`) stay.
 
+## Ongoing application deployments
+
+The one-time migration and DNS cutover steps above are not part of a
+normal code deploy. Career Compass AI production now runs on the Oracle
+VM, and the VM checkout is `~/career-compass-ai` on `main`. From the
+Windows workstation, connect with the existing SSH key:
+
+```powershell
+ssh -i "$env:USERPROFILE\.ssh\oracle-career-compass-private.key" ubuntu@129.80.178.33
+```
+
+After the code is reviewed and verified locally, commit and push it to
+`origin/main`, then run the following on the VM:
+
+```bash
+cd ~/career-compass-ai
+git pull --ff-only origin main
+./infra/oracle-start.sh
+```
+
+`oracle-start.sh` uses both `infra/docker-compose.prod.yml` and
+`infra/docker-compose.oracle.yml`; it rebuilds and recreates the
+frontend/backend images, waits for Postgres, applies Alembic migrations,
+runs the idempotent platform seed, and waits for the frontend on port
+8080. Verify the complete stack:
+
+```bash
+docker compose -f infra/docker-compose.prod.yml \
+  -f infra/docker-compose.oracle.yml ps
+```
+
+Then confirm `https://career.scaledbrain.com` returns HTTP 200. Preserve
+the VM checkout's pre-existing executable-bit-only changes to
+`infra/oracle-start.sh`, `infra/oracle-stop.sh`,
+`infra/setup-cloudflared-oracle.sh`, and
+`migration/import-prod-data.sh`; never reset or discard them during a
+deploy. The Windows `start-prod.ps1` script manages the old laptop stack
+and is not the deploy path for the live app.
+
 ## Rollback
 
 At any point before Step 6, rolling back is free — nothing on the
