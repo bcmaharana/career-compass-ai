@@ -4039,8 +4039,10 @@ Known environment gotchas already solved, don't reintroduce:
   `frontend/src/features/diagram/DiagramCanvas.tsx`, the canvas border is
   conditional on edit mode; read-only article and showcase diagrams have
   no editor frame. Updated `docs/architecture/frontend-architecture.md`.
-  Frontend build/lint and Oracle deployment status will be recorded after
-  verification.
+  Frontend build/lint passed. Commit `977cf31` was pushed and deployed via
+  `./infra/oracle-start.sh`; all five production containers are up and
+  `https://career.scaledbrain.com` returned HTTP 200. The four existing
+  Oracle mode-only changes remain intact.
 - **Diagram marquee and mixed-object selection** (2026-10-06) —
   `frontend/src/features/diagram/DiagramCanvas.tsx` now starts a drag
   selection when the user drags on empty canvas space. It selects rotated
