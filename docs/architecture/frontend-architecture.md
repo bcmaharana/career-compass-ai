@@ -65,6 +65,9 @@ there is not enough room below it.
 
 The diagram canvas frame is shown only in edit mode. Read-only article and
 showcase views render the diagram without an editor border.
+Read-only diagrams use a 1200px minimum canvas width inside a horizontally
+scrollable viewport. This keeps shape labels legible on phones instead of
+shrinking the 1600-unit scene and its text to the narrow device width.
 
 In the diagram editor, dragging on empty canvas space draws a marquee
 that selects shapes, manual lines/arrows, and attached connectors whose

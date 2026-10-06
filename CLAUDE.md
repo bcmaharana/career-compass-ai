@@ -4035,6 +4035,13 @@ Known environment gotchas already solved, don't reintroduce:
   containers are running, and `https://career.scaledbrain.com` returned
   HTTP 200. The four pre-existing executable-bit-only changes on the
   Oracle checkout remain preserved.
+- **Mobile diagram text readability** (2026-10-06) — The 1600-unit
+  diagram scene previously scaled all shape and font sizes to the mobile
+  page width, shrinking 16px labels to only a few pixels. Read-only
+  diagrams now render at a minimum 1200px width in a horizontally
+  scrollable viewport, with a swipe hint on narrow screens. The editor
+  canvas sizing is unchanged. Build/lint and Oracle deployment outcome
+  will be recorded after verification.
 - **Diagram canvas border visibility** (2026-10-06) — In
   `frontend/src/features/diagram/DiagramCanvas.tsx`, the canvas border is
   conditional on edit mode; read-only article and showcase diagrams have

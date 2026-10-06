@@ -750,12 +750,14 @@ export function DiagramCanvas({
           )}
         </>
       )}
+      <div className={readOnly ? "w-full overflow-x-auto" : "w-full"}>
+      {readOnly && contentHeight > 0 && <p className="mb-1 text-[11px] text-muted-foreground md:hidden">Swipe horizontally to view the full diagram.</p>}
       {contentHeight > 0 || lineTool ? <div
         role="group"
         aria-label={readOnly ? `Diagram with ${document.shapes.length} shapes, ${document.lines.length} lines, and ${document.connectors.length} attached connections` : "Diagram editor canvas"}
         ref={canvasRef}
         className={`relative w-full overflow-hidden rounded-md bg-white ${readOnly ? "" : "border border-border"}`}
-        style={{ aspectRatio: `${CANVAS_WIDTH} / ${Math.max(contentHeight, lineTool ? 120 : 1)}` }}
+        style={{ width: readOnly ? "max(100%, 1200px)" : "100%", minWidth: readOnly ? 1200 : undefined, aspectRatio: `${CANVAS_WIDTH} / ${Math.max(contentHeight, lineTool ? 120 : 1)}` }}
       >
         <Stage
           width={viewportWidth} height={viewportWidth * Math.max(contentHeight, lineTool ? 120 : 1) / CANVAS_WIDTH}
@@ -898,6 +900,7 @@ export function DiagramCanvas({
           return <div key={`rich-${shape.id}`} aria-label={shape.text || "Shape text"} className="pointer-events-none absolute flex overflow-hidden p-1 text-sm" style={{ left: (shape.x + shape.width / 2) * scale, top: (shape.y + shape.height / 2) * scale, width: Math.max(24, (shape.width - 20) * scale), height: Math.max(24, (shape.height - 20) * scale), transform: `translate(-50%, -50%) rotate(${shape.rotation}deg)`, alignItems: shape.text_vertical_align === "top" ? "flex-start" : shape.text_vertical_align === "bottom" ? "flex-end" : "center", justifyContent: shape.text_align === "left" ? "flex-start" : shape.text_align === "right" ? "flex-end" : "center", color: shape.text_color, fontFamily: shape.font_family, fontSize: `${shape.font_size * scale}px`, fontWeight: shape.bold ? "bold" : undefined, fontStyle: shape.italic ? "italic" : undefined, textAlign: shape.text_align, lineHeight: 1.2 }}><div className={`max-w-full ${RICH_TEXT_CONTENT_CLASSES}`} dangerouslySetInnerHTML={{ __html: sanitizeShapeHtml(shape.text_html!) }} /></div>;
         })}
       </div> : !readOnly && <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">Add a shape to start a diagram. The canvas will grow with your drawing.</div>}
+      </div>
       {editingShape && createPortal(<div ref={editorPanelRef} role="dialog" aria-label="Edit shape text" className="fixed z-[10000] w-[min(760px,calc(100vw-16px))] rounded-md border border-accent bg-white p-2 shadow-2xl" style={editorPosition}>
         <RichTextEditor key={editingShape.id} defaultValue={editingText} onChange={setEditingText} placeholder="Type inside this shape…" autoFocus />
         <div className="mt-2 flex justify-end gap-2"><button type="button" className="rounded border px-3 py-1 text-sm" onClick={() => { cancelTextEditRef.current = true; setEditingShapeId(null); }}>Cancel</button><button type="button" className="rounded bg-accent px-3 py-1 text-sm text-white" onClick={finishShapeText}>Save text</button></div>
