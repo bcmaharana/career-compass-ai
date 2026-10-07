@@ -4051,12 +4051,15 @@ Known environment gotchas already solved, don't reintroduce:
 - **End-of-day sync and cleanup** (2026-10-06) — Local `main`, GitHub
   `origin/main`, and the Oracle checkout all matched `6ce034b` before this
   docs-only closeout. Oracle production has all five containers running;
-  the public site returns HTTP 200. The local Vite port 5173 was not
-  listening, and the Docker Desktop Linux engine was unavailable, so no
-  local development server/container stack was running to sync. Removed
-  the ignored generated `frontend/dist` build output; kept dependencies
-  installed. The local working tree was clean, and the four known
-  Oracle-only executable-bit changes remain untouched.
+  the public site returns HTTP 200. At the initial check, local Vite was
+  stopped and Docker Desktop unavailable. After the user started Docker
+  Desktop, `docker compose -f infra/docker-compose.yml up -d` restored all
+  four local services (Postgres, Redis, MinIO, backend); containers are up,
+  health checks pass, and backend OpenAPI/MinIO endpoints return HTTP 200.
+  Started Vite from the current workspace source at
+  `http://127.0.0.1:5173/`; it returns HTTP 200. Removed the ignored
+  generated `frontend/dist` output and kept dependencies installed. The
+  four known Oracle-only executable-bit changes remain untouched.
 - **Public page side gutters** (2026-10-06) — Public article and
   showcase pages now use near-full mobile width with 8px outer gutters,
   and 90% viewport width on desktop. Public cards reduce their horizontal
