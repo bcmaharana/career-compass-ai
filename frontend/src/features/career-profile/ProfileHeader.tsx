@@ -6,7 +6,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { RichTextDisplay, RichTextEditor } from "@bcmaharana/ui-kit";
+import { RichTextEditor } from "@bcmaharana/ui-kit";
+import { RichTextDisplay } from "@/components/ui/rich-text-display";
 import { useProfileScope } from "@/features/career-profile/profile-scope";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { getErrorMessage } from "@/lib/errors";

@@ -60,9 +60,12 @@ are lost when the content is saved.
 
 Read-only rich-text fields use the shared `RichTextDisplay`, which keeps
 explicit links and converts bare HTTP(S) URLs in text into safe, clickable
-links. Diagram shape labels are rendered on a separate canvas overlay, so
-that path applies the same URL conversion and enables link pointer events
-only in read-only diagrams; editor overlays remain non-interactive.
+links. This behavior is shipped in `@bcmaharana/ui-kit` `0.2.18` and is
+required by the production frontend build, which installs that package from
+GitHub Packages using `GITHUB_PACKAGES_TOKEN` in `infra/.env`. Diagram shape
+labels are rendered on a separate canvas overlay, so that path applies the
+same URL conversion and enables link pointer events only in read-only
+diagrams; editor overlays remain non-interactive.
 
 The shape text editor opens in a fixed page-level overlay rather than
 inside the clipped canvas. It stays positioned by the edited shape and

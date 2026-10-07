@@ -4162,10 +4162,13 @@ Known environment gotchas already solved, don't reintroduce:
   conversion there; read-only shape links receive pointer events, while
   editor shape labels continue to pass pointer events through to the canvas.
 - Updated `docs/architecture/frontend-architecture.md` accordingly.
-- The ui-kit source change is committed locally as `e202c54` with package
-  version `0.2.18`; its type-check and build passed. GitHub Packages publish
-  and production deployment have **not** happened: automatic review rejected
-  pushing `main` because publishing the package was not explicitly authorized.
-  The Career Compass AI diagram follow-up is currently an uncommitted local
-  change and still needs a frontend build. Resume release/deploy only after
-  explicit user authorization.
+- The ui-kit source change was pushed to GitHub as `e202c54` and the version
+  was bumped to `0.2.18`; the package workflow will publish it when the
+  repository's release automation runs. To build the frontend in production,
+  the required GitHub Packages token must be present in
+  `career-compass-ai/infra/.env` as `GITHUB_PACKAGES_TOKEN` (classic PAT,
+  `read:packages` scope only). Without that token, the Docker frontend build
+  cannot install `@bcmaharana/ui-kit` from GitHub Packages and the Oracle VM
+  redeploy cannot complete. The production deployment remains blocked on that
+  secret until it is supplied and the frontend dependency is re-resolved against
+  the published package.
