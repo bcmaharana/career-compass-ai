@@ -3,6 +3,7 @@ import { Arrow, Circle, Ellipse, Group, Layer, Line, Rect, Shape, Stage, Text, T
 import { createPortal } from "react-dom";
 import type Konva from "konva";
 import { RichTextEditor, RICH_TEXT_CONTENT_CLASSES } from "@bcmaharana/ui-kit";
+import { linkifyPlainUrls } from "@/lib/linkify-plain-urls";
 import type { DiagramConnector, DiagramDocument, DiagramDocumentInput, DiagramLine, DiagramShape, DiagramShapeKind } from "./diagram-types";
 
 const CANVAS_WIDTH = 1600;
@@ -918,8 +919,8 @@ export function DiagramCanvas({
         </Stage>
         {document.shapes.filter((shape) => shape.text_html).map((shape) => {
           const scale = stageScale;
-          const safeHtml = scaleShapeHtmlFontSizes(sanitizeShapeHtml(shape.text_html!), scale);
-          return <div key={`rich-${shape.id}`} aria-label={shape.text || "Shape text"} className="pointer-events-none absolute flex overflow-hidden p-1 text-sm" style={{ left: (shape.x + shape.width / 2) * scale, top: (shape.y + shape.height / 2) * scale, width: Math.max(24, (shape.width - 20) * scale), height: Math.max(24, (shape.height - 20) * scale), transform: `translate(-50%, -50%) rotate(${shape.rotation}deg)`, alignItems: shape.text_vertical_align === "top" ? "flex-start" : shape.text_vertical_align === "bottom" ? "flex-end" : "center", justifyContent: shape.text_align === "left" ? "flex-start" : shape.text_align === "right" ? "flex-end" : "center", color: shape.text_color, fontFamily: shape.font_family, fontSize: `${shape.font_size * scale}px`, fontWeight: shape.bold ? "bold" : undefined, fontStyle: shape.italic ? "italic" : undefined, textAlign: shape.text_align, lineHeight: 1.2 }}><div className={`w-full min-w-0 [overflow-wrap:anywhere] ${RICH_TEXT_CONTENT_CLASSES}`} dangerouslySetInnerHTML={{ __html: safeHtml }} /></div>;
+          const safeHtml = linkifyPlainUrls(scaleShapeHtmlFontSizes(sanitizeShapeHtml(shape.text_html!), scale));
+          return <div key={`rich-${shape.id}`} aria-label={shape.text || "Shape text"} className="pointer-events-none absolute flex overflow-hidden p-1 text-sm" style={{ left: (shape.x + shape.width / 2) * scale, top: (shape.y + shape.height / 2) * scale, width: Math.max(24, (shape.width - 20) * scale), height: Math.max(24, (shape.height - 20) * scale), transform: `translate(-50%, -50%) rotate(${shape.rotation}deg)`, alignItems: shape.text_vertical_align === "top" ? "flex-start" : shape.text_vertical_align === "bottom" ? "flex-end" : "center", justifyContent: shape.text_align === "left" ? "flex-start" : shape.text_align === "right" ? "flex-end" : "center", color: shape.text_color, fontFamily: shape.font_family, fontSize: `${shape.font_size * scale}px`, fontWeight: shape.bold ? "bold" : undefined, fontStyle: shape.italic ? "italic" : undefined, textAlign: shape.text_align, lineHeight: 1.2 }}><div className={`w-full min-w-0 [overflow-wrap:anywhere] ${RICH_TEXT_CONTENT_CLASSES} ${readOnly ? "[&_a]:pointer-events-auto" : ""}`} dangerouslySetInnerHTML={{ __html: safeHtml }} /></div>;
         })}
       </div> : !readOnly && <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">Add a shape to start a diagram. The canvas will grow with your drawing.</div>}
       </div>

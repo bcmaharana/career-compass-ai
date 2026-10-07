@@ -4150,3 +4150,22 @@ Known environment gotchas already solved, don't reintroduce:
 - The user is on Windows, using Docker Desktop + Docker Compose for the
   backend and native `npm run dev` for the frontend. Assume that
   environment unless told otherwise.
+
+## 2026-10-07 — clickable URLs in rich text
+
+- Bare `http://` and `https://` URLs in saved rich-text content now render
+  as clickable links in the shared `@bcmaharana/ui-kit` `RichTextDisplay`.
+  Explicit anchors are preserved; URLs inside anchors and code are skipped.
+- Career Compass AI uses that shared display for its articles, showcase
+  pages, profile, interview, and learning content. Diagram shape labels
+  bypass it, so `frontend/src/lib/linkify-plain-urls.ts` applies the same
+  conversion there; read-only shape links receive pointer events, while
+  editor shape labels continue to pass pointer events through to the canvas.
+- Updated `docs/architecture/frontend-architecture.md` accordingly.
+- The ui-kit source change is committed locally as `e202c54` with package
+  version `0.2.18`; its type-check and build passed. GitHub Packages publish
+  and production deployment have **not** happened: automatic review rejected
+  pushing `main` because publishing the package was not explicitly authorized.
+  The Career Compass AI diagram follow-up is currently an uncommitted local
+  change and still needs a frontend build. Resume release/deploy only after
+  explicit user authorization.
