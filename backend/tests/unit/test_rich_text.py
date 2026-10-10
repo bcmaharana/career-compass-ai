@@ -42,6 +42,10 @@ class TestSanitizeRichText:
         html = "<ul><li>First item</li><li>Second item</li></ul>"
         assert sanitize_rich_text(html) == html
 
+    def test_unbulleted_list_item_survives(self) -> None:
+        html = '<ul><li>First item</li><li style="list-style-type: none;">Plain line</li></ul>'
+        assert sanitize_rich_text(html) == html
+
     def test_nested_bullet_list_survives(self) -> None:
         # Chromium's actual output for "indent" while inside a list —
         # a nested <ul> directly inside <ul>, no intervening <li>.
@@ -54,6 +58,14 @@ class TestSanitizeRichText:
             "indented text</blockquote>"
         )
         assert sanitize_rich_text(html) == '<blockquote style="margin: 0 0 0 40px;">indented text</blockquote>'
+
+    def test_ten_point_indent_survives(self) -> None:
+        html = '<blockquote style="margin: 0px 0px 0px 10pt;">indented text</blockquote>'
+        assert sanitize_rich_text(html) == html
+
+    def test_ten_point_list_item_indent_survives(self) -> None:
+        html = '<ul><li style="margin: 1.75px 0px 1.75px 10pt;">indented item</li></ul>'
+        assert sanitize_rich_text(html) == html
 
     def test_rainbow_marker_span_survives(self) -> None:
         # RichTextEditor's rainbow swatch wraps a selection in this exact
