@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   Bot,
   Briefcase,
   ClipboardList,
@@ -95,13 +96,20 @@ export const NAV_ITEMS: NavItem[] = [
     to: "/learning",
     label: "Learning Intelligence",
     icon: GraduationCap,
-    purpose: "Track your learning log and get AI-recommended resources for your skill gaps.",
+    purpose:
+      "Track learning, explore recommendations for skill gaps, and browse your Knowledge Hub.",
     children: [
+      {
+        to: "/knowledge-hub",
+        label: "Knowledge Hub",
+        icon: BookOpen,
+        purpose: "Browse and manage your career learning articles.",
+      },
       {
         to: "/interview-prep",
         label: "Interview Prep",
         icon: MessageCircleQuestion,
-        purpose: "Build study notes and practice interview questions, with AI-suggested answers.",
+        purpose: "Practice interview questions with AI-suggested answers.",
       },
     ],
   },

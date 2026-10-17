@@ -17,6 +17,7 @@ import { SettingsLandingPage } from "@/features/settings/SettingsLandingPage";
 import { ResumeIntelligencePage } from "@/features/resume-intelligence/ResumeIntelligencePage";
 import { OpportunityIntelligencePage } from "@/features/opportunity-intelligence/OpportunityIntelligencePage";
 import { LearningIntelligencePage } from "@/features/learning-intelligence/LearningIntelligencePage";
+import { KnowledgeHubPage } from "@/features/learning-intelligence/KnowledgeHubPage";
 import { InterviewPrepPage } from "@/features/interview-prep/InterviewPrepPage";
 import { JdTailoringPage } from "@/features/jd-tailoring/JdTailoringPage";
 import { JobApplicationsPage } from "@/features/job-application-tracking/JobApplicationsPage";
@@ -101,6 +102,7 @@ export const router = createBrowserRouter([
           { path: "job-applications", element: <JobApplicationsPage /> },
           { path: "recruiter-contacts", element: <RecruiterContactsPage /> },
           { path: "learning", element: <LearningIntelligencePage /> },
+          { path: "knowledge-hub", element: <KnowledgeHubPage /> },
           { path: "interview-prep", element: <InterviewPrepPage /> },
           { path: "skills", element: <SkillIntelligencePage /> },
           { path: "coach", element: <CoachPage /> },
