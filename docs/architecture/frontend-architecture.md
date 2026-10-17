@@ -32,6 +32,22 @@ frontend/src/
 └── styles/         # Tailwind config, design tokens
 ```
 
+## Learning Intelligence and Interview Prep
+
+Learning Intelligence includes the self-managed learning log and
+AI-generated recommendations. Its nested **Knowledge Hub** route
+(`/knowledge-hub`) owns the Articles experience, including scope-aware
+article management and section filters. The Hub uses the interview-topic
+API and editor components, while keeping article browsing separate from
+interview practice.
+
+**Interview Prep** (`/interview-prep`) is dedicated to interview
+questions and answers. Older links that select the Articles tab on
+Interview Prep (`/interview-prep?tab=topics`) redirect to Knowledge Hub.
+Shared folder-style tab controls live in
+`components/ui/tab-strip.tsx`; scope selection and article content stay
+on the Knowledge Hub page.
+
 ## Rich-text and diagram content
 
 Career Compass AI's diagram editor lives in

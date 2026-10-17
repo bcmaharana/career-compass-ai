@@ -17,6 +17,10 @@ controls built in from the start — not a bolted-on chatbot.
 - **Resume Intelligence** — upload a resume (PDF/DOCX), LLM-extracted structured data,
   review-and-accept before anything merges into your profile, full resume history
 - **Skill Intelligence** — skill inventory plus target-role gap analysis
+- **Learning Intelligence** — a learning log and AI recommendations for target-role skill gaps
+- **Knowledge Hub** — manage and browse articles under Learning Intelligence; Interview Prep is
+  reserved for interview questions and answers
+- **Interview Prep** — practice scoped interview questions, including AI-suggested answers
 - **Career Intelligence Knowledge Graph (CIKG)** — a governed skills/roles/competencies
   graph (hybrid full-text + vector + graph search) backing skill-gap analysis, with a
   full draft → review → approve content-governance workflow
