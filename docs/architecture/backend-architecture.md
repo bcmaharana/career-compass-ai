@@ -55,14 +55,18 @@ Structured JSON logging (`app/core/logging.py`) so log lines are machine-parseab
 - **`tests/integration/`** — API endpoints tested against a real (test) database and the FastAPI `TestClient`/`httpx.AsyncClient`, verifying wiring end-to-end within the backend.
 - **`tests/e2e/`** — reserved for full-stack flows once the frontend exists; empty scaffold in Phase 0.
 
-## Article Image Persistence
+## Block Image Persistence
 
 Knowledge Hub article images are stored in private object storage. The API
 keeps the storage key server-side; normal whole-document article updates
 preserve that key for an image column with the same stable column ID.
-Removing an image column (or changing it to another column type) removes its
-stored object. Article reads resolve the key to a fresh, short-lived
-presigned URL rather than persisting that URL.
+Showcase images use public object storage and persist their URL, which
+whole-document updates preserve when the client omits it. Both repositories
+lock the current row while saving and merge the latest image metadata by
+column ID, preventing overlapping upload and editor-update requests from
+erasing an image reference. Removing an image column (or changing it to
+another column type) removes its reference. Article reads resolve keys to
+fresh, short-lived presigned URLs rather than persisting those URLs.
 
 ## Phase 0 Contents
 

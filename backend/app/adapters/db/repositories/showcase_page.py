@@ -7,6 +7,7 @@ PublicShareLinkModel's repository never filters by tenant_id.
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from typing import Any, cast
 from uuid import UUID
 
@@ -155,8 +156,35 @@ class SqlAlchemyShowcasePageRepository:
         return _page_to_domain(model) if model else None
 
     async def update(self, page: ShowcasePage) -> ShowcasePage:
-        model = await self._session.get(ShowcasePageModel, page.id)
+        result = await self._session.execute(
+            select(ShowcasePageModel)
+            .where(ShowcasePageModel.id == page.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        model = result.scalar_one_or_none()
         assert model is not None, "update() called with a page id that no longer exists"
+        latest_image_urls = {
+            column.id: column.image_url
+            for block in _blocks_from_json(model.blocks)
+            for column in block.columns
+            if column.type == "image" and column.image_url
+        }
+        page.blocks = [
+            replace(
+                block,
+                columns=[
+                    replace(
+                        column,
+                        image_url=column.image_url or latest_image_urls.get(column.id),
+                    )
+                    if column.type == "image"
+                    else column
+                    for column in block.columns
+                ],
+            )
+            for block in page.blocks
+        ]
         model.is_public = page.is_public
         model.blocks = _blocks_to_json(page.blocks)
         model.name = page.name

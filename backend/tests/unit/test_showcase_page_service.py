@@ -434,6 +434,37 @@ class TestUpdate:
 
         assert updated.blocks == []
 
+    async def test_update_preserves_uploaded_image_url_omitted_by_the_client(self) -> None:
+        fx = _Fixture()
+        role = fx.register_role_with_profile()
+        image_block = _image_block()
+        page = await fx.update(target_role_id=role.id, blocks=[image_block])
+        uploaded = await fx.service.upload_image(
+            tenant_id=fx.tenant_id,
+            user_id=fx.user_id,
+            target_role_id=role.id,
+            column_id=image_block.columns[0].id,
+            content=b"fake-bytes",
+            content_type="image/png",
+        )
+        image_url = uploaded.blocks[0].columns[0].image_url
+        assert image_url is not None
+
+        payload_block = ShowcaseBlock(
+            id=image_block.id,
+            columns=[
+                ShowcaseColumn(
+                    id=image_block.columns[0].id,
+                    type="image",
+                    label=image_block.columns[0].label,
+                )
+            ],
+        )
+        updated = await fx.update(target_role_id=role.id, blocks=[payload_block])
+
+        assert page.id == updated.id
+        assert updated.blocks[0].columns[0].image_url == image_url
+
     async def test_updates_name_headline_and_summary_independently_of_the_real_profile(
         self,
     ) -> None:

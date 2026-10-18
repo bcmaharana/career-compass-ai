@@ -301,12 +301,23 @@ class ShowcasePageService:
         page = await self.get_or_create(
             tenant_id=tenant_id, user_id=user_id, target_role_id=target_role_id
         )
+        existing_image_urls = {
+            column.id: column.image_url
+            for block in page.blocks
+            for column in block.columns
+            if column.type == "image" and column.image_url
+        }
         page.blocks = [
             replace(
                 block,
                 columns=[
-                    replace(column, html=sanitize_rich_text(column.html))
+                    replace(
+                        column,
+                        html=sanitize_rich_text(column.html),
+                    )
                     if column.type in ("rich_text", "diagram")
+                    else replace(column, image_url=existing_image_urls.get(column.id))
+                    if column.type == "image" and column.image_url is None
                     else column
                     for column in block.columns
                 ],

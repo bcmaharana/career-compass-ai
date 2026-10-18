@@ -12,6 +12,7 @@ module docstring for the full "why".
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -219,8 +220,35 @@ class SqlAlchemyInterviewTopicRepository:
         return [_topic_to_domain(m, tags_by_topic[m.id]) for m in models]
 
     async def update(self, topic: InterviewTopic) -> InterviewTopic:
-        model = await self._session.get(InterviewTopicModel, topic.id)
+        result = await self._session.execute(
+            select(InterviewTopicModel)
+            .where(InterviewTopicModel.id == topic.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        model = result.scalar_one_or_none()
         assert model is not None, "update() called with a topic id that no longer exists"
+        latest_image_keys = {
+            column.id: column.image_key
+            for block in _article_blocks_from_json(model.blocks)
+            for column in block.columns
+            if column.type == "image" and column.image_key
+        }
+        topic.blocks = [
+            replace(
+                block,
+                columns=[
+                    replace(
+                        column,
+                        image_key=column.image_key or latest_image_keys.get(column.id),
+                    )
+                    if column.type == "image"
+                    else column
+                    for column in block.columns
+                ],
+            )
+            for block in topic.blocks
+        ]
         model.name = topic.name
         model.section = topic.section
         model.blocks = _article_blocks_to_json(topic.blocks)
