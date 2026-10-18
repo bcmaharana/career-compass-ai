@@ -55,6 +55,15 @@ Structured JSON logging (`app/core/logging.py`) so log lines are machine-parseab
 - **`tests/integration/`** — API endpoints tested against a real (test) database and the FastAPI `TestClient`/`httpx.AsyncClient`, verifying wiring end-to-end within the backend.
 - **`tests/e2e/`** — reserved for full-stack flows once the frontend exists; empty scaffold in Phase 0.
 
+## Article Image Persistence
+
+Knowledge Hub article images are stored in private object storage. The API
+keeps the storage key server-side; normal whole-document article updates
+preserve that key for an image column with the same stable column ID.
+Removing an image column (or changing it to another column type) removes its
+stored object. Article reads resolve the key to a fresh, short-lived
+presigned URL rather than persisting that URL.
+
 ## Phase 0 Contents
 
 Only the skeleton: `core/`, health-check router, middleware scaffolding, the identity-provider and LLM-provider *interfaces* (no implementations beyond an in-memory/stub used for tests), and the test harness itself. Real domain entities, repositories, and business logic begin in Phase 1.

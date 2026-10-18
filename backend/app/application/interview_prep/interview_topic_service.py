@@ -135,6 +135,28 @@ class InterviewTopicService:
             )
         topic = await self.get_owned_or_raise(tenant_id=tenant_id, user_id=user_id, topic_id=topic_id)
 
+        # Image keys are server-owned and intentionally absent from the
+        # update payload. Preserve them for image columns that remain in
+        # the document, matching by stable column id.
+        existing_image_keys = {
+            column.id: column.image_key
+            for block in topic.blocks
+            for column in block.columns
+            if column.type == "image" and column.image_key
+        }
+        blocks = [
+            replace(
+                block,
+                columns=[
+                    replace(column, image_key=existing_image_keys.get(column.id))
+                    if column.type == "image"
+                    else column
+                    for column in block.columns
+                ],
+            )
+            for block in blocks
+        ]
+
         # Any image column removed in this update (or the whole block it
         # lived in) should have its object storage cleaned up too — same
         # "an edit that drops a column's image doesn't leak the object"

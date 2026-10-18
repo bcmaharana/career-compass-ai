@@ -402,16 +402,28 @@ class TestUpdateAndDelete:
         storage = FakePrivateObjectStorage()
         service = InterviewTopicService(repo, storage)
 
-        await service.update(
+        # The API payload deliberately omits the server-owned storage key.
+        payload_block = ArticleBlock(
+            id=image_block.id,
+            columns=[
+                ArticleColumn(
+                    id=image_block.columns[0].id,
+                    type="image",
+                    label=image_block.columns[0].label,
+                )
+            ],
+        )
+        updated = await service.update(
             tenant_id=tenant_id,
             user_id=user_id,
             topic_id=topic.id,
             name=topic.name,
             section=None,
-            blocks=[image_block],  # unchanged
+            blocks=[payload_block],
             scope_target_role_ids=[None],
         )
 
+        assert updated.blocks[0].columns[0].image_key == "interview-topics/x/keep.jpg"
         assert storage.deleted_keys == []
 
     async def test_delete_removes_everywhere_when_only_one_scope(self) -> None:
