@@ -49,6 +49,8 @@ def _article_column_to_json(column: ArticleColumn) -> dict[str, Any]:
         "id": str(column.id),
         "type": column.type,
         "label": column.label,
+        "show_background": column.show_background,
+        "background_color": column.background_color,
         "html": column.html,
         "diagram_data": column.diagram_data,
         "image_url": column.image_url,
@@ -64,6 +66,8 @@ def _article_column_from_json(item: dict[str, Any]) -> ArticleColumn:
         id=uuid.UUID(item["id"]),
         type=item["type"],
         label=item["label"],
+        show_background=item.get("show_background", True),
+        background_color=item.get("background_color"),
         html=item.get("html"),
         diagram_data=item.get("diagram_data"),
         # image_url is deliberately never read back from storage — Article

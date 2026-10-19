@@ -2,6 +2,7 @@ import { ApiError } from "@/api/client";
 import { usePublicArticle } from "@/api/queries/public-sharing";
 import type { components } from "@/api/schema.gen";
 import { Card, CardContent } from "@/components/ui/card";
+import { ExpandableImage } from "@/features/public-sharing/ExpandableImage";
 import { RichTextDisplay } from "@/components/ui/rich-text-display";
 import { DiagramCanvas } from "@/features/diagram/LazyDiagramCanvas";
 import { PublicPageHeader } from "@/features/public-sharing/PublicPageHeader";
@@ -75,7 +76,19 @@ function ArticleRowView({ row, ownerHandle }: { row: PublicArticleRow; ownerHand
   return (
     <div className="flex flex-col gap-4 md:flex-row">
       {row.columns.map((column) => (
-        <Card key={column.id} className="min-w-0 flex-1 basis-0">
+        <Card
+          key={column.id}
+          className={`min-w-0 flex-1 basis-0 ${
+            column.show_background === false ? "border-transparent bg-transparent shadow-none" : ""
+          }`}
+          style={
+            column.show_background === false
+              ? { backgroundColor: "transparent" }
+              : column.background_color
+                ? { backgroundColor: column.background_color }
+                : undefined
+          }
+        >
           <CardContent className="flex flex-col gap-2 px-3 py-4 sm:px-4 md:px-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {column.label}
@@ -102,9 +115,9 @@ function ArticleColumnContent({
       return <div className="flex flex-col gap-3">{column.html && <RichTextDisplay html={column.html} />}<DiagramCanvas value={column.diagram_data} readOnly /></div>;
     case "image":
       return column.image_url ? (
-        <img
+        <ExpandableImage
           src={column.image_url}
-          alt=""
+          alt={column.label}
           className="max-h-[75vh] w-full rounded-md border border-border object-contain"
         />
       ) : null;

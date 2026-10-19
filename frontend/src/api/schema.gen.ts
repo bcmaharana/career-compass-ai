@@ -2314,6 +2314,10 @@ export interface components {
             type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link" | "diagram";
             /** Label */
             label: string;
+            /** Show Background */
+            show_background?: boolean;
+            /** Background Color */
+            background_color?: string | null;
             /** Html */
             html?: string | null;
             diagram_data?: components["schemas"]["DiagramDataPayload"] | null;
@@ -4068,6 +4072,10 @@ export interface components {
             type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link" | "diagram";
             /** Label */
             label: string;
+            /** Show Background */
+            show_background?: boolean;
+            /** Background Color */
+            background_color?: string | null;
             /** Html */
             html?: string | null;
             diagram_data?: components["schemas"]["DiagramDataPayload"] | null;
@@ -4115,6 +4123,10 @@ export interface components {
             type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link" | "diagram";
             /** Label */
             label: string;
+            /** Show Background */
+            show_background?: boolean;
+            /** Background Color */
+            background_color?: string | null;
             /** Html */
             html?: string | null;
             diagram_data?: components["schemas"]["DiagramDataPayload"] | null;
@@ -4507,6 +4519,10 @@ export interface components {
             type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link" | "diagram";
             /** Label */
             label: string;
+            /** Show Background */
+            show_background?: boolean;
+            /** Background Color */
+            background_color?: string | null;
             /** Html */
             html?: string | null;
             diagram_data?: components["schemas"]["DiagramDataPayload"] | null;

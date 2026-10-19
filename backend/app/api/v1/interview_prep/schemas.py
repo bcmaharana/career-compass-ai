@@ -37,6 +37,8 @@ class ArticleColumnPayload(BaseModel):
     id: UUID
     type: ArticleColumnTypePayload
     label: str
+    show_background: bool = True
+    background_color: str | None = None
     html: str | None = None
     diagram_data: DiagramDataPayload | None = None
     image_url: str | None = None

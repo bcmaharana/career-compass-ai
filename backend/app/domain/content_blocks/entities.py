@@ -46,7 +46,9 @@ class ContentColumn:
     """One column within a ContentBlock row. Carries a user-editable
     `label` (the whole point of "freeform, including labels") plus exactly
     one populated content field, chosen by `type` — the others stay None
-    for that column. Sanitization of `html` happens in the owning
+    for that column. `show_background` defaults to True to preserve the
+    existing public-page appearance; `background_color` optionally
+    overrides the default surface color. Sanitization of `html` happens in the owning
     application service (e.g. ShowcasePageService.update), the same
     enforcement-point convention app/core/rich_text.py's own docstring
     establishes for every other rich-text field in this app: reads are
@@ -57,6 +59,8 @@ class ContentColumn:
     id: UUID
     type: ContentColumnType
     label: str
+    show_background: bool = True
+    background_color: str | None = None
     html: str | None = None
     #: A small, versioned node/connector scene (never executable HTML).
     diagram_data: dict[str, object] | None = None

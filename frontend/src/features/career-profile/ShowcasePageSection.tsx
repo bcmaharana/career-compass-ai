@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ContentColumnAppearanceControls } from "@/components/ui/content-column-appearance-controls";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,6 +61,8 @@ function newColumn(type: ShowcaseColumnType): ShowcaseColumn {
     id: crypto.randomUUID(),
     type,
     label: COLUMN_TYPE_LABELS[type],
+    show_background: true,
+    background_color: null,
     html: type === "rich_text" || type === "diagram" ? "" : null,
     diagram_data: type === "diagram" ? EMPTY_DIAGRAM : null,
     image_url: null,
@@ -900,6 +903,11 @@ function ShowcaseColumnCard({
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState<ShowcaseColumn>(column);
 
+  const isImageAppearanceDirty =
+    column.type === "image" &&
+    (draft.show_background !== column.show_background ||
+      (draft.background_color ?? null) !== (column.background_color ?? null));
+
   // Re-seeds the draft only when the column identity changes or edit
   // mode is freshly entered — not reactively on every background
   // refetch, matching this app's "initialize once, don't clobber
@@ -940,6 +948,12 @@ function ShowcaseColumnCard({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (file) uploadImage.mutate({ columnId: column.id, file });
+  }
+
+  function updateAppearance(
+    updates: Pick<ShowcaseColumn, "show_background" | "background_color">,
+  ) {
+    setDraft((current) => ({ ...current, ...updates }));
   }
 
   return (
@@ -983,6 +997,13 @@ function ShowcaseColumnCard({
                 maxLength={100}
               />
             </div>
+
+            <ContentColumnAppearanceControls
+              showBackground={draft.show_background !== false}
+              backgroundColor={draft.background_color ?? null}
+              onShowBackgroundChange={(show_background) => updateAppearance({ show_background })}
+              onBackgroundColorChange={(background_color) => updateAppearance({ background_color })}
+            />
 
             {draft.type === "rich_text" && (
               <RichTextEditor
@@ -1062,6 +1083,33 @@ function ShowcaseColumnCard({
 
         {column.type === "image" && (
           <div className="flex flex-col gap-2">
+            <ContentColumnAppearanceControls
+              showBackground={draft.show_background !== false}
+              backgroundColor={draft.background_color ?? null}
+              onShowBackgroundChange={(show_background) => updateAppearance({ show_background })}
+              onBackgroundColorChange={(background_color) => updateAppearance({ background_color })}
+            />
+            {isImageAppearanceDirty && (
+              <div className={cn("flex", ACTION_BUTTON_ROW_GAP)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    onSave({
+                      ...column,
+                      show_background: draft.show_background ?? true,
+                      background_color: draft.background_color ?? null,
+                    })
+                  }
+                  disabled={isSaving}
+                >
+                  {isSaving ? "Saving..." : "Save background"}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setDraft(column)}>
+                  Cancel
+                </Button>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`column-label-${column.id}`}>Label</Label>
               <Input

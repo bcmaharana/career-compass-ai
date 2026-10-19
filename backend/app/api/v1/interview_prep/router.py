@@ -48,7 +48,13 @@ from app.application.interview_prep.interview_topic_service import InterviewTopi
 from app.application.showcase_page.public_share_link_service import PublicShareLinkService
 from app.application.showcase_page.public_sharing_service import PublicSharingService
 from app.core.identity_provider_interface import IdentityClaims
-from app.domain.interview_prep.entities import ArticleBlock, ArticleColumn, InterviewQuestion, InterviewTopic, ReferenceLink
+from app.domain.interview_prep.entities import (
+    ArticleBlock,
+    ArticleColumn,
+    InterviewQuestion,
+    InterviewTopic,
+    ReferenceLink,
+)
 
 router = APIRouter(tags=["interview-prep"])
 
@@ -58,6 +64,8 @@ def _article_column_payload(column: ArticleColumn, image_urls: dict[UUID, str]) 
         id=column.id,
         type=column.type,
         label=column.label,
+        show_background=column.show_background,
+        background_color=column.background_color,
         html=column.html,
         diagram_data=column.diagram_data,
         image_url=image_urls.get(column.id),
@@ -72,6 +80,8 @@ def _article_column_from_payload(column: ArticleColumnPayload) -> ArticleColumn:
         id=column.id,
         type=column.type,
         label=column.label,
+        show_background=column.show_background,
+        background_color=column.background_color,
         html=column.html,
         diagram_data=column.diagram_data.model_dump(mode="json") if column.diagram_data else None,
         image_url=None,

@@ -48,6 +48,14 @@ Shared folder-style tab controls live in
 `components/ui/tab-strip.tsx`; scope selection and article content stay
 on the Knowledge Hub page.
 
+Article and Showcase editors share per-column presentation settings:
+background visibility and an optional background color. These settings
+travel with the shared content-column payload and are rendered on their
+respective public pages; omitted settings on older saved columns retain
+the existing background by default. Public Article and Showcase images
+open in a viewport-filling lightbox that closes on Escape, backdrop
+click, or its close button.
+
 ## Rich-text and diagram content
 
 Career Compass AI's diagram editor lives in

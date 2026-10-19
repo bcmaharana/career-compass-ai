@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { ACTION_BUTTON_ROW_GAP } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ContentColumnAppearanceControls } from "@/components/ui/content-column-appearance-controls";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -64,6 +65,8 @@ function newColumn(type: ArticleColumnType): ArticleColumn {
     id: crypto.randomUUID(),
     type,
     label: COLUMN_TYPE_LABELS[type],
+    show_background: true,
+    background_color: null,
     html: type === "rich_text" || type === "diagram" ? "" : null,
     diagram_data: type === "diagram" ? EMPTY_DIAGRAM : null,
     image_url: null,
@@ -862,11 +865,16 @@ function ArticleColumnCard({
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState<ArticleColumn>(column);
 
+  const isImageAppearanceDirty =
+    column.type === "image" &&
+    (draft.show_background !== column.show_background ||
+      (draft.background_color ?? null) !== (column.background_color ?? null));
   // `column` never changes while isEditing is true (see the effect
   // below, which only re-seeds draft once editing stops) — so it's
   // safe to use directly as the "before" snapshot for dirty-checking,
   // no separate captured-at-edit-start state needed.
-  const isColumnDirty = isEditing && JSON.stringify(draft) !== JSON.stringify(column);
+  const isColumnDirty =
+    (isEditing && JSON.stringify(draft) !== JSON.stringify(column)) || isImageAppearanceDirty;
   const { confirmDiscard: confirmDiscardColumn, guardElement: columnGuardElement } =
     useUnsavedChangesGuard(isColumnDirty);
 
@@ -907,6 +915,12 @@ function ArticleColumnCard({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (file) uploadImage.mutate({ id: topicId, columnId: column.id, file });
+  }
+
+  function updateAppearance(
+    updates: Pick<ArticleColumn, "show_background" | "background_color">,
+  ) {
+    setDraft((current) => ({ ...current, ...updates }));
   }
 
   return (
@@ -953,6 +967,13 @@ function ArticleColumnCard({
                 maxLength={100}
               />
             </div>
+
+            <ContentColumnAppearanceControls
+              showBackground={draft.show_background !== false}
+              backgroundColor={draft.background_color ?? null}
+              onShowBackgroundChange={(show_background) => updateAppearance({ show_background })}
+              onBackgroundColorChange={(background_color) => updateAppearance({ background_color })}
+            />
 
             {draft.type === "rich_text" && (
               <RichTextEditor
@@ -1042,6 +1063,33 @@ function ArticleColumnCard({
 
         {column.type === "image" && (
           <div className="flex flex-col gap-2">
+            <ContentColumnAppearanceControls
+              showBackground={draft.show_background !== false}
+              backgroundColor={draft.background_color ?? null}
+              onShowBackgroundChange={(show_background) => updateAppearance({ show_background })}
+              onBackgroundColorChange={(background_color) => updateAppearance({ background_color })}
+            />
+            {isImageAppearanceDirty && (
+              <div className={cn("flex", ACTION_BUTTON_ROW_GAP)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    onSave({
+                      ...column,
+                      show_background: draft.show_background ?? true,
+                      background_color: draft.background_color ?? null,
+                    })
+                  }
+                  disabled={isSaving}
+                >
+                  {isSaving ? "Saving..." : "Save background"}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setDraft(column)}>
+                  Cancel
+                </Button>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`article-column-label-${column.id}`}>Label</Label>
               <Input
