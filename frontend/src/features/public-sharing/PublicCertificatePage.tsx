@@ -1,6 +1,7 @@
 import { ApiError } from "@/api/client";
 import { usePublicCertificate } from "@/api/queries/certificates";
 import { Card, CardContent } from "@/components/ui/card";
+import { ExpandableImage } from "@/features/public-sharing/ExpandableImage";
 import { PublicPageHeader } from "@/features/public-sharing/PublicPageHeader";
 import { useNoIndex } from "@/hooks/useNoIndex";
 import { formatDisplayDate } from "@/lib/date-format";
@@ -75,10 +76,10 @@ export function PublicCertificatePage() {
                 <CardContent className="flex flex-col items-center gap-3 py-5">
                   <p className="self-start text-sm font-medium">Badge</p>
                   {certificate.badge_image_url ? (
-                    <img
+                    <ExpandableImage
                       src={certificate.badge_image_url}
                       alt={`${certificate.name} badge`}
-                      className="max-h-56 max-w-full object-contain"
+                      className="max-h-56 max-w-full cursor-zoom-in object-contain"
                     />
                   ) : certificate.badge_url ? (
                     <a
@@ -98,10 +99,10 @@ export function PublicCertificatePage() {
               <Card>
                 <CardContent className="py-5">
                   {certificate.certificate_file_content_type?.startsWith("image/") ? (
-                    <img
+                    <ExpandableImage
                       src={certificate.certificate_file_url}
                       alt={`${certificate.name} certificate`}
-                      className="mx-auto max-h-[75vh] max-w-full rounded-md object-contain"
+                      className="mx-auto max-h-[75vh] max-w-full cursor-zoom-in rounded-md object-contain"
                     />
                   ) : (
                     <iframe
