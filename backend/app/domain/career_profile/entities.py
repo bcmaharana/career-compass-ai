@@ -170,6 +170,13 @@ class Certification:
     deleted_at: datetime | None = None
     #: Per-item resume-inclusion toggle — default True (on).
     include_in_resume: bool = True
+    certificate_file_key: str | None = None
+    certificate_file_name: str | None = None
+    certificate_file_content_type: str | None = None
+    badge_image_key: str | None = None
+    badge_image_name: str | None = None
+    badge_image_content_type: str | None = None
+    badge_url: str | None = None
 
 
 @dataclass(slots=True)

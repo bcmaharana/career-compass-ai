@@ -175,7 +175,7 @@ export function CertificationSection({
         }}
         className="flex-row cursor-pointer select-none items-start justify-between space-y-0"
       >
-        <CardTitle>Certifications</CardTitle>
+        <CardTitle>{scope ? "Target Role Certifications" : "Certifications"}</CardTitle>
         <div className="flex items-center gap-2">
           <div
             className={cn("flex items-start", ACTION_BUTTON_ROW_GAP)}

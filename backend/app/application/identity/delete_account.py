@@ -60,6 +60,12 @@ class DeleteAccountService:
             except CareerCompassError:
                 logger.warning("account_deletion_resume_cleanup_failed", key=file_key)
 
+        for file_key in artifacts.certification_file_keys:
+            try:
+                await self._resume_storage.delete_private(key=file_key)
+            except CareerCompassError:
+                logger.warning("account_deletion_certificate_file_cleanup_failed", key=file_key)
+
         # Same private bucket/adapter as resumes.
         for image_key in artifacts.interview_topic_image_keys:
             try:

@@ -11,6 +11,8 @@ import { PrivacyPolicyPage } from "@/features/legal/PrivacyPolicyPage";
 import { TermsOfServicePage } from "@/features/legal/TermsOfServicePage";
 import { PublicArticlePage } from "@/features/public-sharing/PublicArticlePage";
 import { PublicShowcasePage } from "@/features/public-sharing/PublicShowcasePage";
+import { PublicCertificatePage } from "@/features/public-sharing/PublicCertificatePage";
+import { CertificatesPage } from "@/features/career-profile/CertificatesPage";
 import { SettingsAIModelPage } from "@/features/settings/SettingsAIModelPage";
 import { SettingsJobSearchPreferencePage } from "@/features/settings/SettingsJobSearchPreferencePage";
 import { SettingsLandingPage } from "@/features/settings/SettingsLandingPage";
@@ -84,6 +86,10 @@ export const router = createBrowserRouter([
     element: <PublicArticlePage />,
   },
   {
+    path: "/certificate/:shareKey",
+    element: <PublicCertificatePage />,
+  },
+  {
     path: "/:handle/:roleTag/:key",
     element: <PublicShowcasePage />,
   },
@@ -96,6 +102,7 @@ export const router = createBrowserRouter([
           { path: "welcome", element: <WelcomePage /> },
           { path: "dashboard", element: <DashboardPage /> },
           { path: "profile", element: <CareerProfilePage /> },
+          { path: "profile/certificates", element: <CertificatesPage /> },
           { path: "resumes", element: <ResumeIntelligencePage /> },
           { path: "opportunities", element: <OpportunityIntelligencePage /> },
           { path: "jd-tailoring", element: <JdTailoringPage /> },

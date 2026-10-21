@@ -264,3 +264,17 @@ class SqlAlchemyPublicShareLinkRepository:
             user_id=model.user_id,
             created_at=model.created_at,
         )
+
+    async def delete_by_resource(
+        self, resource_type: ShareableResourceType, resource_id: UUID
+    ) -> None:
+        result = await self._session.execute(
+            select(PublicShareLinkModel).where(
+                PublicShareLinkModel.resource_type == resource_type,
+                PublicShareLinkModel.resource_id == resource_id,
+            )
+        )
+        model = result.scalar_one_or_none()
+        if model is not None:
+            await self._session.delete(model)
+            await self._session.flush()

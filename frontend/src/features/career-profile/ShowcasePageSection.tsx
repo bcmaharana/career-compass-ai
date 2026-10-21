@@ -29,6 +29,7 @@ import { publicShowcasePageUrl } from "@/lib/public-sharing-url";
 import { cn } from "@/lib/utils";
 import { DiagramCanvas } from "@/features/diagram/LazyDiagramCanvas";
 import { EMPTY_DIAGRAM } from "@/features/diagram/diagram-types";
+import type { DiagramDocument } from "@/features/diagram/diagram-types";
 import {
   ChevronDown,
   ChevronRight,
@@ -47,6 +48,19 @@ type ShowcaseRow = components["schemas"]["ShowcaseBlockPayload"];
 type ShowcaseColumn = components["schemas"]["ShowcaseColumnPayload"];
 type ShowcaseColumnType = ShowcaseColumn["type"];
 
+function toApiDiagram(
+  diagram: DiagramDocument | null,
+): components["schemas"]["DiagramDataPayload"] | null {
+  if (!diagram) return null;
+  return {
+    ...diagram,
+    shapes: diagram.shapes.map((shape) => ({
+      ...shape,
+      font_family: shape.font_family ?? "Arial, Helvetica, sans-serif",
+    })),
+  };
+}
+
 const COLUMN_TYPE_LABELS: Record<ShowcaseColumnType, string> = {
   rich_text: "Text",
   image: "Image",
@@ -64,7 +78,7 @@ function newColumn(type: ShowcaseColumnType): ShowcaseColumn {
     show_background: true,
     background_color: null,
     html: type === "rich_text" || type === "diagram" ? "" : null,
-    diagram_data: type === "diagram" ? EMPTY_DIAGRAM : null,
+    diagram_data: type === "diagram" ? toApiDiagram(EMPTY_DIAGRAM) : null,
     image_url: null,
     video_embed_url: null,
     article_topic_id: null,
@@ -951,7 +965,7 @@ function ShowcaseColumnCard({
   }
 
   function updateAppearance(
-    updates: Pick<ShowcaseColumn, "show_background" | "background_color">,
+    updates: Partial<Pick<ShowcaseColumn, "show_background" | "background_color">>,
   ) {
     setDraft((current) => ({ ...current, ...updates }));
   }
@@ -1016,7 +1030,10 @@ function ShowcaseColumnCard({
 
             {draft.type === "diagram" && <>
               <RichTextEditor defaultValue={draft.html} onChange={(html) => setDraft({ ...draft, html })} placeholder="Add a paragraph to introduce this diagram..." />
-              <DiagramCanvas value={draft.diagram_data} onChange={(diagram_data) => setDraft({ ...draft, diagram_data })} />
+              <DiagramCanvas
+                value={draft.diagram_data}
+                onChange={(diagram_data) => setDraft({ ...draft, diagram_data: toApiDiagram(diagram_data) })}
+              />
             </>}
 
             {draft.type === "video_embed" && (

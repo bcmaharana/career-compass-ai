@@ -13,6 +13,7 @@ shared swap logic and MoveRequest in schemas.py for the request shape.
 
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, UploadFile, status
@@ -41,6 +42,8 @@ from app.api.v1.career_profile.schemas import (
     CareerHighlightResponse,
     CareerProfileResponse,
     CareerProfileSummaryResponse,
+    CertificateFileUrlResponse,
+    CertificateShareResponse,
     CertificationRequest,
     CertificationResponse,
     CoreCompetencyPayload,
@@ -65,7 +68,10 @@ from app.application.career_profile.career_profile_service import CareerProfileS
 from app.application.career_profile.career_profile_summary_service import (
     CareerProfileSummaryService,
 )
-from app.application.career_profile.certification_service import CertificationService
+from app.application.career_profile.certification_service import (
+    MAX_CERTIFICATE_FILE_SIZE,
+    CertificationService,
+)
 from app.application.career_profile.clear_profile_service import ClearCareerProfileService
 from app.application.career_profile.education_service import EducationService
 from app.application.career_profile.experience_service import ExperienceService
@@ -77,6 +83,7 @@ from app.application.career_profile.resume_export_service import (
 )
 from app.application.career_profile.target_role_service import TargetRoleService
 from app.core.identity_provider_interface import IdentityClaims
+from app.core.url_validation import safe_http_url
 from app.domain.career_profile.entities import (
     CareerGoal,
     CareerHighlight,
@@ -514,7 +521,9 @@ async def move_education(
     return [_education_response(e) for e in educations]
 
 
-def _certification_response(certification: Certification) -> CertificationResponse:
+async def _certification_response(
+    certification: Certification, service: CertificationService, *, include_share_key: bool = False
+) -> CertificationResponse:
     return CertificationResponse(
         id=certification.id,
         name=certification.name,
@@ -522,7 +531,14 @@ def _certification_response(certification: Certification) -> CertificationRespon
         issue_date=certification.issue_date,
         expiration_date=certification.expiration_date,
         credential_id=certification.credential_id,
-        credential_url=certification.credential_url,
+        credential_url=safe_http_url(certification.credential_url),
+        certificate_file_name=certification.certificate_file_name,
+        certificate_file_content_type=certification.certificate_file_content_type,
+        badge_image_name=certification.badge_image_name,
+        badge_url=safe_http_url(certification.badge_url),
+        share_key=(
+            await service.get_existing_share_key(certification.id) if include_share_key else None
+        ),
         display_order=certification.display_order,
         include_in_resume=certification.include_in_resume,
     )
@@ -539,7 +555,10 @@ async def list_certifications(
         user_id=UUID(identity.user_id),
         target_role_id=target_role_id,
     )
-    return [_certification_response(c) for c in certifications]
+    return [
+        await _certification_response(c, service, include_share_key=True)
+        for c in certifications
+    ]
 
 
 @router.post(
@@ -563,8 +582,9 @@ async def add_certification(
         credential_id=request.credential_id,
         credential_url=request.credential_url,
         target_role_id=target_role_id,
+        badge_url=request.badge_url,
     )
-    return _certification_response(certification)
+    return await _certification_response(certification, service)
 
 
 @router.patch(
@@ -587,8 +607,10 @@ async def update_certification(
         credential_id=request.credential_id,
         credential_url=request.credential_url,
         include_in_resume=request.include_in_resume,
+        badge_url=request.badge_url,
+        update_badge_url="badge_url" in request.model_fields_set,
     )
-    return _certification_response(certification)
+    return await _certification_response(certification, service)
 
 
 @router.delete(
@@ -641,7 +663,100 @@ async def move_certification(
         user_id=UUID(identity.user_id),
         target_role_id=target_role_id,
     )
-    return [_certification_response(c) for c in certifications]
+    return [await _certification_response(c, service) for c in certifications]
+
+
+@router.post(
+    "/career-profile/certifications/{certification_id}/files/{file_kind}",
+    response_model=CertificationResponse,
+)
+async def upload_certification_file(
+    certification_id: UUID,
+    file_kind: Literal["certificate", "badge"],
+    file: UploadFile,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: CertificationService = Depends(get_certification_service),
+) -> CertificationResponse:
+    content = await file.read(MAX_CERTIFICATE_FILE_SIZE + 1)
+    certification = await service.upload_file(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        certification_id=certification_id,
+        file_kind=file_kind,
+        filename=file.filename or "",
+        content=content,
+    )
+    return await _certification_response(certification, service, include_share_key=True)
+
+
+@router.get(
+    "/career-profile/certifications/{certification_id}/files/{file_kind}",
+    response_model=CertificateFileUrlResponse,
+)
+async def get_certification_file_url(
+    certification_id: UUID,
+    file_kind: Literal["certificate", "badge"],
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: CertificationService = Depends(get_certification_service),
+) -> CertificateFileUrlResponse:
+    url = await service.get_file_url(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        certification_id=certification_id,
+        file_kind=file_kind,
+    )
+    return CertificateFileUrlResponse(url=url)
+
+
+@router.delete(
+    "/career-profile/certifications/{certification_id}/files/{file_kind}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_certification_file(
+    certification_id: UUID,
+    file_kind: Literal["certificate", "badge"],
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: CertificationService = Depends(get_certification_service),
+) -> None:
+    await service.delete_file(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        certification_id=certification_id,
+        file_kind=file_kind,
+    )
+
+
+@router.post(
+    "/career-profile/certifications/{certification_id}/share",
+    response_model=CertificateShareResponse,
+)
+async def share_certification(
+    certification_id: UUID,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: CertificationService = Depends(get_certification_service),
+) -> CertificateShareResponse:
+    share_key = await service.get_or_create_share_link(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        certification_id=certification_id,
+    )
+    return CertificateShareResponse(share_key=share_key)
+
+
+@router.delete(
+    "/career-profile/certifications/{certification_id}/share",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def revoke_certification_share(
+    certification_id: UUID,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: CertificationService = Depends(get_certification_service),
+) -> None:
+    await service.revoke_share_link(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        certification_id=certification_id,
+    )
 
 
 def _highlight_response(highlight: CareerHighlight) -> CareerHighlightResponse:

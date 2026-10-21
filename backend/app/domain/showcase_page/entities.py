@@ -116,7 +116,7 @@ class ShowcasePage:
 #: literal here (not a DB reference table) since there are only ever two
 #: and they never vary per tenant, same reasoning as
 #: app/domain/platform_admin/permissions.py's plain constant tuple.
-ShareableResourceType = Literal["showcase_page", "interview_topic"]
+ShareableResourceType = Literal["showcase_page", "interview_topic", "certification"]
 
 
 @dataclass(slots=True)

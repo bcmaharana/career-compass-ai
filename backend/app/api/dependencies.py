@@ -132,6 +132,9 @@ from app.application.career_profile.education_service import EducationService
 from app.application.career_profile.experience_service import ExperienceService
 from app.application.career_profile.key_achievement_service import KeyAchievementService
 from app.application.career_profile.peer_endorsement_service import PeerEndorsementService
+from app.application.career_profile.public_certification_service import (
+    PublicCertificationService,
+)
 from app.application.career_profile.resume_export_service import ResumeExportService
 from app.application.career_profile.target_role_service import TargetRoleService
 from app.application.chat.chat_service import ChatService
@@ -897,11 +900,21 @@ def get_education_service(
     return EducationService(educations, career_profiles)
 
 
+def get_public_share_link_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyPublicShareLinkRepository:
+    return SqlAlchemyPublicShareLinkRepository(session)
+
+
 def get_certification_service(
     certifications: SqlAlchemyCertificationRepository = Depends(get_certification_repository),
     career_profiles: CareerProfileService = Depends(get_career_profile_service),
+    share_links: SqlAlchemyPublicShareLinkRepository = Depends(
+        get_public_share_link_repository
+    ),
+    storage: S3ObjectStorageRepository = Depends(get_object_storage),
 ) -> CertificationService:
-    return CertificationService(certifications, career_profiles)
+    return CertificationService(certifications, career_profiles, share_links, storage)
 
 
 def get_career_goal_service(
@@ -1344,12 +1357,6 @@ def get_public_sharing_service(
 # in the same request/transaction. See that service's own docstring.
 
 
-def get_public_share_link_repository(
-    session: AsyncSession = Depends(get_db_session),
-) -> SqlAlchemyPublicShareLinkRepository:
-    return SqlAlchemyPublicShareLinkRepository(session)
-
-
 def get_public_tenant_context_binder(
     session: AsyncSession = Depends(get_db_session),
 ) -> SqlAlchemyTenantContextBinder:
@@ -1386,6 +1393,12 @@ def get_public_career_profile_repository(
     return SqlAlchemyCareerProfileRepository(session)
 
 
+def get_public_certification_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyCertificationRepository:
+    return SqlAlchemyCertificationRepository(session)
+
+
 def get_public_showcase_service(
     share_links: SqlAlchemyPublicShareLinkRepository = Depends(get_public_share_link_repository),
     tenant_context: SqlAlchemyTenantContextBinder = Depends(get_public_tenant_context_binder),
@@ -1398,6 +1411,23 @@ def get_public_showcase_service(
 ) -> PublicShowcaseService:
     return PublicShowcaseService(
         share_links, tenant_context, pages, topics, target_roles, users, career_profiles, storage
+    )
+
+
+def get_public_certification_service(
+    share_links: SqlAlchemyPublicShareLinkRepository = Depends(get_public_share_link_repository),
+    tenant_context: SqlAlchemyTenantContextBinder = Depends(get_public_tenant_context_binder),
+    certifications: SqlAlchemyCertificationRepository = Depends(
+        get_public_certification_repository
+    ),
+    career_profiles: SqlAlchemyCareerProfileRepository = Depends(
+        get_public_career_profile_repository
+    ),
+    users: SqlAlchemyUserRepository = Depends(get_public_user_repository),
+    storage: S3ObjectStorageRepository = Depends(get_object_storage),
+) -> PublicCertificationService:
+    return PublicCertificationService(
+        share_links, tenant_context, certifications, career_profiles, users, storage
     )
 
 

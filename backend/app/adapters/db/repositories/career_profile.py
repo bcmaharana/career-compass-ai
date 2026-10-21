@@ -159,6 +159,13 @@ def _certification_to_domain(model: CertificationModel) -> Certification:
         expiration_date=model.expiration_date,
         credential_id=model.credential_id,
         credential_url=model.credential_url,
+        certificate_file_key=model.certificate_file_key,
+        certificate_file_name=model.certificate_file_name,
+        certificate_file_content_type=model.certificate_file_content_type,
+        badge_image_key=model.badge_image_key,
+        badge_image_name=model.badge_image_name,
+        badge_image_content_type=model.badge_image_content_type,
+        badge_url=model.badge_url,
         display_order=model.display_order,
         created_at=model.created_at,
         updated_at=model.updated_at,
@@ -589,6 +596,13 @@ class SqlAlchemyCertificationRepository:
             expiration_date=certification.expiration_date,
             credential_id=certification.credential_id,
             credential_url=certification.credential_url,
+            certificate_file_key=certification.certificate_file_key,
+            certificate_file_name=certification.certificate_file_name,
+            certificate_file_content_type=certification.certificate_file_content_type,
+            badge_image_key=certification.badge_image_key,
+            badge_image_name=certification.badge_image_name,
+            badge_image_content_type=certification.badge_image_content_type,
+            badge_url=certification.badge_url,
             display_order=order,
         )
         self._session.add(model)
@@ -630,6 +644,13 @@ class SqlAlchemyCertificationRepository:
         model.expiration_date = certification.expiration_date
         model.credential_id = certification.credential_id
         model.credential_url = certification.credential_url
+        model.certificate_file_key = certification.certificate_file_key
+        model.certificate_file_name = certification.certificate_file_name
+        model.certificate_file_content_type = certification.certificate_file_content_type
+        model.badge_image_key = certification.badge_image_key
+        model.badge_image_name = certification.badge_image_name
+        model.badge_image_content_type = certification.badge_image_content_type
+        model.badge_url = certification.badge_url
         model.include_in_resume = certification.include_in_resume
         await self._session.flush()
         await self._session.refresh(model)

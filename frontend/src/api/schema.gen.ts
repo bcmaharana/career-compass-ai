@@ -462,6 +462,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/career-profile/certifications/{certification_id}/files/{file_kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Certification File Url */
+        get: operations["get_certification_file_url_api_v1_career_profile_certifications__certification_id__files__file_kind__get"];
+        put?: never;
+        /** Upload Certification File */
+        post: operations["upload_certification_file_api_v1_career_profile_certifications__certification_id__files__file_kind__post"];
+        /** Delete Certification File */
+        delete: operations["delete_certification_file_api_v1_career_profile_certifications__certification_id__files__file_kind__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-profile/certifications/{certification_id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Share Certification */
+        post: operations["share_certification_api_v1_career_profile_certifications__certification_id__share_post"];
+        /** Revoke Certification Share */
+        delete: operations["revoke_certification_share_api_v1_career_profile_certifications__certification_id__share_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/career-profile/highlights": {
         parameters: {
             query?: never;
@@ -2219,6 +2256,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/certificates/{share_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Public Certificate */
+        get: operations["get_public_certificate_api_v1_public_certificates__share_key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/showcase-pages/{share_key}": {
         parameters: {
             query?: never;
@@ -2314,8 +2368,11 @@ export interface components {
             type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link" | "diagram";
             /** Label */
             label: string;
-            /** Show Background */
-            show_background?: boolean;
+            /**
+             * Show Background
+             * @default true
+             */
+            show_background: boolean;
             /** Background Color */
             background_color?: string | null;
             /** Html */
@@ -2364,6 +2421,11 @@ export interface components {
              * Format: uuid
              */
             import_batch_id: string;
+        };
+        /** Body_upload_certification_file_api_v1_career_profile_certifications__certification_id__files__file_kind__post */
+        Body_upload_certification_file_api_v1_career_profile_certifications__certification_id__files__file_kind__post: {
+            /** File */
+            file: string;
         };
         /** Body_upload_interview_topic_column_image_api_v1_interview_prep_topics__topic_id__blocks__column_id__image_post */
         Body_upload_interview_topic_column_image_api_v1_interview_prep_topics__topic_id__blocks__column_id__image_post: {
@@ -2556,6 +2618,16 @@ export interface components {
             /** Has Any Data */
             has_any_data: boolean;
         };
+        /** CertificateFileUrlResponse */
+        CertificateFileUrlResponse: {
+            /** Url */
+            url: string;
+        };
+        /** CertificateShareResponse */
+        CertificateShareResponse: {
+            /** Share Key */
+            share_key: string;
+        };
         /** CertificationRequest */
         CertificationRequest: {
             /** Name */
@@ -2570,6 +2642,8 @@ export interface components {
             credential_id?: string | null;
             /** Credential Url */
             credential_url?: string | null;
+            /** Badge Url */
+            badge_url?: string | null;
             /**
              * Include In Resume
              * @default true
@@ -2595,6 +2669,16 @@ export interface components {
             credential_id: string | null;
             /** Credential Url */
             credential_url: string | null;
+            /** Certificate File Name */
+            certificate_file_name: string | null;
+            /** Certificate File Content Type */
+            certificate_file_content_type: string | null;
+            /** Badge Image Name */
+            badge_image_name: string | null;
+            /** Badge Url */
+            badge_url: string | null;
+            /** Share Key */
+            share_key?: string | null;
             /** Display Order */
             display_order: number;
             /** Include In Resume */
@@ -2874,9 +2958,15 @@ export interface components {
             /** Lines */
             lines?: components["schemas"]["DiagramLinePayload"][];
         };
-        /** DiagramLinePayload */
+        /**
+         * DiagramLinePayload
+         * @description A manually drawn line whose endpoints may stay attached to shape outlines.
+         */
         DiagramLinePayload: {
-            /** Id */
+            /**
+             * Id
+             * Format: uuid
+             */
             id: string;
             /** X1 */
             x1: number;
@@ -2886,13 +2976,25 @@ export interface components {
             x2: number;
             /** Y2 */
             y2: number;
-            /** Color */
+            /**
+             * Color
+             * @default #475569
+             */
             color: string;
-            /** Stroke Width */
+            /**
+             * Stroke Width
+             * @default 2
+             */
             stroke_width: number;
-            /** Arrow Start */
+            /**
+             * Arrow Start
+             * @default false
+             */
             arrow_start: boolean;
-            /** Arrow End */
+            /**
+             * Arrow End
+             * @default false
+             */
             arrow_end: boolean;
             /** Start Shape Id */
             start_shape_id?: string | null;
@@ -2939,19 +3041,42 @@ export interface components {
             text: string;
             /** Text Html */
             text_html?: string | null;
-            /** Font Size */
+            /**
+             * Font Size
+             * @default 16
+             */
             font_size: number;
-            /** Font Family */
-            font_family?: string;
-            /** Text Color */
+            /**
+             * Font Family
+             * @default Arial, Helvetica, sans-serif
+             */
+            font_family: string;
+            /**
+             * Text Color
+             * @default #0f172a
+             */
             text_color: string;
-            /** Bold */
+            /**
+             * Bold
+             * @default false
+             */
             bold: boolean;
-            /** Italic */
+            /**
+             * Italic
+             * @default false
+             */
             italic: boolean;
-            /** Text Align */
+            /**
+             * Text Align
+             * @default center
+             * @enum {string}
+             */
             text_align: "left" | "center" | "right";
-            /** Text Vertical Align */
+            /**
+             * Text Vertical Align
+             * @default middle
+             * @enum {string}
+             */
             text_vertical_align: "top" | "middle" | "bottom";
             /**
              * Fill
@@ -4072,8 +4197,11 @@ export interface components {
             type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link" | "diagram";
             /** Label */
             label: string;
-            /** Show Background */
-            show_background?: boolean;
+            /**
+             * Show Background
+             * @default true
+             */
+            show_background: boolean;
             /** Background Color */
             background_color?: string | null;
             /** Html */
@@ -4099,6 +4227,33 @@ export interface components {
             /** Blocks */
             blocks: components["schemas"]["PublicArticleBlock"][];
         };
+        /** PublicCertificationResponse */
+        PublicCertificationResponse: {
+            /** Owner Display Name */
+            owner_display_name: string;
+            /** Name */
+            name: string;
+            /** Issuing Organization */
+            issuing_organization: string;
+            /** Issue Date */
+            issue_date: string | null;
+            /** Expiration Date */
+            expiration_date: string | null;
+            /** Credential Id */
+            credential_id: string | null;
+            /** Credential Url */
+            credential_url: string | null;
+            /** Certificate File Name */
+            certificate_file_name: string | null;
+            /** Certificate File Content Type */
+            certificate_file_content_type: string | null;
+            /** Certificate File Url */
+            certificate_file_url: string | null;
+            /** Badge Image Url */
+            badge_image_url: string | null;
+            /** Badge Url */
+            badge_url: string | null;
+        };
         /** PublicShowcaseBlock */
         PublicShowcaseBlock: {
             /**
@@ -4123,8 +4278,11 @@ export interface components {
             type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link" | "diagram";
             /** Label */
             label: string;
-            /** Show Background */
-            show_background?: boolean;
+            /**
+             * Show Background
+             * @default true
+             */
+            show_background: boolean;
             /** Background Color */
             background_color?: string | null;
             /** Html */
@@ -4519,8 +4677,11 @@ export interface components {
             type: "rich_text" | "image" | "video_embed" | "article_link" | "external_link" | "diagram";
             /** Label */
             label: string;
-            /** Show Background */
-            show_background?: boolean;
+            /**
+             * Show Background
+             * @default true
+             */
+            show_background: boolean;
             /** Background Color */
             background_color?: string | null;
             /** Html */
@@ -6087,6 +6248,164 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CertificationResponse"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_certification_file_url_api_v1_career_profile_certifications__certification_id__files__file_kind__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certification_id: string;
+                file_kind: "certificate" | "badge";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateFileUrlResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_certification_file_api_v1_career_profile_certifications__certification_id__files__file_kind__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certification_id: string;
+                file_kind: "certificate" | "badge";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_certification_file_api_v1_career_profile_certifications__certification_id__files__file_kind__post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_certification_file_api_v1_career_profile_certifications__certification_id__files__file_kind__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certification_id: string;
+                file_kind: "certificate" | "badge";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_certification_api_v1_career_profile_certifications__certification_id__share_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateShareResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_certification_share_api_v1_career_profile_certifications__certification_id__share_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -10191,6 +10510,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ShowcasePageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_public_certificate_api_v1_public_certificates__share_key__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                share_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicCertificationResponse"];
                 };
             };
             /** @description Validation Error */

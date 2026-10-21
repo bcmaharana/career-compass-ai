@@ -27,6 +27,7 @@ import { ScopeTagSelector, type ScopeOption } from "@/features/interview-prep/Sc
 import { TopicVisibilityToggle } from "@/features/interview-prep/TopicVisibilityToggle";
 import { DiagramCanvas } from "@/features/diagram/LazyDiagramCanvas";
 import { EMPTY_DIAGRAM } from "@/features/diagram/diagram-types";
+import type { DiagramDocument } from "@/features/diagram/diagram-types";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { groupInterviewTopicsBySection } from "@/lib/group-interview-topics-by-section";
 import { getErrorMessage } from "@/lib/errors";
@@ -51,6 +52,19 @@ type ArticleRow = components["schemas"]["ArticleBlockPayload"];
 type ArticleColumn = components["schemas"]["ArticleColumnPayload"];
 type ArticleColumnType = ArticleColumn["type"];
 
+function toApiDiagram(
+  diagram: DiagramDocument | null,
+): components["schemas"]["DiagramDataPayload"] | null {
+  if (!diagram) return null;
+  return {
+    ...diagram,
+    shapes: diagram.shapes.map((shape) => ({
+      ...shape,
+      font_family: shape.font_family ?? "Arial, Helvetica, sans-serif",
+    })),
+  };
+}
+
 const COLUMN_TYPE_LABELS: Record<ArticleColumnType, string> = {
   rich_text: "Text",
   image: "Image",
@@ -68,7 +82,7 @@ function newColumn(type: ArticleColumnType): ArticleColumn {
     show_background: true,
     background_color: null,
     html: type === "rich_text" || type === "diagram" ? "" : null,
-    diagram_data: type === "diagram" ? EMPTY_DIAGRAM : null,
+    diagram_data: type === "diagram" ? toApiDiagram(EMPTY_DIAGRAM) : null,
     image_url: null,
     video_embed_url: null,
     article_topic_id: null,
@@ -918,7 +932,7 @@ function ArticleColumnCard({
   }
 
   function updateAppearance(
-    updates: Pick<ArticleColumn, "show_background" | "background_color">,
+    updates: Partial<Pick<ArticleColumn, "show_background" | "background_color">>,
   ) {
     setDraft((current) => ({ ...current, ...updates }));
   }
@@ -986,7 +1000,10 @@ function ArticleColumnCard({
 
             {draft.type === "diagram" && <>
               <RichTextEditor defaultValue={draft.html} onChange={(html) => setDraft({ ...draft, html })} placeholder="Add a paragraph to introduce this diagram..." />
-              <DiagramCanvas value={draft.diagram_data} onChange={(diagram_data) => setDraft({ ...draft, diagram_data })} />
+              <DiagramCanvas
+                value={draft.diagram_data}
+                onChange={(diagram_data) => setDraft({ ...draft, diagram_data: toApiDiagram(diagram_data) })}
+              />
             </>}
 
             {draft.type === "video_embed" && (

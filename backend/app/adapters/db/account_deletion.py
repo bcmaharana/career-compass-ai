@@ -224,6 +224,19 @@ class SqlAlchemyAccountDeletionRepository:
         )
         resume_file_keys = list(result.scalars().all())
 
+        certification_files_result = await self._session.execute(
+            select(
+                CertificationModel.certificate_file_key,
+                CertificationModel.badge_image_key,
+            ).where(CertificationModel.tenant_id == tenant_id)
+        )
+        certification_file_keys = [
+            key
+            for row in certification_files_result
+            for key in (row.certificate_file_key, row.badge_image_key)
+            if key is not None
+        ]
+
         # 3. Direct tenant_id/user_id children. Deliberately a different
         # loop variable name than step 1's `model` — mypy infers each
         # for-loop's variable type from its own tuple, and reusing the
@@ -332,6 +345,7 @@ class SqlAlchemyAccountDeletionRepository:
         await self._session.flush()
         return TenantDeletionArtifacts(
             resume_file_keys=resume_file_keys,
+            certification_file_keys=certification_file_keys,
             profile_photos=profile_photos,
             interview_topic_image_keys=interview_topic_image_keys,
             tailored_resume_file_keys=tailored_resume_file_keys,

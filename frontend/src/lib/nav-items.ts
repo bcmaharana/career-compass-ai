@@ -1,4 +1,5 @@
 import {
+  BadgeCheck,
   BookOpen,
   Bot,
   Briefcase,
@@ -45,7 +46,16 @@ export const NAV_ITEMS: NavItem[] = [
     to: "/profile",
     label: "Career Profile",
     icon: UserCircle,
+    end: true,
     purpose: "Build and maintain the living career profile everything else draws from.",
+    children: [
+      {
+        to: "/profile/certificates",
+        label: "Certificates",
+        icon: BadgeCheck,
+        purpose: "Manage and share your certificates independently of target roles.",
+      },
+    ],
   },
   {
     to: "/skills",

@@ -175,6 +175,13 @@ class CertificationModel(Base):
     expiration_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     credential_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     credential_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    certificate_file_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    certificate_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    certificate_file_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    badge_image_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    badge_image_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    badge_image_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    badge_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

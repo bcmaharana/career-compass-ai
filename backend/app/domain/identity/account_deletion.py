@@ -9,7 +9,7 @@ interface, not SQLAlchemy.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 from uuid import UUID
 
@@ -47,6 +47,8 @@ class TenantDeletionArtifacts:
     #: resume_file_keys/tailored_resume_file_keys, different key prefix,
     #: unlike showcase_block_image_urls' public bucket above.
     showcase_resume_file_keys: list[str]
+    #: Private certificate and badge files stored with other user documents.
+    certification_file_keys: list[str] = field(default_factory=list)
 
 
 class AccountDeletionRepository(Protocol):

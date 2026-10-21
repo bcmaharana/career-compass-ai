@@ -108,7 +108,10 @@ export function CareerProfilePage() {
   const clearProfile = useClearCareerProfile(targetRoleId);
   const [clearProfileOpen, setClearProfileOpen] = useState(false);
 
-  const orderedKeys = useMemo(() => resolveOrder(profile?.section_order), [profile?.section_order]);
+  const orderedKeys = useMemo(() => {
+    const resolved = resolveOrder(profile?.section_order);
+    return targetRoleId ? resolved : resolved.filter((key) => key !== "certifications");
+  }, [profile?.section_order, targetRoleId]);
 
   // Single shared value (not one boolean per section) so opening a
   // section's card always closes whichever other one was open — the
