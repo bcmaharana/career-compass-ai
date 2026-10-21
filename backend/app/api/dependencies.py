@@ -37,6 +37,7 @@ from app.adapters.db.repositories import (
     SqlAlchemyPeerEndorsementRepository,
     SqlAlchemyPendingSignupRepository,
     SqlAlchemyPersonalPhoneLoginRepository,
+    SqlAlchemyProfileSkillRepository,
     SqlAlchemyRoleRepository,
     SqlAlchemyTargetRoleRepository,
     SqlAlchemyTenantContextBinder,
@@ -132,9 +133,11 @@ from app.application.career_profile.education_service import EducationService
 from app.application.career_profile.experience_service import ExperienceService
 from app.application.career_profile.key_achievement_service import KeyAchievementService
 from app.application.career_profile.peer_endorsement_service import PeerEndorsementService
+from app.application.career_profile.profile_skill_service import ProfileSkillService
 from app.application.career_profile.public_certification_service import (
     PublicCertificationService,
 )
+from app.application.career_profile.public_profile_skill_service import PublicProfileSkillService
 from app.application.career_profile.resume_export_service import ResumeExportService
 from app.application.career_profile.target_role_service import TargetRoleService
 from app.application.chat.chat_service import ChatService
@@ -778,6 +781,12 @@ def get_certification_repository(
     return SqlAlchemyCertificationRepository(session)
 
 
+def get_profile_skill_repository(
+    session: AsyncSession = Depends(get_tenant_scoped_session),
+) -> SqlAlchemyProfileSkillRepository:
+    return SqlAlchemyProfileSkillRepository(session)
+
+
 def get_career_goal_repository(
     session: AsyncSession = Depends(get_tenant_scoped_session),
 ) -> SqlAlchemyCareerGoalRepository:
@@ -915,6 +924,17 @@ def get_certification_service(
     storage: S3ObjectStorageRepository = Depends(get_object_storage),
 ) -> CertificationService:
     return CertificationService(certifications, career_profiles, share_links, storage)
+
+
+def get_profile_skill_service(
+    skills: SqlAlchemyProfileSkillRepository = Depends(get_profile_skill_repository),
+    career_profiles: CareerProfileService = Depends(get_career_profile_service),
+    share_links: SqlAlchemyPublicShareLinkRepository = Depends(
+        get_public_share_link_repository
+    ),
+    storage: S3ObjectStorageRepository = Depends(get_object_storage),
+) -> ProfileSkillService:
+    return ProfileSkillService(skills, career_profiles, share_links, storage)
 
 
 def get_career_goal_service(
@@ -1399,6 +1419,12 @@ def get_public_certification_repository(
     return SqlAlchemyCertificationRepository(session)
 
 
+def get_public_profile_skill_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SqlAlchemyProfileSkillRepository:
+    return SqlAlchemyProfileSkillRepository(session)
+
+
 def get_public_showcase_service(
     share_links: SqlAlchemyPublicShareLinkRepository = Depends(get_public_share_link_repository),
     tenant_context: SqlAlchemyTenantContextBinder = Depends(get_public_tenant_context_binder),
@@ -1428,6 +1454,23 @@ def get_public_certification_service(
 ) -> PublicCertificationService:
     return PublicCertificationService(
         share_links, tenant_context, certifications, career_profiles, users, storage
+    )
+
+
+def get_public_profile_skill_service(
+    share_links: SqlAlchemyPublicShareLinkRepository = Depends(get_public_share_link_repository),
+    tenant_context: SqlAlchemyTenantContextBinder = Depends(get_public_tenant_context_binder),
+    profile_skills: SqlAlchemyProfileSkillRepository = Depends(
+        get_public_profile_skill_repository
+    ),
+    career_profiles: SqlAlchemyCareerProfileRepository = Depends(
+        get_public_career_profile_repository
+    ),
+    users: SqlAlchemyUserRepository = Depends(get_public_user_repository),
+    storage: S3ObjectStorageRepository = Depends(get_object_storage),
+) -> PublicProfileSkillService:
+    return PublicProfileSkillService(
+        share_links, tenant_context, profile_skills, career_profiles, users, storage
     )
 
 

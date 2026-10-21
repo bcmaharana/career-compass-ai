@@ -30,6 +30,7 @@ from app.api.dependencies import (
     get_experience_service,
     get_key_achievement_service,
     get_peer_endorsement_service,
+    get_profile_skill_service,
     get_resume_export_service,
     get_target_role_service,
 )
@@ -58,6 +59,8 @@ from app.api.v1.career_profile.schemas import (
     PeerEndorsementRequest,
     PeerEndorsementResponse,
     PhotoUploadResponse,
+    ProfileSkillRequest,
+    ProfileSkillResponse,
     TargetRoleRequest,
     TargetRoleResponse,
     UpdateCareerProfileRequest,
@@ -77,6 +80,10 @@ from app.application.career_profile.education_service import EducationService
 from app.application.career_profile.experience_service import ExperienceService
 from app.application.career_profile.key_achievement_service import KeyAchievementService
 from app.application.career_profile.peer_endorsement_service import PeerEndorsementService
+from app.application.career_profile.profile_skill_service import (
+    MAX_SKILL_FILE_SIZE,
+    ProfileSkillService,
+)
 from app.application.career_profile.resume_export_service import (
     ResumeDownloadUrls,
     ResumeExportService,
@@ -94,6 +101,7 @@ from app.domain.career_profile.entities import (
     Experience,
     KeyAchievement,
     PeerEndorsement,
+    ProfileSkill,
     TargetRole,
 )
 
@@ -756,6 +764,195 @@ async def revoke_certification_share(
         tenant_id=UUID(identity.tenant_id),
         user_id=UUID(identity.user_id),
         certification_id=certification_id,
+    )
+
+
+async def _profile_skill_response(
+    skill: ProfileSkill, service: ProfileSkillService, *, include_share_key: bool = False
+) -> ProfileSkillResponse:
+    return ProfileSkillResponse(
+        id=skill.id,
+        name=skill.name,
+        issuing_organization=skill.issuing_organization,
+        issue_date=skill.issue_date,
+        expiration_date=skill.expiration_date,
+        credential_id=skill.credential_id,
+        credential_url=safe_http_url(skill.credential_url),
+        skill_file_name=skill.skill_file_name,
+        skill_file_content_type=skill.skill_file_content_type,
+        badge_image_name=skill.badge_image_name,
+        badge_url=safe_http_url(skill.badge_url),
+        share_key=await service.get_existing_share_key(skill.id) if include_share_key else None,
+        display_order=skill.display_order,
+        include_in_resume=skill.include_in_resume,
+    )
+
+
+@router.get("/career-profile/skills", response_model=list[ProfileSkillResponse])
+async def list_profile_skills(
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ProfileSkillService = Depends(get_profile_skill_service),
+) -> list[ProfileSkillResponse]:
+    skills = await service.list_for_current_user(
+        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
+    )
+    return [
+        await _profile_skill_response(skill, service, include_share_key=True) for skill in skills
+    ]
+
+
+@router.post(
+    "/career-profile/skills",
+    response_model=ProfileSkillResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_profile_skill(
+    request: ProfileSkillRequest,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ProfileSkillService = Depends(get_profile_skill_service),
+) -> ProfileSkillResponse:
+    skill = await service.add(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        name=request.name,
+        issuing_organization=request.issuing_organization,
+        issue_date=request.issue_date,
+        expiration_date=request.expiration_date,
+        credential_id=request.credential_id,
+        credential_url=request.credential_url,
+        badge_url=request.badge_url,
+    )
+    return await _profile_skill_response(skill, service)
+
+
+@router.patch("/career-profile/skills/{skill_id}", response_model=ProfileSkillResponse)
+async def update_profile_skill(
+    skill_id: UUID,
+    request: ProfileSkillRequest,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ProfileSkillService = Depends(get_profile_skill_service),
+) -> ProfileSkillResponse:
+    skill = await service.update(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        skill_id=skill_id,
+        name=request.name,
+        issuing_organization=request.issuing_organization,
+        issue_date=request.issue_date,
+        expiration_date=request.expiration_date,
+        credential_id=request.credential_id,
+        credential_url=request.credential_url,
+        include_in_resume=request.include_in_resume,
+        badge_url=request.badge_url,
+        update_badge_url="badge_url" in request.model_fields_set,
+    )
+    return await _profile_skill_response(skill, service)
+
+
+@router.delete(
+    "/career-profile/skills/{skill_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_profile_skill(
+    skill_id: UUID,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ProfileSkillService = Depends(get_profile_skill_service),
+) -> None:
+    await service.delete(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        skill_id=skill_id,
+    )
+
+
+@router.post(
+    "/career-profile/skills/{skill_id}/files/{file_kind}",
+    response_model=ProfileSkillResponse,
+)
+async def upload_profile_skill_file(
+    skill_id: UUID,
+    file_kind: Literal["skill", "badge"],
+    file: UploadFile,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ProfileSkillService = Depends(get_profile_skill_service),
+) -> ProfileSkillResponse:
+    skill = await service.upload_file(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        skill_id=skill_id,
+        file_kind=file_kind,
+        filename=file.filename or "",
+        content=await file.read(MAX_SKILL_FILE_SIZE + 1),
+    )
+    return await _profile_skill_response(skill, service, include_share_key=True)
+
+
+@router.get(
+    "/career-profile/skills/{skill_id}/files/{file_kind}",
+    response_model=CertificateFileUrlResponse,
+)
+async def get_profile_skill_file_url(
+    skill_id: UUID,
+    file_kind: Literal["skill", "badge"],
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ProfileSkillService = Depends(get_profile_skill_service),
+) -> CertificateFileUrlResponse:
+    url = await service.get_file_url(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        skill_id=skill_id,
+        file_kind=file_kind,
+    )
+    return CertificateFileUrlResponse(url=url)
+
+
+@router.delete(
+    "/career-profile/skills/{skill_id}/files/{file_kind}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_profile_skill_file(
+    skill_id: UUID,
+    file_kind: Literal["skill", "badge"],
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ProfileSkillService = Depends(get_profile_skill_service),
+) -> None:
+    await service.delete_file(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        skill_id=skill_id,
+        file_kind=file_kind,
+    )
+
+
+@router.post(
+    "/career-profile/skills/{skill_id}/share",
+    response_model=CertificateShareResponse,
+)
+async def share_profile_skill(
+    skill_id: UUID,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ProfileSkillService = Depends(get_profile_skill_service),
+) -> CertificateShareResponse:
+    share_key = await service.get_or_create_share_link(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        skill_id=skill_id,
+    )
+    return CertificateShareResponse(share_key=share_key)
+
+
+@router.delete(
+    "/career-profile/skills/{skill_id}/share",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def revoke_profile_skill_share(
+    skill_id: UUID,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ProfileSkillService = Depends(get_profile_skill_service),
+) -> None:
+    await service.revoke_share_link(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        skill_id=skill_id,
     )
 
 

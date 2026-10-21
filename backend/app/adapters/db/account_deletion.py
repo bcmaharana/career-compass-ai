@@ -35,6 +35,7 @@ from app.adapters.db.models.career_profile import (
     ExperienceModel,
     KeyAchievementModel,
     PeerEndorsementModel,
+    ProfileSkillModel,
     TargetRoleModel,
 )
 from app.adapters.db.models.chat import ChatConversationModel, ChatMessageModel
@@ -180,6 +181,7 @@ class SqlAlchemyAccountDeletionRepository:
             CareerHighlightModel,
             CareerProfileVersionModel,
             CertificationModel,
+            ProfileSkillModel,
             EducationModel,
             ExperienceModel,
             KeyAchievementModel,
@@ -234,6 +236,17 @@ class SqlAlchemyAccountDeletionRepository:
             key
             for row in certification_files_result
             for key in (row.certificate_file_key, row.badge_image_key)
+            if key is not None
+        ]
+        profile_skill_files_result = await self._session.execute(
+            select(ProfileSkillModel.skill_file_key, ProfileSkillModel.badge_image_key).where(
+                ProfileSkillModel.tenant_id == tenant_id
+            )
+        )
+        profile_skill_file_keys = [
+            key
+            for row in profile_skill_files_result
+            for key in (row.skill_file_key, row.badge_image_key)
             if key is not None
         ]
 
@@ -346,6 +359,7 @@ class SqlAlchemyAccountDeletionRepository:
         return TenantDeletionArtifacts(
             resume_file_keys=resume_file_keys,
             certification_file_keys=certification_file_keys,
+            profile_skill_file_keys=profile_skill_file_keys,
             profile_photos=profile_photos,
             interview_topic_image_keys=interview_topic_image_keys,
             tailored_resume_file_keys=tailored_resume_file_keys,

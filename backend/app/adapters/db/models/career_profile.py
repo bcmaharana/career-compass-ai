@@ -191,6 +191,40 @@ class CertificationModel(Base):
     include_in_resume: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
+class ProfileSkillModel(Base):
+    __tablename__ = "career_profile_skills"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False
+    )
+    career_profile_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("career_profiles.id"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    issuing_organization: Mapped[str] = mapped_column(String(255), nullable=False)
+    issue_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    expiration_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    credential_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    credential_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    skill_file_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    skill_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    skill_file_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    badge_image_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    badge_image_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    badge_image_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    badge_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    include_in_resume: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
 class CareerGoalModel(Base):
     __tablename__ = "career_goals"
 

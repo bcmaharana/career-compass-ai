@@ -25,6 +25,7 @@ from app.domain.career_profile.entities import (
     Experience,
     KeyAchievement,
     PeerEndorsement,
+    ProfileSkill,
     TargetRole,
 )
 
@@ -91,6 +92,18 @@ class CertificationRepository(Protocol):
     async def move(
         self, tenant_id: UUID, certification_id: UUID, direction: Direction
     ) -> None: ...
+
+
+class ProfileSkillRepository(Protocol):
+    async def create(self, skill: ProfileSkill) -> ProfileSkill: ...
+    async def get_by_id(self, tenant_id: UUID, skill_id: UUID) -> ProfileSkill | None: ...
+    async def list_for_profile(
+        self, tenant_id: UUID, career_profile_id: UUID
+    ) -> list[ProfileSkill]: ...
+    async def update(self, skill: ProfileSkill) -> ProfileSkill: ...
+    async def soft_delete(self, tenant_id: UUID, skill_id: UUID) -> None: ...
+    async def soft_delete_all_for_profile(self, tenant_id: UUID, career_profile_id: UUID) -> None: ...
+    async def move(self, tenant_id: UUID, skill_id: UUID, direction: Direction) -> None: ...
 
 
 class CareerGoalRepository(Protocol):

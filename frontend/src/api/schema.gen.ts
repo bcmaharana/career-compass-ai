@@ -499,6 +499,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/career-profile/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Profile Skills */
+        get: operations["list_profile_skills_api_v1_career_profile_skills_get"];
+        put?: never;
+        /** Add Profile Skill */
+        post: operations["add_profile_skill_api_v1_career_profile_skills_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-profile/skills/{skill_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Profile Skill */
+        delete: operations["delete_profile_skill_api_v1_career_profile_skills__skill_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Profile Skill */
+        patch: operations["update_profile_skill_api_v1_career_profile_skills__skill_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/career-profile/skills/{skill_id}/files/{file_kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Profile Skill File Url */
+        get: operations["get_profile_skill_file_url_api_v1_career_profile_skills__skill_id__files__file_kind__get"];
+        put?: never;
+        /** Upload Profile Skill File */
+        post: operations["upload_profile_skill_file_api_v1_career_profile_skills__skill_id__files__file_kind__post"];
+        /** Delete Profile Skill File */
+        delete: operations["delete_profile_skill_file_api_v1_career_profile_skills__skill_id__files__file_kind__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/career-profile/skills/{skill_id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Share Profile Skill */
+        post: operations["share_profile_skill_api_v1_career_profile_skills__skill_id__share_post"];
+        /** Revoke Profile Skill Share */
+        delete: operations["revoke_profile_skill_share_api_v1_career_profile_skills__skill_id__share_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/career-profile/highlights": {
         parameters: {
             query?: never;
@@ -2273,6 +2346,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/skills/{share_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Public Profile Skill */
+        get: operations["get_public_profile_skill_api_v1_public_skills__share_key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/showcase-pages/{share_key}": {
         parameters: {
             query?: never;
@@ -2434,6 +2524,11 @@ export interface components {
         };
         /** Body_upload_profile_photo_api_v1_career_profile_photo_post */
         Body_upload_profile_photo_api_v1_career_profile_photo_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_upload_profile_skill_file_api_v1_career_profile_skills__skill_id__files__file_kind__post */
+        Body_upload_profile_skill_file_api_v1_career_profile_skills__skill_id__files__file_kind__post: {
             /** File */
             file: string;
         };
@@ -4150,6 +4245,62 @@ export interface components {
             /** Updated By User Id */
             updated_by_user_id: string | null;
         };
+        /** ProfileSkillRequest */
+        ProfileSkillRequest: {
+            /** Name */
+            name: string;
+            /** Issuing Organization */
+            issuing_organization: string;
+            /** Issue Date */
+            issue_date?: string | null;
+            /** Expiration Date */
+            expiration_date?: string | null;
+            /** Credential Id */
+            credential_id?: string | null;
+            /** Credential Url */
+            credential_url?: string | null;
+            /** Badge Url */
+            badge_url?: string | null;
+            /**
+             * Include In Resume
+             * @default true
+             */
+            include_in_resume: boolean;
+        };
+        /** ProfileSkillResponse */
+        ProfileSkillResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Issuing Organization */
+            issuing_organization: string;
+            /** Issue Date */
+            issue_date: string | null;
+            /** Expiration Date */
+            expiration_date: string | null;
+            /** Credential Id */
+            credential_id: string | null;
+            /** Credential Url */
+            credential_url: string | null;
+            /** Skill File Name */
+            skill_file_name: string | null;
+            /** Skill File Content Type */
+            skill_file_content_type: string | null;
+            /** Badge Image Name */
+            badge_image_name: string | null;
+            /** Badge Url */
+            badge_url: string | null;
+            /** Share Key */
+            share_key?: string | null;
+            /** Display Order */
+            display_order: number;
+            /** Include In Resume */
+            include_in_resume: boolean;
+        };
         /** ProposeRevisionRequest */
         ProposeRevisionRequest: {
             /** Entity Type */
@@ -4249,6 +4400,33 @@ export interface components {
             certificate_file_content_type: string | null;
             /** Certificate File Url */
             certificate_file_url: string | null;
+            /** Badge Image Url */
+            badge_image_url: string | null;
+            /** Badge Url */
+            badge_url: string | null;
+        };
+        /** PublicProfileSkillResponse */
+        PublicProfileSkillResponse: {
+            /** Owner Display Name */
+            owner_display_name: string;
+            /** Name */
+            name: string;
+            /** Issuing Organization */
+            issuing_organization: string;
+            /** Issue Date */
+            issue_date: string | null;
+            /** Expiration Date */
+            expiration_date: string | null;
+            /** Credential Id */
+            credential_id: string | null;
+            /** Credential Url */
+            credential_url: string | null;
+            /** Skill File Name */
+            skill_file_name: string | null;
+            /** Skill File Content Type */
+            skill_file_content_type: string | null;
+            /** Skill File Url */
+            skill_file_url: string | null;
             /** Badge Image Url */
             badge_image_url: string | null;
             /** Badge Url */
@@ -6395,6 +6573,281 @@ export interface operations {
             header?: never;
             path: {
                 certification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_profile_skills_api_v1_career_profile_skills_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileSkillResponse"][];
+                };
+            };
+        };
+    };
+    add_profile_skill_api_v1_career_profile_skills_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileSkillRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileSkillResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_profile_skill_api_v1_career_profile_skills__skill_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skill_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_profile_skill_api_v1_career_profile_skills__skill_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skill_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileSkillRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileSkillResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_profile_skill_file_url_api_v1_career_profile_skills__skill_id__files__file_kind__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skill_id: string;
+                file_kind: "skill" | "badge";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateFileUrlResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_profile_skill_file_api_v1_career_profile_skills__skill_id__files__file_kind__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skill_id: string;
+                file_kind: "skill" | "badge";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_profile_skill_file_api_v1_career_profile_skills__skill_id__files__file_kind__post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileSkillResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_profile_skill_file_api_v1_career_profile_skills__skill_id__files__file_kind__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skill_id: string;
+                file_kind: "skill" | "badge";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_profile_skill_api_v1_career_profile_skills__skill_id__share_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skill_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateShareResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_profile_skill_share_api_v1_career_profile_skills__skill_id__share_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skill_id: string;
             };
             cookie?: never;
         };
@@ -10541,6 +10994,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicCertificationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_public_profile_skill_api_v1_public_skills__share_key__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                share_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicProfileSkillResponse"];
                 };
             };
             /** @description Validation Error */

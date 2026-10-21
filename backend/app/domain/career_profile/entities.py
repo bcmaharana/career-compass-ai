@@ -180,6 +180,31 @@ class Certification:
 
 
 @dataclass(slots=True)
+class ProfileSkill:
+    id: UUID
+    tenant_id: UUID
+    career_profile_id: UUID
+    name: str
+    issuing_organization: str
+    issue_date: date | None
+    expiration_date: date | None
+    credential_id: str | None
+    credential_url: str | None
+    display_order: int
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None = None
+    include_in_resume: bool = True
+    skill_file_key: str | None = None
+    skill_file_name: str | None = None
+    skill_file_content_type: str | None = None
+    badge_image_key: str | None = None
+    badge_image_name: str | None = None
+    badge_image_content_type: str | None = None
+    badge_url: str | None = None
+
+
+@dataclass(slots=True)
 class CareerGoal:
     id: UUID
     tenant_id: UUID

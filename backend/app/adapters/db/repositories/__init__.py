@@ -34,6 +34,7 @@ from app.adapters.db.repositories.career_profile import (
     SqlAlchemyExperienceRepository,
     SqlAlchemyKeyAchievementRepository,
     SqlAlchemyPeerEndorsementRepository,
+    SqlAlchemyProfileSkillRepository,
     SqlAlchemyTargetRoleRepository,
 )
 from app.adapters.db.repositories.chat import (
@@ -84,6 +85,7 @@ __all__ = [
     "SqlAlchemyModelRegistry",
     "SqlAlchemyOrganizationRepository",
     "SqlAlchemyPeerEndorsementRepository",
+    "SqlAlchemyProfileSkillRepository",
     "SqlAlchemyPendingSignupRepository",
     "SqlAlchemyPersonalPhoneLoginRepository",
     "SqlAlchemyPrerequisiteOfEdgeRepository",

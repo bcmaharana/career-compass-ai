@@ -16,8 +16,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.dependencies import get_public_certification_service, get_public_showcase_service
-from app.api.v1.career_profile.schemas import PublicCertificationResponse
+from app.api.dependencies import (
+    get_public_certification_service,
+    get_public_profile_skill_service,
+    get_public_showcase_service,
+)
+from app.api.v1.career_profile.schemas import (
+    PublicCertificationResponse,
+    PublicProfileSkillResponse,
+)
 from app.api.v1.public_sharing.schemas import (
     PublicArticleBlock,
     PublicArticleColumn,
@@ -28,6 +35,9 @@ from app.api.v1.public_sharing.schemas import (
 )
 from app.application.career_profile.public_certification_service import (
     PublicCertificationService,
+)
+from app.application.career_profile.public_profile_skill_service import (
+    PublicProfileSkillService,
 )
 from app.application.showcase_page.public_showcase_service import PublicShowcaseService
 from app.core.url_validation import safe_http_url
@@ -59,6 +69,31 @@ async def get_public_certificate(
         certificate_file_url=view.certificate_file_url,
         badge_image_url=view.badge_image_url,
         badge_url=safe_http_url(certification.badge_url),
+    )
+
+
+@router.get("/skills/{share_key}", response_model=PublicProfileSkillResponse)
+async def get_public_profile_skill(
+    share_key: str,
+    service: PublicProfileSkillService = Depends(get_public_profile_skill_service),
+) -> PublicProfileSkillResponse:
+    view = await service.get_skill(share_key)
+    if view is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+    skill = view.profile_skill
+    return PublicProfileSkillResponse(
+        owner_display_name=view.owner_display_name,
+        name=skill.name,
+        issuing_organization=skill.issuing_organization,
+        issue_date=skill.issue_date,
+        expiration_date=skill.expiration_date,
+        credential_id=skill.credential_id,
+        credential_url=safe_http_url(skill.credential_url),
+        skill_file_name=skill.skill_file_name,
+        skill_file_content_type=skill.skill_file_content_type,
+        skill_file_url=view.skill_file_url,
+        badge_image_url=view.badge_image_url,
+        badge_url=safe_http_url(skill.badge_url),
     )
 
 

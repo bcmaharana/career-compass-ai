@@ -12,7 +12,9 @@ import { TermsOfServicePage } from "@/features/legal/TermsOfServicePage";
 import { PublicArticlePage } from "@/features/public-sharing/PublicArticlePage";
 import { PublicShowcasePage } from "@/features/public-sharing/PublicShowcasePage";
 import { PublicCertificatePage } from "@/features/public-sharing/PublicCertificatePage";
+import { PublicProfileSkillPage } from "@/features/public-sharing/PublicProfileSkillPage";
 import { CertificatesPage } from "@/features/career-profile/CertificatesPage";
+import { ProfileSkillsPage } from "@/features/career-profile/ProfileSkillsPage";
 import { SettingsAIModelPage } from "@/features/settings/SettingsAIModelPage";
 import { SettingsJobSearchPreferencePage } from "@/features/settings/SettingsJobSearchPreferencePage";
 import { SettingsLandingPage } from "@/features/settings/SettingsLandingPage";
@@ -90,6 +92,10 @@ export const router = createBrowserRouter([
     element: <PublicCertificatePage />,
   },
   {
+    path: "/skill/:shareKey",
+    element: <PublicProfileSkillPage />,
+  },
+  {
     path: "/:handle/:roleTag/:key",
     element: <PublicShowcasePage />,
   },
@@ -103,6 +109,7 @@ export const router = createBrowserRouter([
           { path: "dashboard", element: <DashboardPage /> },
           { path: "profile", element: <CareerProfilePage /> },
           { path: "profile/certificates", element: <CertificatesPage /> },
+          { path: "profile/skills", element: <ProfileSkillsPage /> },
           { path: "resumes", element: <ResumeIntelligencePage /> },
           { path: "opportunities", element: <OpportunityIntelligencePage /> },
           { path: "jd-tailoring", element: <JdTailoringPage /> },

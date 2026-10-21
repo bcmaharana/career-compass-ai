@@ -40,6 +40,7 @@ from app.adapters.db.models.career_profile import (
     ExperienceModel,
     KeyAchievementModel,
     PeerEndorsementModel,
+    ProfileSkillModel,
     TargetRoleModel,
 )
 from app.adapters.db.models.chat import ChatConversationModel, ChatMessageModel
@@ -116,6 +117,7 @@ __all__ = [
     "OrganizationModel",
     "PasswordResetTokenModel",
     "PeerEndorsementModel",
+    "ProfileSkillModel",
     "PendingSignupModel",
     "PermissionModel",
     "PersonalPhoneLoginModel",

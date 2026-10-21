@@ -55,6 +55,12 @@ export const NAV_ITEMS: NavItem[] = [
         icon: BadgeCheck,
         purpose: "Manage and share your certificates independently of target roles.",
       },
+      {
+        to: "/profile/skills",
+        label: "Skills",
+        icon: Sparkles,
+        purpose: "Manage and share your skills independently of Skill Intelligence.",
+      },
     ],
   },
   {

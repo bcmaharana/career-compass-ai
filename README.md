@@ -13,10 +13,12 @@ controls built in from the start — not a bolted-on chatbot.
   RBAC, and row-level multi-tenant isolation enforced at the Postgres level (not just in
   application code)
 - **Career Profile** — experience, education, career goals, highlights, achievements, peer
-  endorsements, core competencies, and a common Certificates library. Add certificates with
-  private PDF/JPG/PNG proof and image or URL badges; share individual public links showing the
-  recipient's name, certificate details, badge, and proof. Existing target-role certificates
-  are copied into the common library while remaining attached to their roles.
+  endorsements, core competencies, a common Certificates library, and a separate Skills
+  library for new skill entries. Both libraries support private PDF/JPG/PNG proof and image or
+  URL badges, with individual public links showing the recipient's name, details, badge, and
+  proof. Existing target-role certificates are copied into the common Certificates library
+  while remaining attached to their roles. Skills are not imported from Skill Intelligence or
+  included in generated resumes at this time.
 - **Resume Intelligence** — upload a resume (PDF/DOCX), LLM-extracted structured data,
   review-and-accept before anything merges into your profile, full resume history
 - **Skill Intelligence** — skill inventory plus target-role gap analysis

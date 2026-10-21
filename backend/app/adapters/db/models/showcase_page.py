@@ -80,7 +80,7 @@ class PublicShareLinkModel(Base):
     __tablename__ = "public_share_links"
     __table_args__ = (
         CheckConstraint(
-            "resource_type IN ('showcase_page', 'interview_topic')",
+            "resource_type IN ('showcase_page', 'interview_topic', 'certification', 'profile_skill')",
             name="resource_type",
         ),
     )

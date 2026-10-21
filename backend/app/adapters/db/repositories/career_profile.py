@@ -30,6 +30,7 @@ from app.adapters.db.models import (
     ExperienceModel,
     KeyAchievementModel,
     PeerEndorsementModel,
+    ProfileSkillModel,
     TargetRoleModel,
 )
 from app.adapters.db.reorder import Direction, move_item, next_display_order
@@ -45,6 +46,7 @@ from app.domain.career_profile.entities import (
     Experience,
     KeyAchievement,
     PeerEndorsement,
+    ProfileSkill,
     TargetRole,
 )
 
@@ -162,6 +164,32 @@ def _certification_to_domain(model: CertificationModel) -> Certification:
         certificate_file_key=model.certificate_file_key,
         certificate_file_name=model.certificate_file_name,
         certificate_file_content_type=model.certificate_file_content_type,
+        badge_image_key=model.badge_image_key,
+        badge_image_name=model.badge_image_name,
+        badge_image_content_type=model.badge_image_content_type,
+        badge_url=model.badge_url,
+        display_order=model.display_order,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+        deleted_at=model.deleted_at,
+        include_in_resume=model.include_in_resume,
+    )
+
+
+def _profile_skill_to_domain(model: ProfileSkillModel) -> ProfileSkill:
+    return ProfileSkill(
+        id=model.id,
+        tenant_id=model.tenant_id,
+        career_profile_id=model.career_profile_id,
+        name=model.name,
+        issuing_organization=model.issuing_organization,
+        issue_date=model.issue_date,
+        expiration_date=model.expiration_date,
+        credential_id=model.credential_id,
+        credential_url=model.credential_url,
+        skill_file_key=model.skill_file_key,
+        skill_file_name=model.skill_file_name,
+        skill_file_content_type=model.skill_file_content_type,
         badge_image_key=model.badge_image_key,
         badge_image_name=model.badge_image_name,
         badge_image_content_type=model.badge_image_content_type,
@@ -690,6 +718,125 @@ class SqlAlchemyCertificationRepository:
             tenant_id=tenant_id,
             scope_filter=CertificationModel.career_profile_id == model.career_profile_id,
             item_id=certification_id,
+            direction=direction,
+        )
+
+
+class SqlAlchemyProfileSkillRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def create(self, skill: ProfileSkill) -> ProfileSkill:
+        order = await next_display_order(
+            self._session,
+            ProfileSkillModel,
+            tenant_id=skill.tenant_id,
+            scope_filter=ProfileSkillModel.career_profile_id == skill.career_profile_id,
+        )
+        model = ProfileSkillModel(
+            id=skill.id,
+            tenant_id=skill.tenant_id,
+            career_profile_id=skill.career_profile_id,
+            name=skill.name,
+            issuing_organization=skill.issuing_organization,
+            issue_date=skill.issue_date,
+            expiration_date=skill.expiration_date,
+            credential_id=skill.credential_id,
+            credential_url=skill.credential_url,
+            skill_file_key=skill.skill_file_key,
+            skill_file_name=skill.skill_file_name,
+            skill_file_content_type=skill.skill_file_content_type,
+            badge_image_key=skill.badge_image_key,
+            badge_image_name=skill.badge_image_name,
+            badge_image_content_type=skill.badge_image_content_type,
+            badge_url=skill.badge_url,
+            display_order=order,
+        )
+        self._session.add(model)
+        await self._session.flush()
+        await self._session.refresh(model)
+        return _profile_skill_to_domain(model)
+
+    async def get_by_id(self, tenant_id: UUID, skill_id: UUID) -> ProfileSkill | None:
+        result = await self._session.execute(
+            select(ProfileSkillModel).where(
+                ProfileSkillModel.tenant_id == tenant_id,
+                ProfileSkillModel.id == skill_id,
+                ProfileSkillModel.deleted_at.is_(None),
+            )
+        )
+        model = result.scalar_one_or_none()
+        return _profile_skill_to_domain(model) if model else None
+
+    async def list_for_profile(
+        self, tenant_id: UUID, career_profile_id: UUID
+    ) -> list[ProfileSkill]:
+        result = await self._session.execute(
+            select(ProfileSkillModel)
+            .where(
+                ProfileSkillModel.tenant_id == tenant_id,
+                ProfileSkillModel.career_profile_id == career_profile_id,
+                ProfileSkillModel.deleted_at.is_(None),
+            )
+            .order_by(ProfileSkillModel.display_order.asc())
+        )
+        return [_profile_skill_to_domain(model) for model in result.scalars().all()]
+
+    async def update(self, skill: ProfileSkill) -> ProfileSkill:
+        model = await self._session.get(ProfileSkillModel, skill.id)
+        assert model is not None, "update() called with a profile skill id that no longer exists"
+        model.name = skill.name
+        model.issuing_organization = skill.issuing_organization
+        model.issue_date = skill.issue_date
+        model.expiration_date = skill.expiration_date
+        model.credential_id = skill.credential_id
+        model.credential_url = skill.credential_url
+        model.skill_file_key = skill.skill_file_key
+        model.skill_file_name = skill.skill_file_name
+        model.skill_file_content_type = skill.skill_file_content_type
+        model.badge_image_key = skill.badge_image_key
+        model.badge_image_name = skill.badge_image_name
+        model.badge_image_content_type = skill.badge_image_content_type
+        model.badge_url = skill.badge_url
+        model.include_in_resume = skill.include_in_resume
+        await self._session.flush()
+        await self._session.refresh(model)
+        return _profile_skill_to_domain(model)
+
+    async def soft_delete(self, tenant_id: UUID, skill_id: UUID) -> None:
+        result = await self._session.execute(
+            select(ProfileSkillModel).where(
+                ProfileSkillModel.tenant_id == tenant_id,
+                ProfileSkillModel.id == skill_id,
+            )
+        )
+        model = result.scalar_one_or_none()
+        if model is not None:
+            model.deleted_at = datetime.now(UTC)
+            await self._session.flush()
+
+    async def soft_delete_all_for_profile(self, tenant_id: UUID, career_profile_id: UUID) -> None:
+        await self._session.execute(
+            update(ProfileSkillModel)
+            .where(
+                ProfileSkillModel.tenant_id == tenant_id,
+                ProfileSkillModel.career_profile_id == career_profile_id,
+                ProfileSkillModel.deleted_at.is_(None),
+            )
+            .values(deleted_at=datetime.now(UTC))
+        )
+        await self._session.flush()
+
+    async def move(self, tenant_id: UUID, skill_id: UUID, direction: Direction) -> None:
+        model = await self._session.get(ProfileSkillModel, skill_id)
+        if model is None:
+            return
+        await move_item(
+            self._session,
+            ProfileSkillModel,
+            tenant_id=tenant_id,
+            scope_filter=ProfileSkillModel.career_profile_id == model.career_profile_id,
+            item_id=skill_id,
             direction=direction,
         )
 

@@ -152,6 +152,41 @@ class CertificationResponse(BaseModel):
     include_in_resume: bool
 
 
+class ProfileSkillRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    issuing_organization: str = Field(min_length=1, max_length=255)
+    issue_date: date | None = None
+    expiration_date: date | None = None
+    credential_id: str | None = Field(default=None, max_length=255)
+    credential_url: str | None = Field(default=None, max_length=2048)
+    badge_url: str | None = Field(default=None, max_length=2048)
+    include_in_resume: bool = True
+
+    @field_validator("credential_url", "badge_url")
+    @classmethod
+    def validate_external_url(cls, value: str | None) -> str | None:
+        if value is not None and safe_http_url(value) is None:
+            raise ValueError("URL must use HTTP or HTTPS.")
+        return value
+
+
+class ProfileSkillResponse(BaseModel):
+    id: UUID
+    name: str
+    issuing_organization: str
+    issue_date: date | None
+    expiration_date: date | None
+    credential_id: str | None
+    credential_url: str | None
+    skill_file_name: str | None
+    skill_file_content_type: str | None
+    badge_image_name: str | None
+    badge_url: str | None
+    share_key: str | None = None
+    display_order: int
+    include_in_resume: bool
+
+
 class CertificateFileUrlResponse(BaseModel):
     url: str
 
@@ -171,6 +206,21 @@ class PublicCertificationResponse(BaseModel):
     certificate_file_name: str | None
     certificate_file_content_type: str | None
     certificate_file_url: str | None
+    badge_image_url: str | None
+    badge_url: str | None
+
+
+class PublicProfileSkillResponse(BaseModel):
+    owner_display_name: str
+    name: str
+    issuing_organization: str
+    issue_date: date | None
+    expiration_date: date | None
+    credential_id: str | None
+    credential_url: str | None
+    skill_file_name: str | None
+    skill_file_content_type: str | None
+    skill_file_url: str | None
     badge_image_url: str | None
     badge_url: str | None
 

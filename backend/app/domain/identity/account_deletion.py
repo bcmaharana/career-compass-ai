@@ -49,6 +49,8 @@ class TenantDeletionArtifacts:
     showcase_resume_file_keys: list[str]
     #: Private certificate and badge files stored with other user documents.
     certification_file_keys: list[str] = field(default_factory=list)
+    #: Private skill image and badge files stored with other user documents.
+    profile_skill_file_keys: list[str] = field(default_factory=list)
 
 
 class AccountDeletionRepository(Protocol):
