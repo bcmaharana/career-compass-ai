@@ -15,10 +15,10 @@ controls built in from the start — not a bolted-on chatbot.
 - **Career Profile** — experience, education, career goals, highlights, achievements, peer
   endorsements, core competencies, a common Certificates library, and a separate Skills
   library for new skill entries. Both libraries support private PDF/JPG/PNG proof and image or
-  URL badges, with individual public links showing the recipient's name, details, badge, and
-  proof. Existing target-role certificates are copied into the common Certificates library
-  while remaining attached to their roles. Skills are not imported from Skill Intelligence or
-  included in generated resumes at this time.
+  URL badges, individual public links showing the recipient's name, details, badge, and proof,
+  and controls to reorder cards. Existing target-role certificates are copied into the common
+  Certificates library while remaining attached to their roles. Skills are not imported from
+  Skill Intelligence or included in generated resumes at this time.
 - **Resume Intelligence** — upload a resume (PDF/DOCX), LLM-extracted structured data,
   review-and-accept before anything merges into your profile, full resume history
 - **Skill Intelligence** — skill inventory plus target-role gap analysis

@@ -14,6 +14,8 @@ export type ProfileSkillRequest = components["schemas"]["ProfileSkillRequest"] &
   badge_url?: string | null;
 };
 
+export type ProfileSkillMoveDirection = "up" | "down";
+
 export interface PublicProfileSkill {
   owner_display_name: string;
   name: string;
@@ -61,6 +63,15 @@ export function useDeleteProfileSkill() {
   return useMutation({
     mutationFn: (id: string) => apiClient.delete(`/api/v1/career-profile/skills/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: PROFILE_SKILL_QUERY_KEY }),
+  });
+}
+
+export function useMoveProfileSkill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, direction }: { id: string; direction: ProfileSkillMoveDirection }) =>
+      apiClient.post<ProfileSkill[]>(`/api/v1/career-profile/skills/${id}/move`, { direction }),
+    onSuccess: (data) => queryClient.setQueryData(PROFILE_SKILL_QUERY_KEY, data),
   });
 }
 

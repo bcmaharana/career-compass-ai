@@ -1,4 +1,4 @@
-import { useCertifications } from "@/api/queries/career-profile";
+import { useCertifications, useMoveCertification } from "@/api/queries/career-profile";
 import {
   useAddCertificate,
   useCertificateFileUrl,
@@ -16,6 +16,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoveButtons } from "@/components/ui/move-buttons";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
@@ -81,6 +82,7 @@ export function CertificatesPage() {
   const fileUrl = useCertificateFileUrl();
   const shareCertificate = useShareCertificate();
   const revokeShare = useRevokeCertificateShare();
+  const moveCertificate = useMoveCertification(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<CertificateForm>(EMPTY_FORM);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -193,6 +195,7 @@ export function CertificatesPage() {
     shareCertificate.error,
     revokeShare.error,
     deleteCertificate.error,
+    moveCertificate.error,
   ];
 
   return (
@@ -231,7 +234,7 @@ export function CertificatesPage() {
           </CardContent>
         </Card>
       )}
-      {certificates?.map((certificate) => {
+      {certificates?.map((certificate, index) => {
         const shareKey =
           shareOverrides[certificate.id] === undefined
             ? certificate.share_key
@@ -258,7 +261,15 @@ export function CertificatesPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex shrink-0 gap-1">
+              <div className="flex shrink-0 items-center gap-1">
+                <MoveButtons
+                  onMoveUp={() => moveCertificate.mutate({ id: certificate.id, direction: "up" })}
+                  onMoveDown={() => moveCertificate.mutate({ id: certificate.id, direction: "down" })}
+                  isFirst={index === 0}
+                  isLast={index === certificates.length - 1}
+                  disabled={moveCertificate.isPending}
+                  label={`${certificate.name} certificate`}
+                />
                 <Button variant="ghost" size="sm" onClick={() => openEdit(certificate)} aria-label={`Edit ${certificate.name}`}>
                   <Pencil className="h-4 w-4" />
                 </Button>

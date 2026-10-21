@@ -4,6 +4,7 @@ import {
   useProfileSkillFileUrl,
   useDeleteProfileSkill,
   useDeleteProfileSkillFile,
+  useMoveProfileSkill,
   useRevokeProfileSkillShare,
   useShareProfileSkill,
   useUpdateProfileSkill,
@@ -16,6 +17,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoveButtons } from "@/components/ui/move-buttons";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { formatDisplayDate } from "@/lib/date-format";
 import { getErrorMessage } from "@/lib/errors";
@@ -76,6 +78,7 @@ export function ProfileSkillsPage() {
   const addProfileSkill = useAddProfileSkill();
   const updateProfileSkill = useUpdateProfileSkill();
   const deleteProfileSkill = useDeleteProfileSkill();
+  const moveProfileSkill = useMoveProfileSkill();
   const uploadFile = useUploadProfileSkillFile();
   const deleteFile = useDeleteProfileSkillFile();
   const fileUrl = useProfileSkillFileUrl();
@@ -193,6 +196,7 @@ export function ProfileSkillsPage() {
     shareProfileSkill.error,
     revokeShare.error,
     deleteProfileSkill.error,
+    moveProfileSkill.error,
   ];
 
   return (
@@ -231,7 +235,7 @@ export function ProfileSkillsPage() {
           </CardContent>
         </Card>
       )}
-      {skills?.map((skill) => {
+      {skills?.map((skill, index) => {
         const shareKey =
           shareOverrides[skill.id] === undefined
             ? skill.share_key
@@ -258,7 +262,15 @@ export function ProfileSkillsPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex shrink-0 gap-1">
+              <div className="flex shrink-0 items-center gap-1">
+                <MoveButtons
+                  onMoveUp={() => moveProfileSkill.mutate({ id: skill.id, direction: "up" })}
+                  onMoveDown={() => moveProfileSkill.mutate({ id: skill.id, direction: "down" })}
+                  isFirst={index === 0}
+                  isLast={index === skills.length - 1}
+                  disabled={moveProfileSkill.isPending}
+                  label={`${skill.name} skill`}
+                />
                 <Button variant="ghost" size="sm" onClick={() => openEdit(skill)} aria-label={`Edit ${skill.name}`}>
                   <Pencil className="h-4 w-4" />
                 </Button>

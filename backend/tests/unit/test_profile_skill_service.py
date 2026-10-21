@@ -14,7 +14,11 @@ from app.application.career_profile.profile_skill_service import ProfileSkillSer
 from app.application.career_profile.public_profile_skill_service import PublicProfileSkillService
 from app.core.exceptions import NotFoundError, ValidationError
 from app.domain.career_profile.entities import ProfileSkill
-from app.domain.career_profile.repositories import CareerProfileRepository, ProfileSkillRepository
+from app.domain.career_profile.repositories import (
+    CareerProfileRepository,
+    Direction,
+    ProfileSkillRepository,
+)
 from app.domain.identity.repositories import UserRepository
 from app.domain.showcase_page.entities import PublicShareLink
 
@@ -22,6 +26,7 @@ from app.domain.showcase_page.entities import PublicShareLink
 class FakeProfileSkillRepository:
     def __init__(self, profile_skill: ProfileSkill) -> None:
         self.profile_skill = profile_skill
+        self.moved: tuple[uuid.UUID, Direction] | None = None
 
     async def get_by_id(self, tenant_id: uuid.UUID, skill_id: uuid.UUID) -> ProfileSkill | None:
         if self.profile_skill.id != skill_id or self.profile_skill.tenant_id != tenant_id:
@@ -31,6 +36,9 @@ class FakeProfileSkillRepository:
     async def update(self, profile_skill: ProfileSkill) -> ProfileSkill:
         self.profile_skill = profile_skill
         return profile_skill
+
+    async def move(self, tenant_id: uuid.UUID, skill_id: uuid.UUID, direction: Direction) -> None:
+        self.moved = (skill_id, direction)
 
 
 class FakeCareerProfiles:
@@ -221,6 +229,34 @@ async def test_share_link_is_created_and_revoked_for_one_skill() -> None:
 
     await service.revoke_share_link(tenant_id=tenant_id, user_id=user_id, skill_id=profile_skill.id)
     assert links.link is None
+
+
+@pytest.mark.asyncio
+async def test_move_requires_ownership_and_delegates_direction() -> None:
+    tenant_id, user_id, profile_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    profile_skill = make_profile_skill(tenant_id, profile_id)
+    repository = FakeProfileSkillRepository(profile_skill)
+    service = ProfileSkillService(
+        cast(ProfileSkillRepository, repository),
+        cast(CareerProfileService, FakeCareerProfiles(profile_id, user_id)),
+    )
+
+    await service.move(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        skill_id=profile_skill.id,
+        direction="up",
+    )
+
+    assert repository.moved == (profile_skill.id, "up")
+    with pytest.raises(NotFoundError):
+        await service.move(
+            tenant_id=tenant_id,
+            user_id=uuid.uuid4(),
+            skill_id=profile_skill.id,
+            direction="down",
+        )
+    assert repository.moved == (profile_skill.id, "up")
 
 
 @pytest.mark.asyncio

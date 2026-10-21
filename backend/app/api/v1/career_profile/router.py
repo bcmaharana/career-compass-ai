@@ -132,6 +132,7 @@ def _profile_response(
         resume_section_toggles=profile.resume_section_toggles,
     )
 
+
 router = APIRouter(tags=["career-profile"])
 
 
@@ -671,7 +672,9 @@ async def move_certification(
         user_id=UUID(identity.user_id),
         target_role_id=target_role_id,
     )
-    return [await _certification_response(c, service) for c in certifications]
+    return [
+        await _certification_response(c, service, include_share_key=True) for c in certifications
+    ]
 
 
 @router.post(
@@ -862,6 +865,30 @@ async def delete_profile_skill(
         user_id=UUID(identity.user_id),
         skill_id=skill_id,
     )
+
+
+@router.post(
+    "/career-profile/skills/{skill_id}/move",
+    response_model=list[ProfileSkillResponse],
+)
+async def move_profile_skill(
+    skill_id: UUID,
+    request: MoveRequest,
+    identity: IdentityClaims = Depends(get_current_identity),
+    service: ProfileSkillService = Depends(get_profile_skill_service),
+) -> list[ProfileSkillResponse]:
+    await service.move(
+        tenant_id=UUID(identity.tenant_id),
+        user_id=UUID(identity.user_id),
+        skill_id=skill_id,
+        direction=request.direction,
+    )
+    skills = await service.list_for_current_user(
+        tenant_id=UUID(identity.tenant_id), user_id=UUID(identity.user_id)
+    )
+    return [
+        await _profile_skill_response(skill, service, include_share_key=True) for skill in skills
+    ]
 
 
 @router.post(

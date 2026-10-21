@@ -535,6 +535,23 @@ export interface paths {
         patch: operations["update_profile_skill_api_v1_career_profile_skills__skill_id__patch"];
         trace?: never;
     };
+    "/api/v1/career-profile/skills/{skill_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move Profile Skill */
+        post: operations["move_profile_skill_api_v1_career_profile_skills__skill_id__move_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/career-profile/skills/{skill_id}/files/{file_kind}": {
         parameters: {
             query?: never;
@@ -6700,6 +6717,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProfileSkillResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_profile_skill_api_v1_career_profile_skills__skill_id__move_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                skill_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileSkillResponse"][];
                 };
             };
             /** @description Validation Error */
