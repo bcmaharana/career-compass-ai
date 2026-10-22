@@ -173,6 +173,7 @@ def _certification_to_domain(model: CertificationModel) -> Certification:
         updated_at=model.updated_at,
         deleted_at=model.deleted_at,
         include_in_resume=model.include_in_resume,
+        does_not_expire=model.does_not_expire,
     )
 
 
@@ -199,6 +200,7 @@ def _profile_skill_to_domain(model: ProfileSkillModel) -> ProfileSkill:
         updated_at=model.updated_at,
         deleted_at=model.deleted_at,
         include_in_resume=model.include_in_resume,
+        does_not_expire=model.does_not_expire,
     )
 
 
@@ -632,6 +634,7 @@ class SqlAlchemyCertificationRepository:
             badge_image_content_type=certification.badge_image_content_type,
             badge_url=certification.badge_url,
             display_order=order,
+            does_not_expire=certification.does_not_expire,
         )
         self._session.add(model)
         await self._session.flush()
@@ -680,6 +683,7 @@ class SqlAlchemyCertificationRepository:
         model.badge_image_content_type = certification.badge_image_content_type
         model.badge_url = certification.badge_url
         model.include_in_resume = certification.include_in_resume
+        model.does_not_expire = certification.does_not_expire
         await self._session.flush()
         await self._session.refresh(model)
         return _certification_to_domain(model)
@@ -751,6 +755,7 @@ class SqlAlchemyProfileSkillRepository:
             badge_image_content_type=skill.badge_image_content_type,
             badge_url=skill.badge_url,
             display_order=order,
+            does_not_expire=skill.does_not_expire,
         )
         self._session.add(model)
         await self._session.flush()
@@ -799,6 +804,7 @@ class SqlAlchemyProfileSkillRepository:
         model.badge_image_content_type = skill.badge_image_content_type
         model.badge_url = skill.badge_url
         model.include_in_resume = skill.include_in_resume
+        model.does_not_expire = skill.does_not_expire
         await self._session.flush()
         await self._session.refresh(model)
         return _profile_skill_to_domain(model)

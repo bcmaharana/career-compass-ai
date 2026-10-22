@@ -122,6 +122,7 @@ class CertificationRequest(BaseModel):
     issuing_organization: str = Field(min_length=1, max_length=255)
     issue_date: date | None = None
     expiration_date: date | None = None
+    does_not_expire: bool = False
     credential_id: str | None = Field(default=None, max_length=255)
     credential_url: str | None = Field(default=None, max_length=2048)
     badge_url: str | None = Field(default=None, max_length=2048)
@@ -141,6 +142,7 @@ class CertificationResponse(BaseModel):
     issuing_organization: str
     issue_date: date | None
     expiration_date: date | None
+    does_not_expire: bool
     credential_id: str | None
     credential_url: str | None
     certificate_file_name: str | None
@@ -157,6 +159,7 @@ class ProfileSkillRequest(BaseModel):
     issuing_organization: str = Field(min_length=1, max_length=255)
     issue_date: date | None = None
     expiration_date: date | None = None
+    does_not_expire: bool = False
     credential_id: str | None = Field(default=None, max_length=255)
     credential_url: str | None = Field(default=None, max_length=2048)
     badge_url: str | None = Field(default=None, max_length=2048)
@@ -176,6 +179,7 @@ class ProfileSkillResponse(BaseModel):
     issuing_organization: str
     issue_date: date | None
     expiration_date: date | None
+    does_not_expire: bool
     credential_id: str | None
     credential_url: str | None
     skill_file_name: str | None
@@ -201,6 +205,7 @@ class PublicCertificationResponse(BaseModel):
     issuing_organization: str
     issue_date: date | None
     expiration_date: date | None
+    does_not_expire: bool
     credential_id: str | None
     credential_url: str | None
     certificate_file_name: str | None
@@ -216,6 +221,7 @@ class PublicProfileSkillResponse(BaseModel):
     issuing_organization: str
     issue_date: date | None
     expiration_date: date | None
+    does_not_expire: bool
     credential_id: str | None
     credential_url: str | None
     skill_file_name: str | None

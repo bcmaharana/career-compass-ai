@@ -189,6 +189,7 @@ class CertificationModel(Base):
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     include_in_resume: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    does_not_expire: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class ProfileSkillModel(Base):
@@ -223,6 +224,7 @@ class ProfileSkillModel(Base):
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     include_in_resume: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    does_not_expire: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class CareerGoalModel(Base):

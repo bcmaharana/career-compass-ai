@@ -30,6 +30,7 @@ interface ProfileSkillForm {
   issuing_organization: string;
   issue_date: string;
   expiration_date: string;
+  does_not_expire: boolean;
   credential_id: string;
   credential_url: string;
   badge_url: string;
@@ -41,6 +42,7 @@ const EMPTY_FORM: ProfileSkillForm = {
   issuing_organization: "",
   issue_date: "",
   expiration_date: "",
+  does_not_expire: false,
   credential_id: "",
   credential_url: "",
   badge_url: "",
@@ -53,6 +55,7 @@ function getForm(skill: ProfileSkill): ProfileSkillForm {
     issuing_organization: skill.issuing_organization,
     issue_date: skill.issue_date ?? "",
     expiration_date: skill.expiration_date ?? "",
+    does_not_expire: skill.does_not_expire,
     credential_id: skill.credential_id ?? "",
     credential_url: skill.credential_url ?? "",
     badge_url: skill.badge_url ?? "",
@@ -66,6 +69,7 @@ function requestFromForm(form: ProfileSkillForm): ProfileSkillRequest {
     issuing_organization: form.issuing_organization.trim(),
     issue_date: form.issue_date || null,
     expiration_date: form.expiration_date || null,
+    does_not_expire: form.does_not_expire,
     credential_id: form.credential_id.trim() || null,
     credential_url: form.credential_url.trim() || null,
     badge_url: form.badge_url.trim() || null,
@@ -255,7 +259,9 @@ export function ProfileSkillsPage() {
                     {skill.issue_date && (
                       <span>Issued {formatDisplayDate(skill.issue_date)}</span>
                     )}
-                    {skill.expiration_date && (
+                    {skill.does_not_expire ? (
+                      <span>This credential does not expire</span>
+                    ) : skill.expiration_date && (
                       <span>Expires {formatDisplayDate(skill.expiration_date)}</span>
                     )}
                     {skill.credential_id && <span>ID: {skill.credential_id}</span>}
@@ -408,9 +414,24 @@ export function ProfileSkillsPage() {
             <Field label="Expiration date">
               <Input
                 type="date"
+                disabled={form.does_not_expire}
                 value={form.expiration_date}
                 onChange={(event) => setForm({ ...form, expiration_date: event.target.value })}
               />
+              <label className="mt-2 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.does_not_expire}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      does_not_expire: event.target.checked,
+                      expiration_date: event.target.checked ? "" : form.expiration_date,
+                    })
+                  }
+                />
+                This credential does not expire
+              </label>
             </Field>
           </div>
           <Field label="Credential ID">

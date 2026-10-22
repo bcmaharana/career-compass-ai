@@ -141,6 +141,36 @@ def test_skill_external_links_require_http_or_https() -> None:
 
 
 @pytest.mark.asyncio
+async def test_non_expiring_skill_clears_expiration_date() -> None:
+    tenant_id, user_id, profile_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    profile_skill = make_profile_skill(tenant_id, profile_id)
+    profile_skill.expiration_date = date(2030, 1, 1)
+    repository = FakeProfileSkillRepository(profile_skill)
+    service = ProfileSkillService(
+        cast(ProfileSkillRepository, repository),
+        cast(CareerProfileService, FakeCareerProfiles(profile_id, user_id)),
+        FakeShareLinks(),
+        FakePrivateStorage(),
+    )
+
+    updated = await service.update(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        skill_id=profile_skill.id,
+        name=profile_skill.name,
+        issuing_organization=profile_skill.issuing_organization,
+        issue_date=profile_skill.issue_date,
+        expiration_date=profile_skill.expiration_date,
+        credential_id=profile_skill.credential_id,
+        credential_url=profile_skill.credential_url,
+        does_not_expire=True,
+    )
+
+    assert updated.does_not_expire is True
+    assert updated.expiration_date is None
+
+
+@pytest.mark.asyncio
 async def test_upload_stores_valid_pdf_in_private_storage() -> None:
     tenant_id, user_id, profile_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     profile_skill = make_profile_skill(tenant_id, profile_id)

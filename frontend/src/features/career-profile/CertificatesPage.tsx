@@ -29,6 +29,7 @@ interface CertificateForm {
   issuing_organization: string;
   issue_date: string;
   expiration_date: string;
+  does_not_expire: boolean;
   credential_id: string;
   credential_url: string;
   badge_url: string;
@@ -40,6 +41,7 @@ const EMPTY_FORM: CertificateForm = {
   issuing_organization: "",
   issue_date: "",
   expiration_date: "",
+  does_not_expire: false,
   credential_id: "",
   credential_url: "",
   badge_url: "",
@@ -52,6 +54,7 @@ function getForm(certificate: Certificate): CertificateForm {
     issuing_organization: certificate.issuing_organization,
     issue_date: certificate.issue_date ?? "",
     expiration_date: certificate.expiration_date ?? "",
+    does_not_expire: certificate.does_not_expire,
     credential_id: certificate.credential_id ?? "",
     credential_url: certificate.credential_url ?? "",
     badge_url: certificate.badge_url ?? "",
@@ -65,6 +68,7 @@ function requestFromForm(form: CertificateForm): CertificateRequest {
     issuing_organization: form.issuing_organization.trim(),
     issue_date: form.issue_date || null,
     expiration_date: form.expiration_date || null,
+    does_not_expire: form.does_not_expire,
     credential_id: form.credential_id.trim() || null,
     credential_url: form.credential_url.trim() || null,
     badge_url: form.badge_url.trim() || null,
@@ -254,7 +258,9 @@ export function CertificatesPage() {
                     {certificate.issue_date && (
                       <span>Issued {formatDisplayDate(certificate.issue_date)}</span>
                     )}
-                    {certificate.expiration_date && (
+                    {certificate.does_not_expire ? (
+                      <span>This credential does not expire</span>
+                    ) : certificate.expiration_date && (
                       <span>Expires {formatDisplayDate(certificate.expiration_date)}</span>
                     )}
                     {certificate.credential_id && <span>ID: {certificate.credential_id}</span>}
@@ -407,9 +413,24 @@ export function CertificatesPage() {
             <Field label="Expiration date">
               <Input
                 type="date"
+                disabled={form.does_not_expire}
                 value={form.expiration_date}
                 onChange={(event) => setForm({ ...form, expiration_date: event.target.value })}
               />
+              <label className="mt-2 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.does_not_expire}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      does_not_expire: event.target.checked,
+                      expiration_date: event.target.checked ? "" : form.expiration_date,
+                    })
+                  }
+                />
+                This credential does not expire
+              </label>
             </Field>
           </div>
           <Field label="Credential ID">

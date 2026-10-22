@@ -68,6 +68,7 @@ class ProfileSkillService:
         expiration_date: date | None,
         credential_id: str | None,
         credential_url: str | None,
+        does_not_expire: bool = False,
         target_role_id: UUID | None = None,
         badge_url: str | None = None,
     ) -> ProfileSkill:
@@ -83,7 +84,7 @@ class ProfileSkillService:
                 name=name,
                 issuing_organization=issuing_organization,
                 issue_date=issue_date,
-                expiration_date=expiration_date,
+                expiration_date=None if does_not_expire else expiration_date,
                 credential_id=credential_id,
                 credential_url=credential_url,
                 skill_file_key=None,
@@ -93,6 +94,7 @@ class ProfileSkillService:
                 badge_image_name=None,
                 badge_image_content_type=None,
                 badge_url=badge_url,
+                does_not_expire=does_not_expire,
                 display_order=0,  # overwritten by the repository on create
                 created_at=now,
                 updated_at=now,
@@ -119,6 +121,7 @@ class ProfileSkillService:
         expiration_date: date | None,
         credential_id: str | None,
         credential_url: str | None,
+        does_not_expire: bool = False,
         include_in_resume: bool = True,
         badge_url: str | None = None,
         update_badge_url: bool = False,
@@ -129,7 +132,8 @@ class ProfileSkillService:
         skill.name = name
         skill.issuing_organization = issuing_organization
         skill.issue_date = issue_date
-        skill.expiration_date = expiration_date
+        skill.expiration_date = None if does_not_expire else expiration_date
+        skill.does_not_expire = does_not_expire
         skill.credential_id = credential_id
         skill.credential_url = credential_url
         if update_badge_url:

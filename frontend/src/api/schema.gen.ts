@@ -2750,6 +2750,11 @@ export interface components {
             issue_date?: string | null;
             /** Expiration Date */
             expiration_date?: string | null;
+            /**
+             * Does Not Expire
+             * @default false
+             */
+            does_not_expire?: boolean;
             /** Credential Id */
             credential_id?: string | null;
             /** Credential Url */
@@ -2777,6 +2782,8 @@ export interface components {
             issue_date: string | null;
             /** Expiration Date */
             expiration_date: string | null;
+            /** Does Not Expire */
+            does_not_expire: boolean;
             /** Credential Id */
             credential_id: string | null;
             /** Credential Url */
@@ -4272,6 +4279,11 @@ export interface components {
             issue_date?: string | null;
             /** Expiration Date */
             expiration_date?: string | null;
+            /**
+             * Does Not Expire
+             * @default false
+             */
+            does_not_expire?: boolean;
             /** Credential Id */
             credential_id?: string | null;
             /** Credential Url */
@@ -4299,6 +4311,8 @@ export interface components {
             issue_date: string | null;
             /** Expiration Date */
             expiration_date: string | null;
+            /** Does Not Expire */
+            does_not_expire: boolean;
             /** Credential Id */
             credential_id: string | null;
             /** Credential Url */
@@ -4407,6 +4421,8 @@ export interface components {
             issue_date: string | null;
             /** Expiration Date */
             expiration_date: string | null;
+            /** Does Not Expire */
+            does_not_expire: boolean;
             /** Credential Id */
             credential_id: string | null;
             /** Credential Url */
@@ -4434,6 +4450,8 @@ export interface components {
             issue_date: string | null;
             /** Expiration Date */
             expiration_date: string | null;
+            /** Does Not Expire */
+            does_not_expire: boolean;
             /** Credential Id */
             credential_id: string | null;
             /** Credential Url */

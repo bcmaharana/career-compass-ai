@@ -22,6 +22,7 @@ export interface PublicProfileSkill {
   issuing_organization: string;
   issue_date: string | null;
   expiration_date: string | null;
+  does_not_expire: boolean;
   credential_id: string | null;
   credential_url: string | null;
   skill_file_name: string | null;

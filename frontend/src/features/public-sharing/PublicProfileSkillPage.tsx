@@ -53,7 +53,9 @@ export function PublicProfileSkillPage() {
                   {skill.issue_date && (
                     <span>Issued {formatDisplayDate(skill.issue_date)}</span>
                   )}
-                  {skill.expiration_date && (
+                  {skill.does_not_expire ? (
+                    <span>This credential does not expire</span>
+                  ) : skill.expiration_date && (
                     <span>Expires {formatDisplayDate(skill.expiration_date)}</span>
                   )}
                   {skill.credential_id && <span>Credential ID: {skill.credential_id}</span>}

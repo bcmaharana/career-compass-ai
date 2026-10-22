@@ -33,6 +33,7 @@ interface FormState {
   issuing_organization: string;
   issue_date: string;
   expiration_date: string;
+  does_not_expire: boolean;
   credential_id: string;
   credential_url: string;
   include_in_resume: boolean;
@@ -43,6 +44,7 @@ const EMPTY_FORM: FormState = {
   issuing_organization: "",
   issue_date: "",
   expiration_date: "",
+  does_not_expire: false,
   credential_id: "",
   credential_url: "",
   include_in_resume: true,
@@ -54,6 +56,7 @@ function toFormState(certification: Certification): FormState {
     issuing_organization: certification.issuing_organization,
     issue_date: certification.issue_date ?? "",
     expiration_date: certification.expiration_date ?? "",
+    does_not_expire: certification.does_not_expire,
     credential_id: certification.credential_id ?? "",
     credential_url: certification.credential_url ?? "",
     include_in_resume: certification.include_in_resume,
@@ -125,6 +128,7 @@ export function CertificationSection({
       issuing_organization: form.issuing_organization,
       issue_date: form.issue_date || null,
       expiration_date: form.expiration_date || null,
+      does_not_expire: form.does_not_expire,
       credential_id: form.credential_id || null,
       credential_url: form.credential_url || null,
       include_in_resume: form.include_in_resume,
@@ -150,6 +154,7 @@ export function CertificationSection({
         issuing_organization: certification.issuing_organization,
         issue_date: certification.issue_date,
         expiration_date: certification.expiration_date,
+        does_not_expire: certification.does_not_expire,
         credential_id: certification.credential_id,
         credential_url: certification.credential_url,
         include_in_resume: include,
@@ -246,7 +251,11 @@ export function CertificationSection({
               <p className="text-sm text-muted-foreground">
                 {certification.issuing_organization}
               </p>
-              {certification.expiration_date && (
+              {certification.does_not_expire ? (
+                <p className="text-xs font-bold italic text-accent">
+                  This credential does not expire
+                </p>
+              ) : certification.expiration_date && (
                 <p className="text-xs font-bold italic text-accent">
                   Expires {formatDisplayDate(certification.expiration_date)}
                 </p>
@@ -339,9 +348,24 @@ export function CertificationSection({
               <Input
                 id="cert-expiration"
                 type="date"
+                disabled={form.does_not_expire}
                 value={form.expiration_date}
                 onChange={(e) => setForm({ ...form, expiration_date: e.target.value })}
               />
+              <label className="mt-2 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.does_not_expire}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      does_not_expire: e.target.checked,
+                      expiration_date: e.target.checked ? "" : form.expiration_date,
+                    })
+                  }
+                />
+                This credential does not expire
+              </label>
             </div>
           </div>
           <div className="flex flex-col gap-1.5">

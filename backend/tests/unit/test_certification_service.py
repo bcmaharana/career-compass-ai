@@ -126,6 +126,36 @@ def test_certificate_external_links_require_http_or_https() -> None:
 
 
 @pytest.mark.asyncio
+async def test_non_expiring_certification_clears_expiration_date() -> None:
+    tenant_id, user_id, profile_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    certification = make_certification(tenant_id, profile_id)
+    certification.expiration_date = date(2030, 1, 1)
+    repository = FakeCertificationRepository(certification)
+    service = CertificationService(
+        repository,
+        FakeCareerProfiles(profile_id, user_id),
+        FakeShareLinks(),
+        FakePrivateStorage(),
+    )
+
+    updated = await service.update(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        certification_id=certification.id,
+        name=certification.name,
+        issuing_organization=certification.issuing_organization,
+        issue_date=certification.issue_date,
+        expiration_date=certification.expiration_date,
+        credential_id=certification.credential_id,
+        credential_url=certification.credential_url,
+        does_not_expire=True,
+    )
+
+    assert updated.does_not_expire is True
+    assert updated.expiration_date is None
+
+
+@pytest.mark.asyncio
 async def test_upload_stores_valid_pdf_in_private_storage() -> None:
     tenant_id, user_id, profile_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     certification = make_certification(tenant_id, profile_id)
@@ -221,6 +251,7 @@ async def test_share_link_is_created_and_revoked_for_one_certificate() -> None:
 async def test_public_certificate_resolves_only_through_its_share_key() -> None:
     tenant_id, user_id, profile_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     certification = make_certification(tenant_id, profile_id)
+    certification.does_not_expire = True
     certification.certificate_file_key = "certificates/private/proof.pdf"
     certification.badge_image_key = "certificates/private/badge.png"
     links = FakeShareLinks()
@@ -246,6 +277,7 @@ async def test_public_certificate_resolves_only_through_its_share_key() -> None:
     view = await public_service.get_certificate(share_key)
 
     assert view is not None
+    assert view.certification.does_not_expire is True
     assert view.owner_display_name == "Ada Lovelace"
     assert tenant_context.bound_tenants == [tenant_id]
     assert view.certificate_file_url == ("https://storage.test/certificates/private/proof.pdf")

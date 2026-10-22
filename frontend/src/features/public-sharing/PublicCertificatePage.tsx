@@ -53,7 +53,9 @@ export function PublicCertificatePage() {
                   {certificate.issue_date && (
                     <span>Issued {formatDisplayDate(certificate.issue_date)}</span>
                   )}
-                  {certificate.expiration_date && (
+                  {certificate.does_not_expire ? (
+                    <span>This credential does not expire</span>
+                  ) : certificate.expiration_date && (
                     <span>Expires {formatDisplayDate(certificate.expiration_date)}</span>
                   )}
                   {certificate.credential_id && <span>Credential ID: {certificate.credential_id}</span>}

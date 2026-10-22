@@ -177,6 +177,7 @@ class Certification:
     badge_image_name: str | None = None
     badge_image_content_type: str | None = None
     badge_url: str | None = None
+    does_not_expire: bool = False
 
 
 @dataclass(slots=True)
@@ -202,6 +203,7 @@ class ProfileSkill:
     badge_image_name: str | None = None
     badge_image_content_type: str | None = None
     badge_url: str | None = None
+    does_not_expire: bool = False
 
 
 @dataclass(slots=True)
