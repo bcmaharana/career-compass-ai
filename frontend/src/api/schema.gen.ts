@@ -4514,6 +4514,8 @@ export interface components {
         PublicShowcasePageResponse: {
             /** Owner Display Name */
             owner_display_name: string;
+            /** Owner First Name */
+            owner_first_name: string;
             /** Owner Handle */
             owner_handle: string;
             /** Role Name */

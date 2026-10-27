@@ -109,6 +109,7 @@ async def get_public_showcase_page(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
     return PublicShowcasePageResponse(
         owner_display_name=view.owner_display_name,
+        owner_first_name=view.owner_first_name,
         owner_handle=view.owner_handle,
         role_name=view.role_name,
         role_tag=view.role_tag,

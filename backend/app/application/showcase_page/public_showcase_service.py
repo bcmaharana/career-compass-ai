@@ -58,6 +58,7 @@ async def _resolve_photo_url(
 class PublicShowcasePageView:
     page: ShowcasePage
     owner_display_name: str
+    owner_first_name: str
     owner_handle: str
     role_name: str
     role_tag: str
@@ -190,6 +191,7 @@ class PublicShowcaseService:
         return PublicShowcasePageView(
             page=page,
             owner_display_name=owner.display_name,
+            owner_first_name=owner.first_name,
             owner_handle=owner.handle or "",
             role_name=role.role_name,
             role_tag=role.tag,

@@ -248,7 +248,9 @@ class TestGetShowcasePage:
             tag="SE",
             created_at=datetime.now(UTC),
         )
-        fx.users.users[user_id] = _make_user(tenant_id=tenant_id)
+        owner = _make_user(tenant_id=tenant_id)
+        owner.salutation = "Mr."
+        fx.users.users[user_id] = owner
         fx.share_links.by_key["k"] = PublicShareLink(
             share_key="k",
             tenant_id=tenant_id,
@@ -265,6 +267,8 @@ class TestGetShowcasePage:
         assert view.role_name == "Senior Engineer"
         assert view.role_tag == "SE"
         assert view.owner_handle == "JR"
+        assert view.owner_display_name == "Mr. Jordan Rivera"
+        assert view.owner_first_name == "Jordan"
         assert view.photo_url is None  # neither profile below exists at all here
         assert view.resume_view_url is None  # no resume uploaded on this page
         assert view.resume_download_url is None

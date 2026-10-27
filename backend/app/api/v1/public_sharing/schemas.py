@@ -45,6 +45,7 @@ class PublicShowcaseBlock(BaseModel):
 
 class PublicShowcasePageResponse(BaseModel):
     owner_display_name: str
+    owner_first_name: str
     owner_handle: str
     role_name: str
     role_tag: str

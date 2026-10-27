@@ -232,21 +232,17 @@ function ShowcaseTopBar({ page }: { page: PublicShowcasePageData }) {
  * leaves a save/download option available via the browser's own PDF
  * viewer or share sheet, whereas attachment forces an immediate save
  * with no chance to view first. Firstname is taken from the page's own
- * name (falling back to owner_display_name, same fallback
- * ShowcaseBrandTitle already uses) rather than a dedicated backend
- * field, since the full name is already available here and a
- * first-token split is all "Firstname" needs. */
+ * account's first name, which excludes the salutation included in
+ * owner_display_name and the page's editable `name`. */
 function ShowcaseResumeLink({ page }: { page: PublicShowcasePageData }) {
   const resumeUrl = page.resume_view_url || page.resume_download_url;
   if (!resumeUrl) return null;
-  const fullName = page.name || page.owner_display_name;
-  const firstName = fullName.trim().split(/\s+/)[0] || fullName;
   return (
     <Card>
       <CardContent className="flex items-center gap-2 px-3 py-4 sm:px-4 md:px-4">
         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
         <p className="text-sm">
-          {firstName}'s Resume can be{" "}
+          {page.owner_first_name}'s Resume can be{" "}
           <a
             href={resumeUrl}
             target="_blank"
