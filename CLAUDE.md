@@ -4151,6 +4151,19 @@ Known environment gotchas already solved, don't reintroduce:
   backend and native `npm run dev` for the frontend. Assume that
   environment unless told otherwise.
 
+## 2026-10-28 — allowing larger diagram shapes
+
+- Diagram shape resizing now supports up to 1600 px wide and 10000 px tall,
+  aligned with the canvas bounds in `frontend/src/features/diagram/DiagramCanvas.tsx`.
+  The backend payload schema accepts the same dimensions, and a regression
+  test covers sizes beyond the previous 500x400 limit.
+- Frontend typecheck and targeted ESLint passed. Direct backend schema
+  validation passed; pytest could not start because the local environment is
+  missing `firebase_admin`, imported by the shared test setup.
+- Commit `6a20b86` was pushed to `origin/main` and deployed to the Oracle VM.
+  All services are running and `https://career.scaledbrain.com/profile` returns
+  HTTP 200.
+
 ## 2026-10-07 — clickable URLs in rich text
 
 - Bare `http://` and `https://` URLs in saved rich-text content now render
