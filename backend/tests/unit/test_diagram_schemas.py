@@ -44,6 +44,26 @@ def test_diagram_accepts_shapes_and_attached_arrow() -> None:
     assert diagram.connectors[0].arrow is True
 
 
+def test_diagram_accepts_shapes_larger_than_default_resize_limits() -> None:
+    diagram = DiagramDataPayload.model_validate(
+        {
+            "shapes": [
+                {
+                    "id": str(uuid4()),
+                    "kind": "rectangle",
+                    "x": 0,
+                    "y": 0,
+                    "width": 800,
+                    "height": 600,
+                }
+            ]
+        }
+    )
+
+    assert diagram.shapes[0].width == 800
+    assert diagram.shapes[0].height == 600
+
+
 def test_diagram_rejects_connector_to_missing_shape() -> None:
     with pytest.raises(ValidationError, match="reference shapes"):
         DiagramDataPayload.model_validate(

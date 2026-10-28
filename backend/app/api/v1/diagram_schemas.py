@@ -18,8 +18,8 @@ class DiagramShapePayload(BaseModel):
     kind: Literal["rectangle", "ellipse", "circle", "triangle", "diamond", "pentagon", "hexagon"]
     x: float = Field(ge=0, le=1600)
     y: float = Field(ge=0, le=10000)
-    width: float = Field(ge=40, le=500)
-    height: float = Field(ge=40, le=400)
+    width: float = Field(ge=40, le=1600)
+    height: float = Field(ge=40, le=10000)
     rotation: float = Field(default=0, ge=-180, le=180)
     text: str = Field(default="", max_length=180)
     text_html: str | None = Field(default=None, max_length=4000)

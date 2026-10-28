@@ -855,7 +855,9 @@ export function DiagramCanvas({
                 }}
                 onDragEnd={() => { if (dragBeforeRef.current) { undoRef.current.push(dragBeforeRef.current); redoRef.current = []; dragBeforeRef.current = null; onChange?.(documentRef.current); } }}
                 onTransformEnd={(event) => {
-                  const node = event.target; const width = Math.max(40, Math.min(500, shape.width * node.scaleX())); const height = Math.max(40, Math.min(400, shape.height * node.scaleY()));
+                  const node = event.target;
+                  const width = Math.max(40, Math.min(CANVAS_WIDTH, shape.width * node.scaleX()));
+                  const height = Math.max(40, Math.min(MAX_CANVAS_HEIGHT, shape.height * node.scaleY()));
                   const nextShape = { ...shape, x: node.x() - width / 2, y: node.y() - height / 2, width, height, rotation: node.rotation() };
                   node.scaleX(1); node.scaleY(1); updateShape(shape.id, nextShape);
                 }}
@@ -914,7 +916,7 @@ export function DiagramCanvas({
             })()}
             {!readOnly && snapPreview && <Circle x={snapPreview.x} y={snapPreview.y} radius={8} fill="#ffffff" stroke="#2563eb" strokeWidth={3} listening={false} />}
             {!readOnly && marquee && <Rect x={Math.min(marquee.x1, marquee.x2)} y={Math.min(marquee.y1, marquee.y2)} width={Math.abs(marquee.x2 - marquee.x1)} height={Math.abs(marquee.y2 - marquee.y1)} fill="rgba(37,99,235,0.10)" stroke="#2563eb" strokeWidth={1} dash={[5, 4]} listening={false} />}
-            {!readOnly && <Transformer ref={transformerRef} rotateEnabled flipEnabled={false} keepRatio={selectedShape?.kind === "circle"} boundBoxFunc={(oldBox, newBox) => newBox.width < 40 || newBox.height < 40 ? oldBox : newBox} />}
+            {!readOnly && <Transformer ref={transformerRef} rotateEnabled flipEnabled={false} keepRatio={selectedShape?.kind === "circle"} boundBoxFunc={(oldBox, newBox) => newBox.width < 40 || newBox.height < 40 || newBox.width > CANVAS_WIDTH || newBox.height > MAX_CANVAS_HEIGHT ? oldBox : newBox} />}
           </Layer>
         </Stage>
         {document.shapes.filter((shape) => shape.text_html).map((shape) => {
